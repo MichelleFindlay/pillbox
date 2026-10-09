@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS users (
     is_active        TINYINT(1)    NOT NULL DEFAULT 1,
     timezone         VARCHAR(64)   NOT NULL DEFAULT 'Europe/London',
     enabled_metrics  VARCHAR(1000) NULL,
+    session_version  INT UNSIGNED  NOT NULL DEFAULT 0,  -- bumped to sign out every other device
+    theme            VARCHAR(20)   NOT NULL DEFAULT 'olive',
+    color_mode       VARCHAR(10)   NOT NULL DEFAULT 'auto',  -- auto | light | dark
     created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at    DATETIME      NULL,
     PRIMARY KEY (id),
@@ -96,6 +99,21 @@ CREATE TABLE IF NOT EXISTS dose_logs (
     CONSTRAINT fk_dose_user  FOREIGN KEY (user_id)       REFERENCES users (id)                ON DELETE CASCADE,
     CONSTRAINT fk_dose_med   FOREIGN KEY (medication_id) REFERENCES medications (id)          ON DELETE CASCADE,
     CONSTRAINT fk_dose_sched FOREIGN KEY (schedule_id)   REFERENCES medication_schedules (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Prescription collections and stock recounts.
+CREATE TABLE IF NOT EXISTS stock_events (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id        INT UNSIGNED NOT NULL,
+    medication_id  INT UNSIGNED NOT NULL,
+    kind           ENUM('collected','recount') NOT NULL,
+    quantity       DECIMAL(10,2) NOT NULL,      -- amount collected, or the new counted total
+    stock_after    DECIMAL(10,2) NOT NULL,
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_stock_med (medication_id, created_at),
+    CONSTRAINT fk_stock_user FOREIGN KEY (user_id)       REFERENCES users (id)       ON DELETE CASCADE,
+    CONSTRAINT fk_stock_med  FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Measurements a user creates themselves (e.g. something a doctor asked them to track).

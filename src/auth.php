@@ -12,6 +12,10 @@ function current_user(): ?array
         $loaded = true;
         if (!empty($_SESSION['uid'])) {
             $user = q('SELECT * FROM users WHERE id = ? AND is_active = 1', [$_SESSION['uid']])->fetch() ?: null;
+            // Signed out remotely ("sign out everywhere else", password change or reset)?
+            if ($user !== null && (int) $user['session_version'] !== (int) ($_SESSION['sv'] ?? 0)) {
+                $user = null;
+            }
             if ($user === null) {
                 logout_session();
             }
@@ -45,11 +49,12 @@ function require_admin(): array
     return $user;
 }
 
-function login_user(array $user): void
+function login_user(array $user, ?string $method = null): void
 {
     session_regenerate_id(true);
     $_SESSION['uid'] = (int) $user['id'];
-    $_SESSION['provider'] = $user['auth_provider'];
+    $_SESSION['provider'] = $method ?? $user['auth_provider'];
+    $_SESSION['sv'] = (int) ($user['session_version'] ?? 0);
     unset($_SESSION['csrf']);
     q('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [$user['id']]);
 }
@@ -110,6 +115,19 @@ function attempt_local_login(string $username, string $password): array|string
     return $user;
 }
 
+/**
+ * Can people sign in with a Pillbox username and password?
+ * Off if 'allow_local_login' is false, or if 'disable_local_login_when_sso' is on and
+ * Microsoft sign-in is enabled and configured.
+ */
+function local_login_enabled(): bool
+{
+    if (!config('app.allow_local_login', true)) {
+        return false;
+    }
+    return !(config('entra.disable_local_login_when_sso', false) && entra_enabled());
+}
+
 function validate_new_password(string $password, string $confirm): ?string
 {
     if (mb_strlen($password) < 10) {
@@ -130,6 +148,27 @@ function validate_username(string $username): ?string
         return 'That username is already taken.';
     }
     return null;
+}
+
+/**
+ * Sign a user out on every device. If $keepCurrent, this browser stays signed in.
+ */
+function bump_session_version(int $userId, bool $keepCurrent): void
+{
+    q('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$userId]);
+    if ($keepCurrent) {
+        session_regenerate_id(true);
+        $_SESSION['sv'] = (int) q('SELECT session_version FROM users WHERE id = ?', [$userId])->fetchColumn();
+    }
+}
+
+/** Would removing admin rights from (or deleting) this user leave Pillbox with no active admin? */
+function is_last_admin(array $user): bool
+{
+    if (!$user['is_admin']) {
+        return false;
+    }
+    return (int) q('SELECT COUNT(*) FROM users WHERE is_admin = 1 AND is_active = 1 AND id <> ?', [$user['id']])->fetchColumn() === 0;
 }
 
 function user_count(): int

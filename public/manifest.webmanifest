@@ -1,13 +1,26 @@
 {
+  "id": "pillbox",
   "name": "Pillbox",
   "short_name": "Pillbox",
   "description": "Medication and health reading tracker",
-  "start_url": "index.php",
+  "lang": "en-GB",
+  "start_url": "index.php?source=app",
   "scope": "./",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#f6f5f1",
   "theme_color": "#3d4a3a",
+  "categories": ["health", "medical"],
   "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "assets/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Today's doses", "short_name": "Today", "url": "index.php", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Record a reading", "short_name": "Reading", "url": "readings.php", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Add a medication", "short_name": "Add med", "url": "medication_edit.php", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

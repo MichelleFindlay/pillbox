@@ -21,6 +21,28 @@ if (is_post()) {
             q('UPDATE medications SET is_active = 1, end_date = NULL WHERE id = ?', [$med['id']]);
             flash('success', $med['name'] . ' restarted.');
             break;
+        case 'restock':
+            // Prescription collected (add to stock) or a recount (set the exact number).
+            $kind = post('kind') === 'recount' ? 'recount' : 'collected';
+            $qty = post('quantity');
+            if (!is_numeric($qty) || (float) $qty < 0 || (float) $qty > 100000 || ($kind === 'collected' && (float) $qty <= 0)) {
+                flash('error', 'Enter how many ' . substr(dose_label(2, $med['dose_unit']), 2) . ' as a number' . ($kind === 'collected' ? ' greater than zero.' : '.'));
+                redirect('medications.php#med-' . $med['id']);
+            }
+            $qty = (float) $qty;
+            $after = transaction(function () use ($med, $kind, $qty, $uid) {
+                $current = q('SELECT stock_count FROM medications WHERE id = ? FOR UPDATE', [$med['id']])->fetchColumn();
+                $after = $kind === 'collected' ? (float) $current + $qty : $qty;
+                q('UPDATE medications SET stock_count = ? WHERE id = ?', [$after, $med['id']]);
+                q('INSERT INTO stock_events (user_id, medication_id, kind, quantity, stock_after, created_at) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())',
+                    [$uid, $med['id'], $kind, $qty, $after]);
+                return $after;
+            });
+            $days = stock_days_left(['stock_count' => $after] + $med, schedules_by_medication([(int) $med['id']], $todayYmd)[$med['id']] ?? []);
+            flash('success', ($kind === 'collected' ? 'Added ' . dose_label($qty, $med['dose_unit']) . ' to ' : 'Stock count updated for ')
+                . $med['name'] . '. You now have ' . dose_label($after, $med['dose_unit'])
+                . ($days !== null ? ' (about ' . (int) floor($days) . ' days).' : '.'));
+            redirect('medications.php#med-' . $med['id']);
         case 'delete':
             q('DELETE FROM medications WHERE id = ?', [$med['id']]);
             flash('success', $med['name'] . ' and all of its dose history were deleted.');
@@ -32,6 +54,15 @@ if (is_post()) {
 $meds = user_medications($uid, false);
 $schedules = schedules_by_medication(array_column($meds, 'id'), $todayYmd);
 $active = array_filter($meds, fn ($m) => $m['is_active']);
+// Most recent collection per medication, to show and to pre-fill the next one.
+$lastCollected = [];
+foreach (q(
+    "SELECT e.* FROM stock_events e
+     JOIN (SELECT medication_id, MAX(id) AS id FROM stock_events WHERE user_id = ? AND kind = 'collected' GROUP BY medication_id) x ON x.id = e.id",
+    [$uid]
+) as $e) {
+    $lastCollected[$e['medication_id']] = $e;
+}
 $stopped = array_filter($meds, fn ($m) => !$m['is_active']);
 
 render_header('Medications', 'meds');
@@ -52,7 +83,7 @@ render_header('Medications', 'meds');
 <?php foreach ($active as $m):
     $ms = $schedules[$m['id']] ?? [];
     $daysLeft = stock_days_left($m, $ms); ?>
-    <article class="card med-card">
+    <article class="card med-card" id="med-<?= (int) $m['id'] ?>">
         <header class="med-head">
             <?= med_dot($m['colour']) ?>
             <div>
@@ -75,9 +106,32 @@ render_header('Medications', 'meds');
             <?php if ($m['stock_count'] !== null): ?>
                 Stock: <?= h(num($m['stock_count'])) ?><?= $daysLeft !== null ? ' (~' . (int) floor($daysLeft) . ' days)' : '' ?> ·
             <?php endif; ?>
+            <?php if (isset($lastCollected[$m['id']])): $lc = $lastCollected[$m['id']]; ?>
+                Last collected <?= h(local_time($lc['created_at'], 'j M')) ?> (<?= h(dose_label($lc['quantity'], $m['dose_unit'])) ?>) ·
+            <?php endif; ?>
             Since <?= h(date('j M Y', strtotime($m['start_date']))) ?><?= $m['end_date'] ? ' until ' . h(date('j M Y', strtotime($m['end_date']))) : '' ?>
             <?= $m['prescriber'] ? ' · ' . h($m['prescriber']) : '' ?>
         </p>
+        <details class="restock">
+            <summary class="btn btn-small btn-primary">Prescription collected</summary>
+            <form method="post" class="restock-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
+                <input type="hidden" name="action" value="restock">
+                <div class="radios" role="radiogroup" aria-label="Type of update">
+                    <label class="check"><input type="radio" name="kind" value="collected" checked> Add what I collected</label>
+                    <label class="check"><input type="radio" name="kind" value="recount"> Set the exact number I have</label>
+                </div>
+                <div class="restock-row">
+                    <label>How many <?= h(substr(dose_label(2, $m['dose_unit']), 2)) ?>
+                        <input type="number" name="quantity" min="0" step="any" inputmode="decimal" required
+                            value="<?= isset($lastCollected[$m['id']]) ? h(num($lastCollected[$m['id']]['quantity'])) : '' ?>" placeholder="e.g. 56">
+                    </label>
+                    <button class="btn btn-primary" type="submit">Update stock</button>
+                </div>
+                <p class="muted small">Currently <?= $m['stock_count'] !== null ? h(dose_label($m['stock_count'], $m['dose_unit'])) : 'not tracked' ?>.</p>
+            </form>
+        </details>
         <footer class="med-actions">
             <a class="btn btn-small" href="<?= h(url('medication_edit.php?id=' . $m['id'])) ?>">Edit</a>
             <form method="post" data-confirm="Stop taking <?= h($m['name']) ?>? It will be removed from your daily list but its history is kept.">

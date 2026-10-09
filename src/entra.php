@@ -250,6 +250,12 @@ function entra_find_or_create_user(array $claims): array
         throw new RuntimeException('Your Pillbox account has been disabled.');
     }
 
+    // A local account with a linked Microsoft account keeps its own name and admin
+    // status; those are managed in Pillbox, not synced from Microsoft.
+    if ($user['auth_provider'] === 'local') {
+        return $user;
+    }
+
     $isAdmin = (int) $user['is_admin'];
     $role = (string) config('entra.admin_role', '');
     if ($role !== '' && isset($claims['roles']) && is_array($claims['roles'])) {
@@ -258,6 +264,37 @@ function entra_find_or_create_user(array $claims): array
     q('UPDATE users SET display_name = ?, email = ?, is_admin = ? WHERE id = ?', [mb_substr($name, 0, 150), $email, $isAdmin, $user['id']]);
 
     return q('SELECT * FROM users WHERE id = ?', [$user['id']])->fetch();
+}
+
+/**
+ * Attach a Microsoft account to an existing (local) Pillbox user, so they can sign in
+ * either way. If that Microsoft account was already auto-created as a separate, empty
+ * Pillbox account, the empty one is removed.
+ * @throws RuntimeException
+ */
+function entra_link_account(int $userId, array $claims): void
+{
+    $oid = strtolower((string) $claims['oid']);
+    $tid = strtolower((string) $claims['tid']);
+
+    transaction(function () use ($userId, $oid, $tid, $claims) {
+        $other = q('SELECT * FROM users WHERE entra_tid = ? AND entra_oid = ? FOR UPDATE', [$tid, $oid])->fetch();
+        if ($other && (int) $other['id'] !== $userId) {
+            $hasData = (int) q(
+                'SELECT (SELECT COUNT(*) FROM medications WHERE user_id = ?)
+                      + (SELECT COUNT(*) FROM health_readings WHERE user_id = ?)
+                      + (SELECT COUNT(*) FROM custom_metrics WHERE user_id = ?)',
+                [$other['id'], $other['id'], $other['id']]
+            )->fetchColumn() > 0;
+            if ($other['auth_provider'] !== 'entra' || $other['is_admin'] || $hasData) {
+                throw new RuntimeException('That Microsoft account is already used by another Pillbox account ('
+                    . $other['display_name'] . '). Ask an administrator to delete or unlink that account first.');
+            }
+            q('DELETE FROM users WHERE id = ?', [$other['id']]);
+        }
+        $email = mb_strtolower((string) ($claims['email'] ?? $claims['preferred_username'] ?? '')) ?: null;
+        q('UPDATE users SET entra_oid = ?, entra_tid = ?, email = COALESCE(email, ?) WHERE id = ?', [$oid, $tid, $email, $userId]);
+    });
 }
 
 function entra_logout_url(): string

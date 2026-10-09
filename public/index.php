@@ -69,9 +69,18 @@ render_header('Today', 'today');
     <?php endif; ?>
 </div>
 
+<div class="flash install-banner" hidden>
+    <span>Add Pillbox to your home screen to use it like an app.</span>
+    <span class="inline-actions">
+        <a class="btn btn-small btn-primary" href="<?= h(url('account.php#install')) ?>">How</a>
+        <button class="btn btn-small" type="button" data-dismiss-install>Not now</button>
+    </span>
+</div>
+
 <?php foreach ($lowStock as [$m, $days]): ?>
 <div class="flash flash-warning" role="status">
     <strong><?= h($m['name']) ?></strong> is running low: <?= h(num($m['stock_count'])) ?> left (about <?= (int) floor($days) ?> day<?= floor($days) == 1 ? '' : 's' ?>). Time to order a repeat prescription.
+    <a href="<?= h(url('medications.php#med-' . $m['id'])) ?>">Collected it?</a>
 </div>
 <?php endforeach; ?>
 

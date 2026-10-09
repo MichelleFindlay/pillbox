@@ -78,25 +78,38 @@ function send_security_headers(): void
 
 function start_session(): void
 {
-    session_name('PILLBOX');
-    session_set_cookie_params([
-        'lifetime' => 0,
+    $idle = max(5, (int) config('app.session_idle_minutes', 480)) * 60;
+    $cookie = [
         'path'     => config('app.base_path') ?: '/',
         'secure'   => is_https(),
         'httponly' => true,
         // Lax (not Strict) so the cookie survives the redirect back from Microsoft.
         'samesite' => 'Lax',
-    ]);
+    ];
+
+    // Keep sessions in our own folder so the server's housekeeping (which on many
+    // hosts deletes sessions after 24 minutes) doesn't sign people out early.
+    $dir = storage_path('sessions');
+    if (is_dir($dir) || @mkdir($dir, 0700)) {
+        session_save_path($dir);
+        ini_set('session.gc_probability', '1');
+        ini_set('session.gc_divisor', '100');
+    }
+    ini_set('session.gc_maxlifetime', (string) $idle);
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
+    session_name('PILLBOX');
+    // A persistent cookie, so closing the installed phone app doesn't sign you out.
+    session_set_cookie_params(['lifetime' => $idle] + $cookie);
     session_start();
 
-    $idle = (int) config('app.session_idle_minutes', 480) * 60;
     if (isset($_SESSION['last_seen']) && time() - $_SESSION['last_seen'] > $idle) {
         $_SESSION = [];
         session_regenerate_id(true);
     }
     $_SESSION['last_seen'] = time();
+    // Slide the cookie's expiry forward on every visit.
+    setcookie(session_name(), session_id(), ['expires' => time() + $idle] + $cookie);
 }
 
 /* ---------- CSRF ---------- */
@@ -231,7 +244,7 @@ function dose_label(mixed $amount, string $unit): string
 
 function storage_path(string $file): string
 {
-    $dir = config('app.storage_path');
+    $dir = (string) config('app.storage_path', APP_ROOT . '/storage');
     if (!is_dir($dir) || !is_writable($dir)) {
         $dir = sys_get_temp_dir();
     }

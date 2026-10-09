@@ -1,6 +1,28 @@
 <?php
 declare(strict_types=1);
 
+// Colour themes. Colours themselves live in style.css ([data-palette="..."]);
+// 'bar' values colour the phone's status bar to match the header.
+const THEMES = [
+    'olive'    => ['label' => 'Olive (default)', 'bar' => ['#3d4a3a', '#20271e']],
+    'nhs'      => ['label' => 'NHS blue',        'bar' => ['#005eb8', '#0b2a4a']],
+    'ocean'    => ['label' => 'Ocean',           'bar' => ['#0b5f5a', '#0d2e2c']],
+    'berry'    => ['label' => 'Berry',           'bar' => ['#4b2a6e', '#2a1d3d']],
+    'sunset'   => ['label' => 'Sunset',          'bar' => ['#7a3415', '#3a1e12']],
+    'rose'     => ['label' => 'Rose',            'bar' => ['#7d2349', '#3a1626']],
+    'slate'    => ['label' => 'Slate',           'bar' => ['#2c3e50', '#1c2531']],
+    'contrast' => ['label' => 'High contrast',   'bar' => ['#000000', '#000000']],
+];
+const COLOR_MODES = ['auto' => 'Automatic (match my device)', 'light' => 'Light', 'dark' => 'Dark'];
+
+/** The signed-in user's [theme, mode], or the defaults. */
+function user_theme(?array $user): array
+{
+    $theme = isset(THEMES[$user['theme'] ?? '']) ? $user['theme'] : 'olive';
+    $mode = isset(COLOR_MODES[$user['color_mode'] ?? '']) ? $user['color_mode'] : 'auto';
+    return [$theme, $mode];
+}
+
 function icon(string $name): string
 {
     $paths = [
@@ -28,15 +50,30 @@ function render_header(string $title, string $active = ''): void
         'history'  => ['history.php', 'History'],
         'report'   => ['report.php', 'Report'],
     ];
+    [$theme, $mode] = user_theme($user);
+    [$barLight, $barDark] = THEMES[$theme]['bar'];
     ?><!doctype html>
-<html lang="en">
+<html lang="en" data-palette="<?= h($theme) ?>"<?= $mode !== 'auto' ? ' data-theme="' . h($mode) . '"' : '' ?>>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#3d4a3a">
+<?php if ($mode === 'auto'): ?>
+<meta name="theme-color" content="<?= h($barLight) ?>" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="<?= h($barDark) ?>" media="(prefers-color-scheme: dark)">
+<?php else: ?>
+<meta name="theme-color" content="<?= h($mode === 'dark' ? $barDark : $barLight) ?>">
+<?php endif; ?>
+<meta name="pillbox-base" content="<?= h(url('')) ?>">
 <title><?= h($title) ?> · <?= h(config('app.name')) ?></title>
 <link rel="icon" href="<?= h(asset('assets/logo.svg')) ?>" type="image/svg+xml">
+<link rel="icon" href="<?= h(asset('assets/icons/icon-192.png')) ?>" type="image/png" sizes="192x192">
 <link rel="manifest" href="<?= h(url('manifest.webmanifest')) ?>">
+<!-- Installed app ("Add to Home Screen") on iPhone / iPad -->
+<link rel="apple-touch-icon" href="<?= h(asset('assets/icons/apple-touch-icon.png')) ?>">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="<?= h(config('app.name')) ?>">
 <link rel="stylesheet" href="<?= h(asset('assets/style.css')) ?>">
 <script src="<?= h(asset('assets/app.js')) ?>" defer></script>
 </head>

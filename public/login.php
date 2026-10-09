@@ -10,7 +10,7 @@ if (current_user()) {
 
 $error = null;
 $username = '';
-if (is_post() && config('app.allow_local_login')) {
+if (is_post() && local_login_enabled()) {
     require_post();
     $username = post('username');
     $result = attempt_local_login($username, (string) ($_POST['password'] ?? ''));
@@ -37,11 +37,11 @@ render_header('Sign in');
     </a>
     <?php endif; ?>
 
-    <?php if (entra_enabled() && config('app.allow_local_login')): ?>
+    <?php if (entra_enabled() && local_login_enabled()): ?>
     <div class="divider"><span>or use a local account</span></div>
     <?php endif; ?>
 
-    <?php if (config('app.allow_local_login')): ?>
+    <?php if (local_login_enabled()): ?>
     <form method="post" class="stack">
         <?= csrf_field() ?>
         <label>Username
@@ -54,7 +54,7 @@ render_header('Sign in');
     </form>
     <?php endif; ?>
 
-    <?php if (user_count() === 0): ?>
+    <?php if (user_count() === 0 && local_login_enabled()): ?>
     <p class="muted small">First time here? <a href="<?= h(url('setup.php')) ?>">Create a local administrator account</a>, or sign in with Microsoft &mdash; the first person to sign in becomes the administrator.</p>
     <?php endif; ?>
 </section>

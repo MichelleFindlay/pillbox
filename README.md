@@ -20,7 +20,7 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
 
 ## Requirements
 
-- Apache 2.4 with `mod_rewrite` (normally enabled)
+- Apache 2.4 with `mod_rewrite` (normally enabled) and ideally `mod_headers`
 - PHP 8.1+ with `pdo_mysql`, `curl`, `openssl`, `mbstring`
 - MySQL 8.0+ or MariaDB 10.5+
 - HTTPS (required for Entra ID sign-in and strongly recommended anyway)
@@ -38,8 +38,8 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
    You don't need to import any tables, because Pillbox creates them the first time it is opened.
    You can import `database/schema.sql` yourself if you prefer.
 
-3. **Configure**: copy `config/config.local.example.php` to `config/config.local.php` and fill in the
-   database details. If the site is in a sub-folder (e.g. `https://example.com/pillbox/`), set
+3. **Configure**: copy `config/config.example.php` to `config/config.php` and fill in the
+   database details. `config/config.php` is the only settings file; it is git-ignored, so your passwords stay off GitHub. If the site is in a sub-folder (e.g. `https://example.com/pillbox/`), set
    `'base_path' => '/pillbox'`.
 
 4. **Make `storage/` writable** by the web server (it caches Microsoft's signing keys):
@@ -68,6 +68,25 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
 
   **Check it:** browsing to `https://your-site/config/config.php` should return *403 Forbidden*.
 
+## Installing as an app on iPhone and Android
+
+Pillbox is a Progressive Web App (PWA). Once it's on your HTTPS site, people can add it to their home
+screen. It then opens full screen with its own icon, like a normal app; no App Store or Google Play
+listing is needed. **Account → Install Pillbox on your phone** explains how:
+
+- **iPhone / iPad:** open the site in Safari → Share → **Add to Home Screen**.
+- **Android:** open the site in Chrome → ⋮ menu → **Install app** (or tap **Install the app** on the Account page).
+
+Notes:
+
+- HTTPS is required; browsers won't install the app over plain HTTP.
+- The app needs a connection. Health data is never stored on the phone, only on your server; if the
+  phone is offline it shows a "You're offline" page.
+- Sign-ins last for `session_idle_minutes` (8 hours by default) since last use, even if the app is
+  closed. Raise it in `config/config.php` if people find they're signed out too often, e.g. `10080`
+  for a week.
+- Sessions are stored in `storage/sessions`, so `storage/` must be writable.
+
 ## Microsoft Entra ID single sign-on
 
 1. In the Entra admin centre go to **App registrations → New registration**.
@@ -81,7 +100,7 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
    only inside Pillbox.
 5. *(Optional)* To limit who can sign in, set **Assignment required = Yes** on the enterprise
    application and assign users or groups.
-6. In `config/config.local.php`, set the `entra` section:
+6. In `config/config.php`, set the `entra` section:
    ```php
    'entra' => [
        'enabled'       => true,
@@ -117,7 +136,7 @@ system-to-system account:
 
 1. Go to [NHS England Terminology Server: how to access](https://digital.nhs.uk/services/terminology-server/how-to-access-the-terminology-server)
    and request a **system-to-system account**. You'll be given a client ID and client secret.
-2. Add them to `config/config.local.php`:
+2. Add them to `config/config.php`:
    ```php
    'nhs_terminology' => [
        'enabled'       => true,
@@ -156,7 +175,7 @@ matched to ones already in Pillbox.
 ```
 public/      web root: pages, assets (CSS, JS, logo)
 src/         application code (auth, Entra OIDC, scheduling, metrics, charts, layout)
-config/      config.php (defaults) + your config.local.php
+config/      config.example.php (template) -> copy to config.php (your settings)
 database/    schema.sql
 storage/     cache (must be writable)
 ```

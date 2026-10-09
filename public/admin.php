@@ -84,8 +84,15 @@ if (is_post()) {
                     break;
                 }
                 q('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash((string) $_POST['password'], PASSWORD_DEFAULT), $target['id']]);
+                bump_session_version((int) $target['id'], false);
                 q('DELETE FROM login_attempts WHERE username = ?', [$target['username']]);
                 flash('success', 'Password reset for ' . $target['display_name'] . '.');
+                break;
+            case 'unlink_entra':
+                if ($target['auth_provider'] === 'local') {
+                    q('UPDATE users SET entra_oid = NULL, entra_tid = NULL WHERE id = ?', [$target['id']]);
+                    flash('success', 'Microsoft account unlinked from ' . $target['display_name'] . '.');
+                }
                 break;
             case 'delete':
                 if ($self) {
@@ -111,6 +118,9 @@ render_header('Admin', 'admin');
 <?= form_errors($errors) ?>
 
 <section class="card">
+    <?php if (!local_login_enabled()): ?>
+    <p class="flash flash-warning">Password sign-in is switched off in <code>config/config.php</code>, so local users can't sign in. Add Microsoft users instead.</p>
+    <?php endif; ?>
     <?php if (!entra_enabled()): ?>
     <p class="muted small">Microsoft Entra ID sign-in is not configured. See the README to switch it on.</p>
     <?php elseif (config('entra.auto_provision')): ?>
@@ -126,7 +136,8 @@ render_header('Admin', 'admin');
             <tr<?= $u['is_active'] ? '' : ' class="muted"' ?>>
                 <td><strong><?= h($u['display_name']) ?></strong><?= $u['is_admin'] ? ' <span class="badge">Admin</span>' : '' ?>
                     <div class="muted small"><?= h($u['username'] ?? $u['email']) ?></div></td>
-                <td><?= $u['auth_provider'] === 'entra' ? 'Microsoft' . ($u['entra_oid'] ? '' : ' <span class="muted small">(not yet signed in)</span>') : 'Local' ?></td>
+                <td><?php if ($u['auth_provider'] === 'entra'): ?>Microsoft<?= $u['entra_oid'] ? '' : ' <span class="muted small">(not yet signed in)</span>' ?>
+                    <?php else: ?>Local<?= $u['entra_oid'] ? ' + Microsoft' : '' ?><?php endif; ?></td>
                 <td class="num"><?= (int) $u['med_count'] ?></td>
                 <td><?= $u['last_login_at'] ? h(local_time($u['last_login_at'], 'j M Y H:i')) : '—' ?></td>
                 <td><?= $u['is_active'] ? 'Active' : 'Disabled' ?></td>
@@ -138,6 +149,9 @@ render_header('Admin', 'admin');
                             <form method="post"><?= csrf_field() ?><input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
                                 <button class="btn btn-small" name="action" value="toggle_active"><?= $u['is_active'] ? 'Disable' : 'Enable' ?></button>
                                 <button class="btn btn-small" name="action" value="toggle_admin"><?= $u['is_admin'] ? 'Remove admin' : 'Make admin' ?></button>
+                                <?php if ($u['auth_provider'] === 'local' && $u['entra_oid']): ?>
+                                <button class="btn btn-small" name="action" value="unlink_entra">Unlink Microsoft</button>
+                                <?php endif; ?>
                             </form>
                             <?php if ($u['auth_provider'] === 'local'): ?>
                             <form method="post" class="inline-form"><?= csrf_field() ?><input type="hidden" name="id" value="<?= (int) $u['id'] ?>">

@@ -2,6 +2,33 @@
 (function () {
   'use strict';
 
+  // Remember the user's theme so pages served without it (the offline page) can use it.
+  (function () {
+    var root = document.documentElement;
+    try {
+      if (root.hasAttribute('data-palette')) {
+        window.localStorage.setItem('pillbox-palette', root.getAttribute('data-palette'));
+        window.localStorage.setItem('pillbox-mode', root.getAttribute('data-theme') || 'auto');
+      } else {
+        root.setAttribute('data-palette', window.localStorage.getItem('pillbox-palette') || 'olive');
+        var mode = window.localStorage.getItem('pillbox-mode');
+        if (mode === 'light' || mode === 'dark') { root.setAttribute('data-theme', mode); }
+      }
+    } catch (e) { /* storage unavailable: defaults are fine */ }
+  })();
+
+  // Preview the chosen theme / mode straight away on the Account page (saved with the button).
+  document.addEventListener('change', function (e) {
+    var input = e.target;
+    var root = document.documentElement;
+    if (input.name === 'theme' && input.closest('#appearance')) {
+      root.setAttribute('data-palette', input.value);
+    }
+    if (input.name === 'color_mode' && input.closest('#appearance')) {
+      if (input.value === 'auto') { root.removeAttribute('data-theme'); } else { root.setAttribute('data-theme', input.value); }
+    }
+  });
+
   // Ask before destructive form submissions: <form data-confirm="Are you sure?">
   document.addEventListener('submit', function (e) {
     var msg = e.target.getAttribute && e.target.getAttribute('data-confirm');
@@ -183,4 +210,56 @@
       if (linked) { linked.textContent = 'No longer linked to an NHS dm+d code because the name was changed.'; }
     }
   });
+})();
+
+// Installable app: service worker, install button and home-screen prompt.
+(function () {
+  'use strict';
+  var baseMeta = document.querySelector('meta[name="pillbox-base"]');
+  var base = baseMeta ? baseMeta.getAttribute('content') : './';
+  var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register(base + 'sw.js', { scope: base }).catch(function () { /* app still works without it */ });
+    });
+  }
+
+  function storageGet(key) { try { return window.localStorage.getItem(key); } catch (e) { return null; } }
+  function storageSet(key, value) { try { window.localStorage.setItem(key, value); } catch (e) { /* ignore */ } }
+
+  var installedNote = document.querySelector('.installed-note');
+  var installHelp = document.querySelector('.install-help');
+  if (standalone && installedNote) {
+    installedNote.hidden = false;
+    if (installHelp) { installHelp.hidden = true; }
+  }
+
+  // Android / desktop Chrome & Edge: offer the browser's own install prompt.
+  var deferredPrompt = null;
+  var installButton = document.getElementById('install-button');
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    var wrap = document.querySelector('.install-android');
+    if (wrap) { wrap.hidden = false; }
+  });
+  if (installButton) {
+    installButton.addEventListener('click', function () {
+      if (!deferredPrompt) { return; }
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.finally(function () { deferredPrompt = null; });
+    });
+  }
+
+  // Gentle prompt on the Today page for phones that haven't installed it yet.
+  var banner = document.querySelector('.install-banner');
+  var isPhone = window.matchMedia('(max-width: 760px) and (pointer: coarse)').matches;
+  if (banner && isPhone && !standalone && storageGet('pillbox-install-dismissed') !== '1') {
+    banner.hidden = false;
+    banner.querySelector('[data-dismiss-install]').addEventListener('click', function () {
+      storageSet('pillbox-install-dismissed', '1');
+      banner.hidden = true;
+    });
+  }
 })();

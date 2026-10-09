@@ -55,6 +55,28 @@ function ensure_schema(): void
         if (!q("SHOW COLUMNS FROM medications LIKE 'dmd_code'")->fetch()) {
             db()->exec('ALTER TABLE medications ADD COLUMN dmd_code VARCHAR(20) NULL AFTER name');
         }
+        if (!q("SHOW COLUMNS FROM users LIKE 'session_version'")->fetch()) {
+            db()->exec('ALTER TABLE users ADD COLUMN session_version INT UNSIGNED NOT NULL DEFAULT 0 AFTER enabled_metrics');
+        }
+        if (!q("SHOW TABLES LIKE 'stock_events'")->fetch()) {
+            db()->exec("CREATE TABLE IF NOT EXISTS stock_events (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id        INT UNSIGNED NOT NULL,
+    medication_id  INT UNSIGNED NOT NULL,
+    kind           ENUM('collected','recount') NOT NULL,
+    quantity       DECIMAL(10,2) NOT NULL,      -- amount collected, or the new counted total
+    stock_after    DECIMAL(10,2) NOT NULL,
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_stock_med (medication_id, created_at),
+    CONSTRAINT fk_stock_user FOREIGN KEY (user_id)       REFERENCES users (id)       ON DELETE CASCADE,
+    CONSTRAINT fk_stock_med  FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        }
+        if (!q("SHOW COLUMNS FROM users LIKE 'theme'")->fetch()) {
+            db()->exec("ALTER TABLE users ADD COLUMN theme VARCHAR(20) NOT NULL DEFAULT 'olive' AFTER session_version,
+                        ADD COLUMN color_mode VARCHAR(10) NOT NULL DEFAULT 'auto' AFTER theme");
+        }
         return;
     }
     $sql = (string) file_get_contents(APP_ROOT . '/database/schema.sql');
