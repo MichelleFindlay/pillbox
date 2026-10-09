@@ -1,0 +1,13 @@
+{
+  "name": "Pillbox",
+  "short_name": "Pillbox",
+  "description": "Medication and health reading tracker",
+  "start_url": "index.php",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f5f1",
+  "theme_color": "#3d4a3a",
+  "icons": [
+    { "src": "assets/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

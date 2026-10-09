@@ -1,0 +1,9 @@
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_headers.c>
+    Header always unset X-Powered-By
+</IfModule>
+<FilesMatch "\.webmanifest$">
+    ForceType application/manifest+json
+</FilesMatch>
