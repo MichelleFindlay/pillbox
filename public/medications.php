@@ -5,6 +5,11 @@ $user = require_login();
 $uid = (int) $user['id'];
 $todayYmd = local_today()->format('Y-m-d');
 
+if (is_post() && post('action') === 'show_changes') {
+    require_post();
+    q('UPDATE users SET meds_show_changes = ? WHERE id = ?', [post('show') === '1' ? 1 : 0, $uid]);
+    redirect('medications.php');
+}
 if (is_post()) {
     require_post();
     $med = find_medication((int) post('id'), $uid);
@@ -32,6 +37,14 @@ if (is_post()) {
                 redirect('medications.php#med-' . $med['id']);
             }
             $qty = (float) $qty;
+            $expiry = post('expiry_date') === '' ? null : parse_date(post('expiry_date'));
+            if (post('expiry_date') !== '' && !$expiry) {
+                flash('error', 'Enter the expiry date as a date, or leave it empty.');
+                redirect('medications.php#med-' . $med['id']);
+            }
+            if ($expiry) {
+                q('UPDATE medications SET expiry_date = ? WHERE id = ?', [$expiry->format('Y-m-d'), $med['id']]);
+            }
             $after = transaction(function () use ($med, $kind, $qty, $uid) {
                 $current = q('SELECT stock_count FROM medications WHERE id = ? FOR UPDATE', [$med['id']])->fetchColumn();
                 $after = $kind === 'collected' ? (float) $current + $qty : $qty;
@@ -43,9 +56,11 @@ if (is_post()) {
             $days = stock_days_left(['stock_count' => $after] + $med, schedules_by_medication([(int) $med['id']], $todayYmd)[$med['id']] ?? []);
             flash('success', ($kind === 'collected' ? 'Added ' . dose_label($qty, $med['dose_unit']) . ' to ' : 'Stock count updated for ')
                 . $med['name'] . '. You now have ' . dose_label($after, $med['dose_unit'])
-                . ($days !== null ? ' (about ' . (int) floor($days) . ' days).' : '.'));
+                . ($days !== null ? ' (about ' . (int) floor($days) . ' days).' : '.')
+                . ($expiry ? ' Expiry date set to ' . $expiry->format('j M Y') . '.' : ''));
             redirect('medications.php#med-' . $med['id']);
         case 'delete':
+            owner_only('Permanently deleting a medicine');
             q('DELETE FROM medications WHERE id = ?', [$med['id']]);
             flash('success', $med['name'] . ' and all of its dose history were deleted.');
             break;
@@ -71,7 +86,14 @@ $stopped = array_filter($meds, fn ($m) => !$m['is_active']);
 render_header('Medications', 'meds');
 ?>
 <div class="page-head">
-    <h1>Medications</h1>
+    <div>
+        <h1>Medications</h1>
+        <form method="post" class="show-changes">
+            <?= csrf_field() ?><input type="hidden" name="action" value="show_changes"><input type="hidden" name="show" value="0">
+            <label class="check small"><input type="checkbox" name="show" value="1" data-autosubmit<?= checked((bool) $user['meds_show_changes']) ?>> Show dose changes</label>
+            <noscript><button class="btn btn-small" type="submit">Apply</button></noscript>
+        </form>
+    </div>
     <span class="inline-actions">
         <a class="btn" href="<?= h(url('travel.php')) ?>">&#9992; Travel</a>
         <a class="btn btn-primary" href="<?= h(url('medication_edit.php')) ?>">+ Add medication</a>
@@ -115,6 +137,9 @@ render_header('Medications', 'meds');
             <?php if (isset($lastCollected[$m['id']])): $lc = $lastCollected[$m['id']]; ?>
                 Last collected <?= h(local_time($lc['created_at'], 'j M')) ?> (<?= h(dose_label($lc['quantity'], $m['dose_unit'])) ?>) ·
             <?php endif; ?>
+            <?php [$expState, $expText] = expiry_status($m['expiry_date'], local_today()); if ($expText): ?>
+                <span class="<?= $expState ? 'warn' : '' ?>"><?= $expState === 'expired' ? '&#9888; ' : '' ?><?= h($expText) ?></span> ·
+            <?php endif; ?>
             Since <?= h(date('j M Y', strtotime($m['start_date']))) ?><?= $m['end_date'] ? ' until ' . h(date('j M Y', strtotime($m['end_date']))) : '' ?>
             <?= $m['prescriber'] ? ' · ' . h($m['prescriber']) : '' ?>
         </p>
@@ -133,13 +158,18 @@ render_header('Medications', 'meds');
                         <input type="number" name="quantity" min="0" step="any" inputmode="decimal" required
                             value="<?= isset($lastCollected[$m['id']]) ? h(num($lastCollected[$m['id']]['quantity'])) : '' ?>" placeholder="e.g. 56">
                     </label>
+                    <label><span>Expiry date <span class="muted small">(optional)</span></span>
+                        <input type="date" name="expiry_date" value=""></label>
                     <button class="btn btn-primary" type="submit">Update stock</button>
                 </div>
                 <p class="muted small">Currently <?= $m['stock_count'] !== null ? h(dose_label($m['stock_count'], $m['dose_unit'])) : 'not tracked' ?>.</p>
             </form>
         </details>
-        <?php if (isset($latestChanges[$m['id']]) && $latestChanges[$m['id']]['kind'] !== 'started'): $lc = $latestChanges[$m['id']]; ?>
+        <?php if ($user['meds_show_changes'] && isset($latestChanges[$m['id']]) && $latestChanges[$m['id']]['kind'] !== 'started'): $lc = $latestChanges[$m['id']]; ?>
         <p class="small last-change">Changed <?= h(date('j M Y', strtotime($lc['effective_date']))) ?>: <?= h($lc['summary']) ?></p>
+        <?php endif; ?>
+        <?php if ($m['mental_health'] && mind_enabled($user)): ?>
+        <p class="small"><a href="<?= h(url('mind_meds.php#med-' . $m['id'])) ?>">Side effects and how I'm feeling</a></p>
         <?php endif; ?>
         <footer class="med-actions">
             <a class="btn btn-small" href="<?= h(url('medication_edit.php?id=' . $m['id'])) ?>">Edit</a>

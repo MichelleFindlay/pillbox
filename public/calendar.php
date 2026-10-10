@@ -1,6 +1,7 @@
 <?php
 /*
- * Private calendar feed (iCalendar) of a user's appointments: calendar.php?token=<secret>
+ * Private calendar feed (iCalendar) of a user's appointments, plus care routine tasks and
+ * checks (on their due dates) with reminders turned on: calendar.php?token=<secret>
  * No sign-in: the secret token in the URL is the key. Users can change or turn it off
  * on the Appointments page.
  */
@@ -25,4 +26,8 @@ header('Content-Type: text/calendar; charset=utf-8');
 header('Content-Disposition: inline; filename="appointments.ics"');
 header('Cache-Control: private, max-age=900');
 header('X-Robots-Tag: noindex, nofollow');
-echo appointments_ics($user, $appointments, $host);
+$areas = routine_areas($user);
+$careEvents = care_ics_events(array_filter(care_tasks((int) $user['id']), fn ($t) => in_array($t['area'], $areas, true)), $host)
+    . checks_ics_events($user, array_filter(health_checks((int) $user['id']), fn ($c) => in_array($c['area'], $areas, true)), $host)
+    . mind_ics_events($user, $host);
+echo appointments_ics($user, $appointments, $host, $careEvents);

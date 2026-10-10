@@ -28,11 +28,28 @@ function url(string $path = ''): string
 function absolute_url(string $path = ''): string
 {
     $base = rtrim((string) config('app.public_url', ''), '/');
+    if ($base === '' && empty($_SERVER['HTTP_HOST'])) {
+        // Scheduled tasks have no request to go on: use the address the site was last visited at.
+        $base = rtrim((string) @file_get_contents(storage_path('site_url.txt')), '/');
+    }
     if ($base === '') {
         $host = preg_replace('/[^A-Za-z0-9.\-:\[\]]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
         $base = (is_https() ? 'https' : 'http') . '://' . $host . config('app.base_path', '');
     }
     return $base . '/' . ltrim($path, '/');
+}
+
+/** Remember the site's address (once per session) so emails sent by scheduled tasks can link back. */
+function remember_site_url(): void
+{
+    if (config('app.public_url', '') !== '' || empty($_SERVER['HTTP_HOST']) || !empty($_SESSION['site_url_saved'])) {
+        return;
+    }
+    $_SESSION['site_url_saved'] = true;
+    $url = rtrim(absolute_url(), '/');
+    if (@file_get_contents(storage_path('site_url.txt')) !== $url) {
+        @file_put_contents(storage_path('site_url.txt'), $url, LOCK_EX);
+    }
 }
 
 /** URL for a static asset with a cache-busting version. */
@@ -55,7 +72,7 @@ function redirect(string $path): never
 function safe_return(?string $target, string $fallback = 'index.php'): string
 {
     $target = (string) $target;
-    return preg_match('#^[a-z_]+\.php(\?[A-Za-z0-9_=&%.:+\-]*)?$#', $target) ? $target : $fallback;
+    return preg_match('#^[a-z_]+\.php(\?[A-Za-z0-9_=&%.:+\-]*)?(\x23[a-z0-9-]+)?$#', $target) ? $target : $fallback;
 }
 
 function is_https(): bool
@@ -181,6 +198,10 @@ function require_post(): void
     if (!hash_equals(csrf_token(), (string) ($_POST['csrf'] ?? ''))) {
         http_response_code(400);
         exit('Your session expired or the form was submitted twice. Go back, reload the page and try again.');
+    }
+    if (acting_read_only() && !in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), ['sharing.php', 'logout.php'], true)) {
+        flash('error', "You can look, but not change anything: you've been given view-only access.");
+        redirect(safe_return(basename(parse_url($_SERVER['HTTP_REFERER'] ?? '', PHP_URL_PATH) ?: ''), 'index.php'));
     }
 }
 

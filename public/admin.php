@@ -134,7 +134,7 @@ if (is_post()) {
 
 $users = q(
     'SELECT u.*, (SELECT COUNT(*) FROM medications m WHERE m.user_id = u.id AND m.is_active = 1) AS med_count
-     FROM users u ORDER BY u.display_name'
+     FROM users u WHERE u.is_demo = 0 ORDER BY u.display_name'
 )->fetchAll();
 
 $userIdentities = [];
@@ -244,6 +244,23 @@ render_header('Admin', 'admin');
     </form>
 </section>
 <?php $latest = latest_version(); $repoUrl = github_repo_url(); ?>
+<?php $lastRun = tasks_last_run(); ?>
+<section class="card" id="tasks">
+    <h2>Scheduled tasks</h2>
+    <p>Emails (daily summaries, appointment reminders, update notices) and tidying up happen in the scheduled tasks.
+        <?php if ($lastRun): ?>They last ran <strong><?= h(local_time(gmdate('Y-m-d H:i:s', (int) $lastRun['ran_at']), 'j M Y, H:i')) ?></strong>.
+        <?php else: ?><strong>They haven't run yet.</strong><?php endif; ?></p>
+    <?php if ($lastRun && $lastRun['ran_at'] < time() - 3600): ?><p class="flash flash-warning">That was over an hour ago: check the cron job is still set up.</p><?php endif; ?>
+    <?php if (!empty($lastRun['log'])): ?><details class="q-edit"><summary>What they did</summary><ul class="small"><?php foreach ($lastRun['log'] as $line): ?><li><?= h($line) ?></li><?php endforeach; ?></ul></details><?php endif; ?>
+    <p class="small">Email is <strong><?= mail_enabled() ? 'on (' . h((string) config('mail.transport', 'mail')) . ')' : 'off' ?></strong> (mail settings in config/config.php).</p>
+    <details class="q-edit"<?= $lastRun ? '' : ' open' ?>><summary>How to set them up</summary>
+        <p class="small">Run them every 5 to 15 minutes. With cron on your server:</p>
+        <pre class="code">*/10 * * * * php <?= h(APP_ROOT) ?>/bin/cron.php</pre>
+        <p class="small">Or, if your host has no cron, set a long random <code>token</code> under <code>'cron'</code> in config/config.php and have a web cron service call:</p>
+        <pre class="code"><?= h(absolute_url('cron.php?token=')) ?><em>your-token</em></pre>
+    </details>
+</section>
+
 <section class="card" id="version">
     <h2>Version</h2>
     <p>This Pillbox is version <strong><?= h(pillbox_version()) ?></strong>.

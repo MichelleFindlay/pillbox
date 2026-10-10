@@ -4,8 +4,16 @@ declare(strict_types=1);
 const LOGIN_MAX_FAILURES = 8;
 const LOGIN_WINDOW_MINUTES = 15;
 
+/**
+ * The user whose Pillbox is being shown: the signed-in user, or someone who has shared
+ * theirs with them (see sharing.php), with '_acting' => [real user, level, mind] added.
+ * Scheduled tasks set it per user with set_current_user().
+ */
 function current_user(): ?array
 {
+    if (array_key_exists('PILLBOX_TASK_USER', $GLOBALS)) {
+        return $GLOBALS['PILLBOX_TASK_USER'];
+    }
     static $loaded = false;
     static $user = null;
     if (!$loaded) {
@@ -18,10 +26,38 @@ function current_user(): ?array
             }
             if ($user === null) {
                 logout_session();
+            } elseif (!empty($_SESSION['acting_for'])) {
+                $user = acting_user($user, (int) $_SESSION['acting_for']) ?? $user;
             }
         }
     }
     return $user;
+}
+
+/** For scheduled tasks: make helpers (time zones, ...) work for this user. */
+function set_current_user(?array $user): void
+{
+    $GLOBALS['PILLBOX_TASK_USER'] = $user;
+}
+
+/** The signed-in person, even while looking at someone else's Pillbox. */
+function real_user(): ?array
+{
+    $user = current_user();
+    return $user['_acting']['by'] ?? $user;
+}
+
+/** The owner's account, if $real may look at it; null (and stop acting) otherwise. */
+function acting_user(array $real, int $ownerId): ?array
+{
+    $share = q('SELECT s.*, u.id AS uid FROM data_shares s JOIN users u ON u.id = s.owner_id AND u.is_active = 1
+                WHERE s.owner_id = ? AND s.grantee_id = ?', [$ownerId, $real['id']])->fetch();
+    if (!$share) {
+        unset($_SESSION['acting_for']);
+        return null;
+    }
+    $owner = q('SELECT * FROM users WHERE id = ?', [$ownerId])->fetch();
+    return $owner + ['_acting' => ['by' => $real, 'level' => $share['level'], 'mind' => (bool) $share['include_mind'], 'share_id' => (int) $share['id']]];
 }
 
 function require_login(): array
@@ -33,7 +69,31 @@ function require_login(): array
         $_SESSION['after_login'] = safe_return($target . ($query !== '' ? '?' . $query : ''));
         redirect('login.php');
     }
+    // Looking at someone else's Pillbox: their account settings and the like stay theirs.
+    if (isset($user['_acting']) && in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), ACTING_BLOCKED_PAGES, true)) {
+        flash('error', "That's only available in your own Pillbox. Use \"Back to mine\" first.");
+        redirect('index.php');
+    }
     return $user;
+}
+
+// Pages someone with shared access can't open, even with "can help" access.
+const ACTING_BLOCKED_PAGES = ['account.php', 'account_export.php', 'admin.php', 'health_import.php', 'export.php', 'mind_unlock.php'];
+
+/** Stop someone with shared access doing something only the owner should (sync links, PINs, deleting). */
+function owner_only(string $what = 'That'): void
+{
+    if (isset(current_user()['_acting'])) {
+        flash('error', "$what can only be done by the owner of this Pillbox.");
+        redirect(safe_return(basename(parse_url($_SERVER['HTTP_REFERER'] ?? '', PHP_URL_PATH) ?: ''), 'index.php'));
+    }
+}
+
+/** With view-only shared access, nothing can be changed (except going back to your own Pillbox). */
+function acting_read_only(): bool
+{
+    $user = current_user();
+    return isset($user['_acting']) && $user['_acting']['level'] !== 'manage';
 }
 
 function require_admin(): array
@@ -55,6 +115,7 @@ function login_user(array $user, ?string $method = null): void
     $_SESSION['uid'] = (int) $user['id'];
     $_SESSION['provider'] = $method ?? $user['auth_provider'];
     $_SESSION['sv'] = (int) ($user['session_version'] ?? 0);
+    $_SESSION['login_at'] = time();
     unset($_SESSION['csrf']);
     q('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [$user['id']]);
 }
@@ -175,5 +236,5 @@ function is_last_admin(array $user): bool
 
 function user_count(): int
 {
-    return (int) q('SELECT COUNT(*) FROM users')->fetchColumn();
+    return (int) q('SELECT COUNT(*) FROM users WHERE is_demo = 0')->fetchColumn();
 }

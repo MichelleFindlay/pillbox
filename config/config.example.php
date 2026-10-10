@@ -138,4 +138,37 @@ return [
         // A scheduled dose with nothing logged counts as missed this long after its time.
         'missed_after_minutes' => 120,
     ],
+
+    // Email: daily summaries, appointment reminders and update notices. Sent by the
+    // scheduled tasks (see 'cron' below), so those need setting up too.
+    'mail' => [
+        'enabled'   => false,
+        'from'      => 'pillbox@example.com',
+        'from_name' => 'Pillbox',
+        // 'mail' uses PHP's mail() (fine on most shared hosting); 'smtp' talks to a mail server directly.
+        'transport' => 'mail',
+        'smtp' => [
+            'host'     => 'smtp.example.com',
+            'port'     => 587,
+            'secure'   => 'tls',      // 'tls' (STARTTLS, usually port 587), 'ssl' (port 465) or '' (none)
+            'username' => '',
+            'password' => '',
+        ],
+    ],
+
+    // Scheduled tasks (emails, update check, tidying up). Run every 5 to 15 minutes, either
+    //   from cron:  */10 * * * * php /path/to/pillbox/bin/cron.php
+    //   or a web cron service calling:  https://your-site/cron.php?token=<token below>
+    'cron' => [
+        // A long random secret for the web address; leave empty to allow only the command line.
+        'token' => '',
+    ],
+
+    // Demo mode: a "Try the demo" button on the sign-in page. Each visitor gets their own copy of a
+    // sample account; nothing they change is kept after they sign out (or after 'hours').
+    // Account settings, email, sharing and sync links are switched off in the demo.
+    'demo' => [
+        'enabled' => false,
+        'hours'   => 2,
+    ],
 ];

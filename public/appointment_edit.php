@@ -18,7 +18,7 @@ $form = $appointment ? [
     'notes'            => (string) $appointment['notes'],
     'remind_minutes'   => (string) (int) $appointment['remind_minutes'],
 ] : [
-    'kind' => 'gp', 'title' => '', 'date' => local_today()->modify('+1 day')->format('Y-m-d'), 'time' => '09:00',
+    'kind' => isset(APPOINTMENT_TYPES[get('kind')]) ? get('kind') : 'gp', 'title' => '', 'date' => local_today()->modify('+1 day')->format('Y-m-d'), 'time' => '09:00',
     'duration_minutes' => '15', 'with_whom' => '', 'location' => '', 'notes' => '', 'remind_minutes' => '1440',
 ];
 $errors = [];

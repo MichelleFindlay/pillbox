@@ -57,6 +57,7 @@ render_header('Report', 'report');
     <button class="btn btn-primary" type="button" data-print>Print / save as PDF</button>
     <a class="btn" href="<?= h(url('export.php?' . http_build_query($range + ['what' => 'doses']))) ?>">Doses CSV</a>
     <a class="btn" href="<?= h(url('export.php?' . http_build_query($range + ['what' => 'readings']))) ?>">Readings CSV</a>
+    <a class="btn" href="<?= h(url('care_summary.php?' . http_build_query($range))) ?>">Care summary</a>
 </form>
 
 <article class="report">

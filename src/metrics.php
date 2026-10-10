@@ -37,7 +37,7 @@ function builtin_metrics(): array
         'cholesterol' => ['label' => 'Cholesterol', 'fields' => [$f('Total', 'mmol/L', 1, 20, 0.1), $f('HDL', 'mmol/L', 0.1, 5, 0.1, false), $f('LDL', 'mmol/L', 0.1, 15, 0.1, false)]],
         'pain' => ['label' => 'Pain score', 'fields' => [$f('Pain', '/10', 0, 10)], 'contexts' => ['Head', 'Back', 'Joints', 'Chest', 'Abdomen', 'Other']],
         'mood' => ['label' => 'Mood', 'fields' => [$f('Mood', '/10', 0, 10)]],
-        'sleep' => ['label' => 'Sleep', 'fields' => [$f('Sleep', 'hours', 0, 24, 0.25)]],
+        'sleep' => ['label' => 'Sleep', 'fields' => [$f('Sleep', 'hours', 0, 24, 0.25)], 'contexts' => SLEEP_QUALITY],
         'fluid_intake' => ['label' => 'Fluid intake', 'fields' => [$f('Fluid', 'ml', 0, 10000, 50)]],
         'steps' => ['label' => 'Steps', 'fields' => [$f('Steps', 'steps', 0, 100000)]],
         'symptom' => [

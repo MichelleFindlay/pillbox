@@ -14,6 +14,25 @@ function weekday_bit(DateTimeInterface $date): int
     return 1 << ((int) $date->format('N') - 1);
 }
 
+/**
+ * Whether a medicine's supply has expired or expires within 30 days.
+ * @return array{0: ?string, 1: string} ['expired' | 'soon' | null, wording]
+ */
+function expiry_status(?string $expiry, DateTimeImmutable $today): array
+{
+    if (!$expiry) {
+        return [null, ''];
+    }
+    $date = new DateTimeImmutable($expiry, $today->getTimezone());
+    $days = (int) $today->diff($date)->format('%r%a');
+    return match (true) {
+        $days < 0   => ['expired', 'Expired ' . $date->format('j M Y')],
+        $days === 0 => ['expired', 'Expires today'],
+        $days <= 30 => ['soon', "Expires in $days day" . ($days === 1 ? '' : 's') . ' (' . $date->format('j M') . ')'],
+        default     => [null, 'Expires ' . $date->format('j M Y')],
+    };
+}
+
 function days_label(int $mask): string
 {
     $mask &= EVERY_DAY;
@@ -48,6 +67,19 @@ function current_schedules(int $medId, string $todayYmd): array
          ORDER BY valid_from IS NOT NULL, valid_from, dose_time',
         [$medId, $todayYmd]
     )->fetchAll();
+}
+
+/**
+ * The schedule to show in the editor and compare changes against. When a change has been
+ * split to start tomorrow (because today's doses were already logged), the version ending
+ * today is left out so it isn't edited again.
+ */
+function editing_schedules(int $medId, string $todayYmd): array
+{
+    $tomorrow = (new DateTimeImmutable($todayYmd))->modify('+1 day')->format('Y-m-d');
+    $rows = current_schedules($medId, $todayYmd);
+    $split = array_filter($rows, fn ($s) => $s['valid_from'] === $tomorrow) && array_filter($rows, fn ($s) => $s['valid_to'] === $todayYmd);
+    return $split ? array_values(array_filter($rows, fn ($s) => $s['valid_to'] !== $todayYmd)) : $rows;
 }
 
 function past_schedules(int $medId, string $todayYmd): array
@@ -316,15 +348,16 @@ function prn_logs(int $userId, string $fromUtc, string $toUtc): array
     )->fetchAll();
 }
 
-/** Average units used per day by the current schedule (for stock estimates). */
-function daily_usage(array $med, array $schedules): float
+/** Average units used per day by the schedule in effect on $asOf (default today), for stock estimates. */
+function daily_usage(array $med, array $schedules, ?string $asOf = null): float
 {
     if ($med['as_needed']) {
         return (float) ($med['prn_dose_amount'] ?? 0);
     }
+    $asOf ??= gmdate('Y-m-d');
     $perWeek = 0.0;
     foreach ($schedules as $s) {
-        if ($s['valid_from'] !== null && $s['valid_from'] > gmdate('Y-m-d')) {
+        if (($s['valid_from'] !== null && $s['valid_from'] > $asOf) || ($s['valid_to'] !== null && $s['valid_to'] < $asOf)) {
             continue;
         }
         $days = 0;
@@ -418,7 +451,7 @@ function medication_regimen(array $med, array $schedules): string
  * Describe what changed between two versions of a medication.
  * @return list<array{0: string, 1: string}> [kind, summary]
  */
-function describe_med_changes(array $old, array $oldSchedules, array $new, array $newSchedules): array
+function describe_med_changes(array $old, array $oldSchedules, array $new, array $newSchedules, ?string $asOf = null): array
 {
     $unit = $new['dose_unit'];
     if ((bool) $old['as_needed'] !== (bool) $new['as_needed']) {
@@ -427,8 +460,9 @@ function describe_med_changes(array $old, array $oldSchedules, array $new, array
             : 'Changed from as needed to regular doses: ' . medication_regimen($new, $newSchedules)]];
     }
 
-    $oldDaily = daily_usage($old, $oldSchedules);
-    $newDaily = daily_usage($new, $newSchedules);
+    // Both compared on the same day: the day the change takes effect.
+    $oldDaily = daily_usage($old, $oldSchedules, $asOf);
+    $newDaily = daily_usage($new, $newSchedules, $asOf);
     $strengthChanged = mb_strtolower(trim((string) $old['strength'])) !== mb_strtolower(trim((string) $new['strength']));
     $dailyChanged = abs($oldDaily - $newDaily) > 0.001;
     $timingChanged = schedule_lines($oldSchedules, $old['dose_unit']) !== schedule_lines($newSchedules, $unit);

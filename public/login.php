@@ -10,6 +10,11 @@ if (current_user()) {
 
 $error = null;
 $username = '';
+if (is_post() && post('action') === 'demo' && demo_enabled()) {
+    require_post();
+    login_user(create_demo_account(), 'demo');
+    redirect('index.php');
+}
 if (is_post() && local_login_enabled()) {
     require_post();
     $username = post('username');
@@ -56,6 +61,15 @@ render_header('Sign in');
         </label>
         <button class="btn btn-primary btn-block" type="submit">Sign in</button>
     </form>
+    <?php endif; ?>
+
+    <?php if (demo_enabled()): ?>
+    <div class="divider"><span>or</span></div>
+    <form method="post">
+        <?= csrf_field() ?><input type="hidden" name="action" value="demo">
+        <button class="btn btn-block" type="submit">Try the demo</button>
+    </form>
+    <p class="muted small">Look around with sample data for a made-up person. Nothing you change is kept.</p>
     <?php endif; ?>
 
     <?php if (user_count() === 0 && local_login_enabled()): ?>

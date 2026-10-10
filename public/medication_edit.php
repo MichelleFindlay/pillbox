@@ -13,11 +13,11 @@ if ($id && !$med) {
 }
 
 $fields = ['name', 'dmd_code', 'strength', 'form', 'dose_unit', 'colour', 'reason', 'instructions', 'prescriber', 'notes',
-    'as_needed', 'prn_dose_amount', 'prn_max_daily', 'stock_count', 'low_stock_days', 'start_date', 'end_date'];
+    'as_needed', 'prn_dose_amount', 'prn_max_daily', 'stock_count', 'low_stock_days', 'expiry_date', 'mental_health', 'start_date', 'end_date'];
 $form = $med ?? ['form' => 'tablet', 'dose_unit' => 'tablet', 'colour' => MED_COLOURS[0], 'as_needed' => 0,
     'low_stock_days' => 7, 'start_date' => $todayYmd];
 $rows = $med
-    ? schedules_for_editing(current_schedules((int) $med['id'], $todayYmd))
+    ? schedules_for_editing(editing_schedules((int) $med['id'], $todayYmd))
     : [editor_row(['dose_time' => '08:00', 'dose_amount' => 1, 'days_mask' => EVERY_DAY, 'valid_from' => null, 'valid_to' => null], [], 'same', [])];
 $errors = [];
 
@@ -27,6 +27,7 @@ if (is_post()) {
         $form[$f] = post($f);
     }
     $form['as_needed'] = isset($_POST['as_needed']) ? 1 : 0;
+    $form['mental_health'] = isset($_POST['mental_health']) ? 1 : 0;
 
     // ---- Validate medication fields ----
     if ($form['name'] === '' || mb_strlen($form['name']) > 150) {
@@ -56,6 +57,9 @@ if (is_post()) {
     }
     if (!ctype_digit((string) $form['low_stock_days']) || (int) $form['low_stock_days'] > 365) {
         $form['low_stock_days'] = 7;
+    }
+    if ($form['expiry_date'] !== '' && !parse_date($form['expiry_date'])) {
+        $errors[] = 'Enter the expiry date as a date, or leave it empty.';
     }
     if (!parse_date($form['start_date'])) {
         $errors[] = 'Enter a valid start date.';
@@ -140,21 +144,21 @@ if (is_post()) {
             $form['name'], $nullable($form['dmd_code']), $nullable($form['strength']), $form['form'], $form['dose_unit'], $form['colour'],
             $nullable($form['reason']), $nullable($form['instructions']), $nullable($form['prescriber']), $nullable($form['notes']),
             $form['as_needed'], $nullable($form['prn_dose_amount']), $nullable($form['prn_max_daily']),
-            $nullable($form['stock_count']), (int) $form['low_stock_days'], $form['start_date'], $nullable($form['end_date']),
+            $nullable($form['stock_count']), (int) $form['low_stock_days'], $nullable($form['expiry_date']), (int) $form['mental_health'], $form['start_date'], $nullable($form['end_date']),
         ];
 
-        $oldSchedules = $med ? current_schedules((int) $med['id'], $todayYmd) : [];
+        $oldSchedules = $med ? editing_schedules((int) $med['id'], $todayYmd) : [];
         $medId = transaction(function () use ($med, $values, $rows, $uid, $form, $today, $todayYmd) {
             if ($med) {
                 q('UPDATE medications SET name = ?, dmd_code = ?, strength = ?, form = ?, dose_unit = ?, colour = ?, reason = ?, instructions = ?,
                      prescriber = ?, notes = ?, as_needed = ?, prn_dose_amount = ?, prn_max_daily = ?, stock_count = ?,
-                     low_stock_days = ?, start_date = ?, end_date = ? WHERE id = ? AND user_id = ?',
+                     low_stock_days = ?, expiry_date = ?, mental_health = ?, start_date = ?, end_date = ? WHERE id = ? AND user_id = ?',
                     [...$values, $med['id'], $uid]);
                 $medId = (int) $med['id'];
             } else {
                 q('INSERT INTO medications (name, dmd_code, strength, form, dose_unit, colour, reason, instructions, prescriber, notes,
-                     as_needed, prn_dose_amount, prn_max_daily, stock_count, low_stock_days, start_date, end_date, user_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
+                     as_needed, prn_dose_amount, prn_max_daily, stock_count, low_stock_days, expiry_date, mental_health, start_date, end_date, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
                 $medId = (int) db()->lastInsertId();
             }
 
@@ -164,9 +168,29 @@ if (is_post()) {
                 return $medId;
             }
 
-            $current = array_column(current_schedules($medId, $todayYmd), null, 'id');
+            $current = array_column(editing_schedules($medId, $todayYmd), null, 'id');
             $existing = array_map('intval', array_keys($current));
             $kept = [];
+            $startDate = (string) $form['start_date'];
+
+            // Changes only apply to doses from now on: a schedule that already has history is
+            // ended and a new version started, rather than edited in place. They start today,
+            // or tomorrow if any of today's doses have already been logged, or on the
+            // "takes effect from" date if that's later.
+            $chosen = parse_date(post('change_date'));
+            $from = $chosen && $chosen > $today ? $chosen : $today;
+            $dayStartUtc = $today->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+            $splitDay = function (?int $sid) use ($from, $today, $dayStartUtc): DateTimeImmutable {
+                if ($from == $today && $sid && q('SELECT 1 FROM dose_logs WHERE schedule_id = ? AND scheduled_for >= ? LIMIT 1', [$sid, $dayStartUtc])->fetch()) {
+                    return $today->modify('+1 day');
+                }
+                return $from;
+            };
+            // Has this schedule been in use before the split day? (If not, it can just be edited.)
+            $hasHistory = fn (array $s, DateTimeImmutable $split) => max((string) ($s['valid_from'] ?? ''), $startDate) < $split->format('Y-m-d');
+            $todayLogged = (bool) array_filter($existing, fn ($sid) => $splitDay($sid) > $today);
+            $newFrom = $todayLogged ? $today->modify('+1 day') : $from;
+
             foreach ($rows as $r) {
                 // Reuse this row's existing schedule ids where possible so dose history
                 // stays attached; prefer the one that already has the same amount.
@@ -181,25 +205,33 @@ if (is_post()) {
                         }
                     }
                     $match ??= $pool ? array_key_first($pool) : null;
-                    if ($match !== null) {
-                        $sid = $pool[$match];
-                        unset($pool[$match]);
-                        q('UPDATE medication_schedules SET dose_time = ?, dose_amount = ?, days_mask = ?, valid_from = ?, valid_to = ? WHERE id = ?',
-                            [...$params, $sid]);
-                        $kept[] = $sid;
-                    } else {
+                    if ($match === null) {
+                        // A new dose time: from the split day if the medicine was already being taken.
+                        $validFrom = $startDate < $newFrom->format('Y-m-d') ? max((string) $r['valid_from'], $newFrom->format('Y-m-d')) : $r['valid_from'];
                         q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?)',
-                            [...$params, $medId]);
+                            [$r['dose_time'] . ':00', $amount, $mask, $validFrom, $r['valid_to'], $medId]);
+                        continue;
                     }
+                    $sid = $pool[$match];
+                    unset($pool[$match]);
+                    $old = $current[$sid];
+                    $kept[] = $sid;
+                    $sameDose = substr($old['dose_time'], 0, 5) === $r['dose_time'] && (float) $old['dose_amount'] === $amount && (int) $old['days_mask'] === $mask;
+                    $split = $splitDay($sid);
+                    if ($sameDose || !$hasHistory($old, $split)) {
+                        q('UPDATE medication_schedules SET dose_time = ?, dose_amount = ?, days_mask = ?, valid_from = ?, valid_to = ? WHERE id = ?', [...$params, $sid]);
+                        continue;
+                    }
+                    q('UPDATE medication_schedules SET valid_to = ? WHERE id = ?', [$split->modify('-1 day')->format('Y-m-d'), $sid]);
+                    q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?)',
+                        [$r['dose_time'] . ':00', $amount, $mask, max((string) $r['valid_from'], $split->format('Y-m-d')), $r['valid_to'], $medId]);
                 }
             }
-            // Removed rows: retire them if doses were logged against them (so history and
-            // adherence stay correct), otherwise delete outright.
-            $yesterday = $today->modify('-1 day')->format('Y-m-d');
+            // Removed dose times: end them (keeping their history), or delete them if they were never in use.
             foreach (array_diff($existing, $kept) as $sid) {
-                $used = q('SELECT 1 FROM dose_logs WHERE schedule_id = ? LIMIT 1', [$sid])->fetch();
-                if ($used) {
-                    q('UPDATE medication_schedules SET valid_to = ? WHERE id = ?', [$yesterday, $sid]);
+                $split = $splitDay($sid);
+                if ($hasHistory($current[$sid], $split)) {
+                    q('UPDATE medication_schedules SET valid_to = ? WHERE id = ?', [$split->modify('-1 day')->format('Y-m-d'), $sid]);
                 } else {
                     q('DELETE FROM medication_schedules WHERE id = ?', [$sid]);
                 }
@@ -209,15 +241,21 @@ if (is_post()) {
 
         // Dose change history.
         $saved = find_medication($medId, $uid);
-        $newSchedules = current_schedules($medId, $todayYmd);
+        $newSchedules = editing_schedules($medId, $todayYmd);
         $changeReason = mb_substr(post('change_reason'), 0, 255);
         $changeDate = parse_date(post('change_date')) ? post('change_date') : $todayYmd;
+        // If today's doses were already logged, the new schedule starts tomorrow: describe and date the change from then.
+        $tomorrowYmd = $today->modify('+1 day')->format('Y-m-d');
+        $all = current_schedules($medId, $todayYmd);
+        $startsOn = (array_filter($all, fn ($s) => $s['valid_to'] === $todayYmd) && array_filter($all, fn ($s) => $s['valid_from'] === $tomorrowYmd))
+            || array_filter($oldSchedules, fn ($s) => $s['valid_from'] === $tomorrowYmd) ? $tomorrowYmd : $todayYmd;
+        $changeDate = max($changeDate, $startsOn);
         $changes = [];
         if (!$med) {
             record_med_change($uid, $medId, $saved['start_date'], 'started',
                 'Started ' . trim(($saved['strength'] ?? '') . ' ' . medication_regimen($saved, $newSchedules)), $changeReason);
         } else {
-            $changes = describe_med_changes($med, $oldSchedules, $saved, $newSchedules);
+            $changes = describe_med_changes($med, $oldSchedules, $saved, $newSchedules, $changeDate);
             foreach ($changes as [$kind, $summary]) {
                 record_med_change($uid, $medId, $changeDate, $kind, $summary, $changeReason);
             }
@@ -323,6 +361,10 @@ render_header($med ? 'Edit ' . $med['name'] : 'Add medication', 'meds');
             <label>Prescribed by <input name="prescriber" maxlength="150" value="<?= h($form['prescriber'] ?? '') ?>" placeholder="e.g. Dr Patel"></label>
         </div>
         <label>Instructions <input name="instructions" maxlength="255" value="<?= h($form['instructions'] ?? '') ?>" placeholder="e.g. Take with food"></label>
+        <?php if (mind_enabled($user)): ?>
+        <label class="check"><input type="checkbox" name="mental_health" value="1"<?= checked(!empty($form['mental_health'])) ?>>
+            <span>Mental health medicine <span class="muted small">(shown in Mind, with side-effect and "how I'm feeling" notes for reviews)</span></span></label>
+        <?php elseif (!empty($form['mental_health'])): ?><input type="hidden" name="mental_health" value="1"><?php endif; ?>
         <fieldset class="colours">
             <legend>Colour</legend>
             <?php foreach (MED_COLOURS as $c): ?>
@@ -373,6 +415,8 @@ render_header($med ? 'Edit ' . $med['name'] : 'Add medication', 'meds');
                 <input type="number" min="0" step="any" name="stock_count" value="<?= h(num($form['stock_count'] ?? '')) ?>"></label>
             <label>Warn me when this many days are left
                 <input type="number" min="0" max="365" name="low_stock_days" value="<?= (int) ($form['low_stock_days'] ?? 7) ?>"></label>
+            <label><span>Expiry date <span class="muted small">(optional; on the box or bottle)</span></span>
+                <input type="date" name="expiry_date" value="<?= h($form['expiry_date'] ?? '') ?>"></label>
         </div>
         <label>Notes <textarea name="notes" rows="3" maxlength="5000"><?= h($form['notes'] ?? '') ?></textarea></label>
     </section>

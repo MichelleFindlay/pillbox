@@ -15,6 +15,14 @@ if (is_post()) {
 
         case 'calendar_create':
         case 'calendar_regenerate':
+        case 'calendar_off':
+        case 'calendar_notes':
+            owner_only('Changing the calendar link');
+            demo_blocked('The calendar link');
+    }
+    switch (post('action')) {
+        case 'calendar_create':
+        case 'calendar_regenerate':
             q('UPDATE users SET calendar_token = ? WHERE id = ?', [bin2hex(random_bytes(20)), $uid]);
             flash('success', post('action') === 'calendar_create'
                 ? 'Your calendar link is ready. Add it to your calendar app below.'
@@ -125,6 +133,7 @@ render_header('Appointments', 'appointments');
 </details>
 <?php endif; ?>
 
+<?php if (!isset($user['_acting'])): ?>
 <section class="card" id="subscribe">
     <h2>Add to your calendar</h2>
     <?php if (!$feedUrl): ?>
@@ -174,4 +183,5 @@ render_header('Appointments', 'appointments');
         </div>
     <?php endif; ?>
 </section>
+<?php endif; ?>
 <?php render_footer();
