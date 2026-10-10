@@ -966,6 +966,7 @@ body { accent-color: var(--primary); }
 .care-task:last-child { border-bottom: 0; }
 .care-task .logline { border-bottom: 0; }
 .preset-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.preset-group { margin: .75rem 0 .4rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
 .preset { margin: 0; }
 .preset { max-width: 100%; }
 .preset .btn { white-space: normal; text-align: left; max-width: 100%; flex-direction: column; align-items: flex-start; gap: 0; height: auto; padding-top: .45rem; padding-bottom: .45rem; line-height: 1.25; }

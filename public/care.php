@@ -887,16 +887,22 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
         </div>
         <?php endif; ?>
     <?php else: ?>
-        <?php if ($presets = array_diff_key($area['checks'], array_flip($usedCheckKinds))): ?>
+        <?php if ($presets = array_diff_key($area['checks'], array_flip($usedCheckKinds))):
+            $presetGroups = [];
+            foreach ($presets as $kind => $p) {
+                $presetGroups[$p['group'] ?? ''][$kind] = $p;
+            }
+            foreach ($presetGroups as $groupName => $presets): ?>
+        <?php if ($groupName !== ''): ?><h3 class="preset-group"><?= h($groupName) ?></h3><?php endif; ?>
         <div class="preset-list">
             <?php foreach ($presets as $kind => $p): ?>
             <form method="post" action="<?= h(url($self)) ?>" class="preset"><?= csrf_field() ?><input type="hidden" name="action" value="check_preset"><input type="hidden" name="kind" value="<?= h($kind) ?>">
-                <button class="btn" type="submit"><span>+ <?= h($p['label']) ?></span><span class="muted small"><?= h(isset($p['rule']) ? 'every autumn' : ((($p['track'] ?? '') === 'expiry' && isset($p['interval'])) ? 'use within ' . ($p['interval'] <= 90 ? $p['interval'] . ' days' : preg_replace('/^every /', '', interval_label($p['interval']))) . ' of opening' : null)
+                <button class="btn" type="submit"><span>+ <?= h($p['label']) ?></span><span class="muted small"><?= h($p['hint'] ?? (isset($p['rule']) ? 'every autumn' : ((($p['track'] ?? '') === 'expiry' && isset($p['interval'])) ? 'use within ' . ($p['interval'] <= 90 ? $p['interval'] . ' days' : preg_replace('/^every /', '', interval_label($p['interval']))) . ' of opening' : null)
                     ?? (['expiry' => 'expiry date', 'stock' => 'keep stocked', 'level' => 'fill level'][$p['track'] ?? 'due']
-                    ?? (isset($p['interval']) ? (($p['track'] ?? '') === 'kit' ? 'check ' : '') . interval_label($p['interval']) : 'set a date'))) ?></span></button></form>
+                    ?? (isset($p['interval']) ? (($p['track'] ?? '') === 'kit' ? 'check ' : '') . interval_label($p['interval']) : 'set a date')))) ?></span></button></form>
             <?php endforeach; ?>
         </div>
-        <?php endif; ?>
+        <?php endforeach; endif; ?>
         <details class="q-edit"<?= $checkForm && !$checkForm['id'] ? ' open' : '' ?>>
             <summary>Add your own</summary>
             <?= $checkForm && !$checkForm['id'] ? form_errors($errors) : '' ?>
