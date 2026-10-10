@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/../src/bootstrap.php';
 
-if (user_count() === 0 && !entra_enabled()) {
+if (user_count() === 0 && !sso_enabled()) {
     redirect('setup.php');
 }
 if (current_user()) {
@@ -37,7 +37,11 @@ render_header('Sign in');
     </a>
     <?php endif; ?>
 
-    <?php if (entra_enabled() && local_login_enabled()): ?>
+    <?php foreach (oidc_providers() as $key => $p): ?>
+    <a class="btn btn-sso btn-block" href="<?= h(url('oidc_start.php?provider=' . urlencode($key))) ?>"><?= h($p['label']) ?></a>
+    <?php endforeach; ?>
+
+    <?php if (sso_enabled() && local_login_enabled()): ?>
     <div class="divider"><span>or use a local account</span></div>
     <?php endif; ?>
 
@@ -55,7 +59,7 @@ render_header('Sign in');
     <?php endif; ?>
 
     <?php if (user_count() === 0 && local_login_enabled()): ?>
-    <p class="muted small">First time here? <a href="<?= h(url('setup.php')) ?>">Create a local administrator account</a>, or sign in with Microsoft &mdash; the first person to sign in becomes the administrator.</p>
+    <p class="muted small">First time here? <a href="<?= h(url('setup.php')) ?>">Create a local administrator account</a><?= sso_enabled() ? ', or use a sign-in button above &mdash; the first person to sign in that way becomes the administrator' : '' ?>.</p>
     <?php endif; ?>
 </section>
 <?php render_footer();

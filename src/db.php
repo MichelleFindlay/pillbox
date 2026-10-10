@@ -45,43 +45,47 @@ function transaction(callable $fn): mixed
 }
 
 /**
- * Create the tables on first run if they don't exist yet, so the app can be
- * installed just by uploading it and visiting the site. Also applies small
- * upgrades to databases created by earlier versions.
+ * Keep the database up to date, so Pillbox can be installed or upgraded just by
+ * uploading the files. Any table in database/schema.sql that doesn't exist yet is
+ * created; columns added after a table was first released are added below.
  */
 function ensure_schema(): void
 {
-    if (q("SHOW TABLES LIKE 'users'")->fetch()) {
-        if (!q("SHOW COLUMNS FROM medications LIKE 'dmd_code'")->fetch()) {
-            db()->exec('ALTER TABLE medications ADD COLUMN dmd_code VARCHAR(20) NULL AFTER name');
-        }
-        if (!q("SHOW COLUMNS FROM users LIKE 'session_version'")->fetch()) {
-            db()->exec('ALTER TABLE users ADD COLUMN session_version INT UNSIGNED NOT NULL DEFAULT 0 AFTER enabled_metrics');
-        }
-        if (!q("SHOW TABLES LIKE 'stock_events'")->fetch()) {
-            db()->exec("CREATE TABLE IF NOT EXISTS stock_events (
-    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    user_id        INT UNSIGNED NOT NULL,
-    medication_id  INT UNSIGNED NOT NULL,
-    kind           ENUM('collected','recount') NOT NULL,
-    quantity       DECIMAL(10,2) NOT NULL,      -- amount collected, or the new counted total
-    stock_after    DECIMAL(10,2) NOT NULL,
-    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    KEY ix_stock_med (medication_id, created_at),
-    CONSTRAINT fk_stock_user FOREIGN KEY (user_id)       REFERENCES users (id)       ON DELETE CASCADE,
-    CONSTRAINT fk_stock_med  FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        }
-        if (!q("SHOW COLUMNS FROM users LIKE 'theme'")->fetch()) {
-            db()->exec("ALTER TABLE users ADD COLUMN theme VARCHAR(20) NOT NULL DEFAULT 'olive' AFTER session_version,
-                        ADD COLUMN color_mode VARCHAR(10) NOT NULL DEFAULT 'auto' AFTER theme");
-        }
-        return;
-    }
-    $sql = (string) file_get_contents(APP_ROOT . '/database/schema.sql');
-    $sql = preg_replace('/^--.*$/m', '', $sql);
+    $existing = q('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+
+    // Drop SQL comments (whole-line and end-of-line) so a ';' inside one can't split a statement.
+    $sql = preg_replace('/--[^\n]*/', '', (string) file_get_contents(APP_ROOT . '/database/schema.sql'));
     foreach (array_filter(array_map('trim', explode(';', $sql))) as $statement) {
-        db()->exec($statement);
+        if (preg_match('/^CREATE TABLE IF NOT EXISTS (\w+)/i', $statement, $m) && !in_array($m[1], $existing, true)) {
+            db()->exec($statement);
+        }
+    }
+    if (!$existing) {
+        return; // brand-new install: everything was just created from schema.sql
+    }
+
+    $columns = [];
+    foreach (q('SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()') as $c) {
+        $columns[$c['TABLE_NAME']][$c['COLUMN_NAME']] = $c['COLUMN_TYPE'];
+    }
+    $upgrades = [
+        ['medications', 'dmd_code', 'ALTER TABLE medications ADD COLUMN dmd_code VARCHAR(20) NULL AFTER name'],
+        ['users', 'session_version', 'ALTER TABLE users ADD COLUMN session_version INT UNSIGNED NOT NULL DEFAULT 0 AFTER enabled_metrics'],
+        ['users', 'theme', "ALTER TABLE users ADD COLUMN theme VARCHAR(20) NOT NULL DEFAULT 'olive' AFTER session_version,
+                            ADD COLUMN color_mode VARCHAR(10) NOT NULL DEFAULT 'auto' AFTER theme"],
+        ['users', 'calendar_token', 'ALTER TABLE users ADD COLUMN calendar_token CHAR(40) NULL, ADD COLUMN calendar_include_notes TINYINT(1) NOT NULL DEFAULT 0,
+                                     ADD UNIQUE KEY uq_users_calendar (calendar_token)'],
+        ['appointments', 'outcome_notes', 'ALTER TABLE appointments ADD COLUMN outcome_notes TEXT NULL AFTER notes'],
+        ['health_readings', 'external_id', 'ALTER TABLE health_readings ADD COLUMN source VARCHAR(20) NULL AFTER recorded_at,
+                                            ADD COLUMN external_id CHAR(40) NULL AFTER source, ADD UNIQUE KEY uq_readings_external (user_id, external_id)'],
+        ['users', 'health_sync_token', 'ALTER TABLE users ADD COLUMN health_sync_token CHAR(40) NULL, ADD UNIQUE KEY uq_users_health_sync (health_sync_token)'],
+    ];
+    foreach ($upgrades as [$table, $column, $alter]) {
+        if (isset($columns[$table]) && !isset($columns[$table][$column])) {
+            db()->exec($alter);
+        }
+    }
+    if (isset($columns['users']['auth_provider']) && !str_contains($columns['users']['auth_provider'], 'oidc')) {
+        db()->exec("ALTER TABLE users MODIFY COLUMN auth_provider ENUM('local','entra','oidc') NOT NULL DEFAULT 'local'");
     }
 }

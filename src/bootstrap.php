@@ -12,12 +12,17 @@ $GLOBALS['APP_CONFIG'] = require APP_ROOT . '/config/config.php';
 $GLOBALS['APP_CONFIG']['app']['base_path'] = rtrim((string) ($GLOBALS['APP_CONFIG']['app']['base_path'] ?? ''), '/');
 
 require APP_ROOT . '/src/helpers.php';
+require APP_ROOT . '/src/version.php';
 require APP_ROOT . '/src/db.php';
 require APP_ROOT . '/src/auth.php';
 require APP_ROOT . '/src/entra.php';
+require APP_ROOT . '/src/oidc.php';
 require APP_ROOT . '/src/nhs_terminology.php';
 require APP_ROOT . '/src/medications.php';
+require APP_ROOT . '/src/travel.php';
+require APP_ROOT . '/src/appointments.php';
 require APP_ROOT . '/src/metrics.php';
+require APP_ROOT . '/src/health_import.php';
 require APP_ROOT . '/src/charts.php';
 require APP_ROOT . '/src/layout.php';
 
@@ -41,5 +46,7 @@ set_exception_handler(static function (Throwable $e): void {
 });
 
 send_security_headers();
-start_session();
+if (!defined('PILLBOX_NO_SESSION')) {
+    start_session();
+}
 ensure_schema();

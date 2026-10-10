@@ -41,6 +41,17 @@
     if (e.target.closest('[data-print]')) {
       window.print();
     }
+    // Copy buttons: <button data-copy="#input-id">
+    var copy = e.target.closest('[data-copy]');
+    if (copy) {
+      var field = document.querySelector(copy.getAttribute('data-copy'));
+      if (field) {
+        field.select();
+        var done = function () { var label = copy.textContent; copy.textContent = 'Copied ✓'; setTimeout(function () { copy.textContent = label; }, 2000); };
+        if (navigator.clipboard) { navigator.clipboard.writeText(field.value).then(done, function () { document.execCommand('copy'); done(); }); }
+        else { document.execCommand('copy'); done(); }
+      }
+    }
     var remove = e.target.closest('.remove-row');
     if (remove) {
       var rows = document.querySelectorAll('#schedule-rows .schedule-row');
@@ -84,6 +95,16 @@
   }
   document.addEventListener('change', syncToggles);
   syncToggles();
+
+  // Travel: offer to pick the time zone this device is currently set to.
+  document.querySelectorAll('[data-use-device-tz]').forEach(function (button) {
+    var select = document.querySelector(button.getAttribute('data-use-device-tz'));
+    var tz = window.Intl && Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!select || !tz || !select.querySelector('option[value="' + tz + '"]')) { return; }
+    button.hidden = false;
+    button.textContent = 'Use this phone\'s time zone (' + tz.split('/').pop().replace(/_/g, ' ') + ')';
+    button.addEventListener('click', function () { select.value = tz; });
+  });
 
   // Switching a dose row between "same amount" and "different amount each day"
   // carries the amounts across so nothing has to be retyped.
@@ -262,4 +283,72 @@
       banner.hidden = true;
     });
   }
+})();
+
+// Apple Health export upload: sends big files in pieces so server upload limits don't matter.
+(function () {
+  'use strict';
+  var form = document.getElementById('health-upload');
+  if (!form || !window.fetch || !window.FormData || !window.crypto || !Blob.prototype.slice) { return; }
+  var box = form.querySelector('.upload-progress');
+  var bar = box.querySelector('progress');
+  var status = box.querySelector('p');
+  var button = form.querySelector('button[type=submit]');
+
+  function post(data) {
+    // getAttribute: the form has a field named "action", which hides the form.action property.
+    return fetch(form.getAttribute('action'), { method: 'POST', body: data, credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (!d.ok) { throw new Error(d.error || 'Something went wrong.'); } return d; });
+  }
+  function base() {
+    var fd = new FormData();
+    fd.append('csrf', form.querySelector('[name=csrf]').value);
+    return fd;
+  }
+
+  form.addEventListener('submit', function (e) {
+    var file = form.querySelector('input[type=file]').files[0];
+    if (!file) { return; }
+    e.preventDefault();
+    var size = parseInt(form.getAttribute('data-chunk-size'), 10) || 2097152;
+    var total = Math.max(1, Math.ceil(file.size / size));
+    var bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    var id = Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    var index = 0;
+    box.hidden = false;
+    button.disabled = true;
+
+    function fail(err) {
+      status.textContent = err.message + ' Nothing was imported.';
+      bar.value = 0;
+      button.disabled = false;
+    }
+    function next() {
+      if (index >= total) { return finish(); }
+      var fd = base();
+      fd.append('action', 'upload_chunk');
+      fd.append('upload_id', id);
+      fd.append('index', String(index));
+      fd.append('chunk', file.slice(index * size, Math.min(file.size, (index + 1) * size)), 'chunk');
+      post(fd).then(function () {
+        index++;
+        bar.value = Math.round(index / total * 80);
+        status.textContent = 'Uploading… ' + Math.round(index / total * 100) + '% of ' + (file.size / 1048576).toFixed(1) + ' MB';
+        next();
+      }).catch(fail);
+    }
+    function finish() {
+      status.textContent = 'Reading your health data… this can take a minute or two for a big export. Please keep this page open.';
+      bar.removeAttribute('value'); // indeterminate
+      var fd = base();
+      fd.append('action', 'import_upload');
+      fd.append('upload_id', id);
+      fd.append('range', form.querySelector('[name=range]').value);
+      post(fd).then(function (d) { window.location.href = d.redirect; }).catch(fail);
+    }
+    status.textContent = 'Uploading…';
+    next();
+  });
 })();

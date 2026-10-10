@@ -252,7 +252,7 @@ function entra_find_or_create_user(array $claims): array
 
     // A local account with a linked Microsoft account keeps its own name and admin
     // status; those are managed in Pillbox, not synced from Microsoft.
-    if ($user['auth_provider'] === 'local') {
+    if ($user['auth_provider'] !== 'entra') {
         return $user;
     }
 

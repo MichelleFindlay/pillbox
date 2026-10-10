@@ -5,7 +5,7 @@
 require __DIR__ . '/../src/bootstrap.php';
 
 // No local accounts when password sign-in is off: the first Microsoft sign-in becomes the admin instead.
-if (user_count() > 0 || (!local_login_enabled() && entra_enabled())) {
+if (user_count() > 0 || (!local_login_enabled() && sso_enabled())) {
     redirect('login.php');
 }
 

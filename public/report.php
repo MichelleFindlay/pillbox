@@ -32,6 +32,12 @@ foreach ($prn as $log) {
     $prnTotals[$log['name']]['amount'] += (float) $log['amount'];
 }
 
+$appointments = appointments_between($uid, $fromUtc, $toUtc);
+$medChanges = q('SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id
+                 WHERE c.user_id = ? AND c.effective_date BETWEEN ? AND ? ORDER BY c.effective_date, m.name',
+    [$uid, $from->format('Y-m-d'), $to->format('Y-m-d')])->fetchAll();
+$nextAppointments = appointments_between($uid, utc_now(), gmdate('Y-m-d H:i:s', strtotime('+6 months')));
+
 $defs = user_metric_definitions($uid);
 $readingsByMetric = [];
 foreach (q('SELECT * FROM health_readings WHERE user_id = ? AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at', [$uid, $fromUtc, $toUtc]) as $r) {
@@ -92,6 +98,22 @@ render_header('Report', 'report');
         <?php endif; ?>
     </section>
 
+    <?php if ($medChanges): ?>
+    <section>
+        <h2>Medication changes in this period</h2>
+        <div class="table-wrap">
+        <table class="compact">
+            <thead><tr><th>Date</th><th>Medication</th><th>Change</th><th>Reason</th></tr></thead>
+            <tbody>
+            <?php foreach ($medChanges as $c): ?>
+                <tr><td><?= h(date('j M Y', strtotime($c['effective_date']))) ?></td><td><?= h($c['name']) ?></td><td><?= h($c['summary']) ?></td><td><?= h($c['reason']) ?></td></tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        </div>
+    </section>
+    <?php endif; ?>
+
     <section>
         <h2>Adherence to scheduled doses</h2>
         <?php if (!$adherence): ?><p class="muted">No scheduled doses in this period.</p><?php else: ?>
@@ -123,6 +145,24 @@ render_header('Report', 'report');
             <li><?= h($name) ?>: <?= $t['count'] ?> dose<?= $t['count'] === 1 ? '' : 's' ?>, <?= h(dose_label($t['amount'], $t['unit'])) ?> in total</li>
             <?php endforeach; ?>
         </ul>
+    </section>
+    <?php endif; ?>
+
+    <?php if ($appointments || $nextAppointments): ?>
+    <section>
+        <h2>Appointments</h2>
+        <div class="table-wrap">
+        <table class="compact">
+            <thead><tr><th>When</th><th>Appointment</th><th>With</th><th>Where</th></tr></thead>
+            <tbody>
+            <?php foreach (array_merge($appointments, array_filter($nextAppointments, fn ($n) => $n['starts_at'] >= $toUtc)) as $a): ?>
+                <tr><td><?= h(local_time($a['starts_at'], 'D j M Y, H:i')) ?><?= $a['starts_at'] > utc_now() ? ' <span class="muted small">(upcoming)</span>' : '' ?></td>
+                    <td><?= h(appointment_title($a)) ?><?= $a['title'] ? ' <span class="muted small">(' . h(appointment_type_label($a['kind'])) . ')</span>' : '' ?></td>
+                    <td><?= h($a['with_whom']) ?></td><td><?= h($a['location']) ?></td></tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        </div>
     </section>
     <?php endif; ?>
 

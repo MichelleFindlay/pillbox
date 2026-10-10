@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     email            VARCHAR(255)  NULL,
     display_name     VARCHAR(150)  NOT NULL,
     password_hash    VARCHAR(255)  NULL,
-    auth_provider    ENUM('local','entra') NOT NULL DEFAULT 'local',
+    auth_provider    ENUM('local','entra','oidc') NOT NULL DEFAULT 'local',
     entra_oid        CHAR(36)      NULL,
     entra_tid        CHAR(36)      NULL,
     is_admin         TINYINT(1)    NOT NULL DEFAULT 0,
@@ -19,12 +19,33 @@ CREATE TABLE IF NOT EXISTS users (
     session_version  INT UNSIGNED  NOT NULL DEFAULT 0,  -- bumped to sign out every other device
     theme            VARCHAR(20)   NOT NULL DEFAULT 'olive',
     color_mode       VARCHAR(10)   NOT NULL DEFAULT 'auto',  -- auto | light | dark
+    calendar_token   CHAR(40)      NULL,     -- secret for the private calendar feed URL
+    calendar_include_notes TINYINT(1) NOT NULL DEFAULT 0,
+    health_sync_token CHAR(40)    NULL,     -- secret for the Apple Health sync URL
     created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at    DATETIME      NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_users_username (username),
     UNIQUE KEY uq_users_entra (entra_tid, entra_oid),
+    UNIQUE KEY uq_users_calendar (calendar_token),
+    UNIQUE KEY uq_users_health_sync (health_sync_token),
     KEY ix_users_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Sign-ins through generic OpenID Connect providers (Google, Okta, Keycloak, ...).
+CREATE TABLE IF NOT EXISTS user_identities (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id       INT UNSIGNED NOT NULL,
+    provider      VARCHAR(30)  NOT NULL,          -- key under 'oidc' => 'providers' in config.php
+    subject       VARCHAR(255) NULL,              -- the provider's user id, or NULL if pre-registered by email
+    email         VARCHAR(255) NULL,
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at  DATETIME     NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_identity (provider, subject),
+    KEY ix_identity_user (user_id),
+    KEY ix_identity_email (provider, email),
+    CONSTRAINT fk_identity_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS login_attempts (
@@ -101,6 +122,72 @@ CREATE TABLE IF NOT EXISTS dose_logs (
     CONSTRAINT fk_dose_sched FOREIGN KEY (schedule_id)   REFERENCES medication_schedules (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Medical appointments (GP, specialist, dentist, ...).
+CREATE TABLE IF NOT EXISTS appointments (
+    id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id           INT UNSIGNED NOT NULL,
+    kind              VARCHAR(20)   NOT NULL DEFAULT 'gp',
+    title             VARCHAR(150)  NULL,
+    starts_at         DATETIME      NOT NULL,      -- UTC
+    duration_minutes  SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    with_whom         VARCHAR(150)  NULL,
+    location          VARCHAR(255)  NULL,
+    notes             TEXT          NULL,          -- before: things to bring, fasting, ...
+    outcome_notes     TEXT          NULL,          -- after: what was decided, next steps
+    remind_minutes    INT UNSIGNED  NULL,          -- reminder before the appointment, for calendar apps
+    created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_appt_user_time (user_id, starts_at),
+    CONSTRAINT fk_appt_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Questions to ask at an appointment, ticked off (and answered) on the day.
+CREATE TABLE IF NOT EXISTS appointment_questions (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    appointment_id  INT UNSIGNED NOT NULL,
+    question        VARCHAR(500)  NOT NULL,
+    answer          TEXT          NULL,
+    done            TINYINT(1)    NOT NULL DEFAULT 0,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_question_appt (appointment_id),
+    CONSTRAINT fk_question_appt FOREIGN KEY (appointment_id) REFERENCES appointments (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Dose change history: started, stopped, strength / amount / timing changes, and notes.
+CREATE TABLE IF NOT EXISTS medication_changes (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id         INT UNSIGNED NOT NULL,
+    medication_id   INT UNSIGNED NOT NULL,
+    effective_date  DATE          NOT NULL,
+    kind            VARCHAR(20)   NOT NULL,     -- started | increased | decreased | strength | timing | as_needed | stopped | restarted | note
+    summary         VARCHAR(500)  NOT NULL,
+    reason          VARCHAR(255)  NULL,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_change_med (medication_id, effective_date),
+    KEY ix_change_user (user_id, effective_date),
+    CONSTRAINT fk_change_user FOREIGN KEY (user_id)       REFERENCES users (id)       ON DELETE CASCADE,
+    CONSTRAINT fk_change_med  FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Travel mode: how dose times follow you across time zones between two dates.
+CREATE TABLE IF NOT EXISTS travel_plans (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id         INT UNSIGNED NOT NULL,
+    label           VARCHAR(100)  NULL,
+    destination_tz  VARCHAR(64)   NOT NULL,
+    start_date      DATE          NOT NULL,     -- first day away (home calendar)
+    end_date        DATE          NOT NULL,     -- day you get back; home time resumes the day after
+    mode            VARCHAR(10)   NOT NULL DEFAULT 'local',  -- home | local | gradual
+    shift_hours     TINYINT UNSIGNED NOT NULL DEFAULT 2,     -- for gradual: hours to move per day
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_travel_user (user_id, start_date),
+    CONSTRAINT fk_travel_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Prescription collections and stock recounts.
 CREATE TABLE IF NOT EXISTS stock_events (
     id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -137,8 +224,11 @@ CREATE TABLE IF NOT EXISTS health_readings (
     context      VARCHAR(60)   NULL,
     notes        VARCHAR(500)  NULL,
     recorded_at  DATETIME      NOT NULL,
+    source       VARCHAR(20)   NULL,          -- NULL = entered in Pillbox, 'apple_health' = imported
+    external_id  CHAR(40)      NULL,          -- identifies an imported sample, so re-imports don't duplicate it
     created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
+    UNIQUE KEY uq_readings_external (user_id, external_id),
     KEY ix_readings_user_metric (user_id, metric, recorded_at),
     CONSTRAINT fk_readings_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

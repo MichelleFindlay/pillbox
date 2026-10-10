@@ -268,7 +268,7 @@ label.check { display: flex; align-items: center; gap: .6rem; font-weight: 400; 
 .schedule-list { margin-bottom: .75rem; }
 .med-actions { display: flex; gap: .5rem; margin-top: auto; padding-top: .5rem; }
 .med-actions form, .inline-actions form { margin: 0; }
-.inline-actions { display: flex; gap: .5rem; }
+.inline-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 details > summary { cursor: pointer; }
 details.card > summary h2 { display: inline; }
 
@@ -901,3 +901,114 @@ body { accent-color: var(--primary); }
 .restock-row label { flex: 1 1 140px; }
 .restock-form p { margin: 0; }
 .med-card:target { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+/* ---------- Other sign-in providers (OIDC) ---------- */
+.btn-sso { background: var(--surface); color: var(--text); border-color: var(--text-2); margin-top: .5rem; }
+.btn-sso:hover { border-color: var(--text); }
+.signin-options { list-style: none; margin: 0; padding: 0; }
+.signin-options li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem 0; border-bottom: 1px solid var(--border); }
+.signin-options li:last-child { border-bottom: 0; }
+.signin-options form { margin: 0; }
+
+/* ---------- Appointments ---------- */
+.appt-list { list-style: none; margin: 0; padding: 0; }
+.appt { display: flex; gap: .9rem; align-items: flex-start; padding: .85rem 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.appt:last-child { border-bottom: 0; }
+.appt-date {
+  flex: none; width: 3.6rem; text-align: center; border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--border); background: var(--surface);
+}
+.appt-month { display: block; background: var(--primary); color: var(--primary-text); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: .1rem 0; }
+.appt-day { display: block; font-size: 1.35rem; font-weight: 700; line-height: 1.3; }
+.appt-dow { display: block; font-size: .72rem; color: var(--text-2); padding-bottom: .15rem; }
+.appt-main { flex: 1 1 220px; min-width: 0; }
+.appt-main .badge { margin-left: .35rem; vertical-align: middle; }
+.appt-notes { margin: .35rem 0 0; padding: .4rem .6rem; border-left: 3px solid var(--border); color: var(--text-2); }
+.appt-actions { display: flex; gap: .4rem; align-items: center; }
+.appt-actions form { margin: 0; }
+.appt-past { opacity: .75; }
+.appt-past .appt-month { background: var(--text-2); color: var(--surface); }
+.copy-row { display: flex; gap: .5rem; margin: .5rem 0; }
+.copy-row input { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; }
+.subscribe-buttons, .feed-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+.feed-actions form { margin: 0; }
+.subscribe-help { margin: .5rem 0 1rem; }
+.subscribe-help ul { padding-left: 1.2rem; }
+.feed-options { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin: .75rem 0; }
+.appt-main, .appt-notes { overflow-wrap: anywhere; }
+
+/* ---------- Appointment preparation ---------- */
+.appt-title { font-weight: 700; color: var(--text); }
+.appt-prep { margin: .35rem 0 0; display: flex; gap: 1rem; flex-wrap: wrap; }
+.appt-when { font-size: 1.1rem; margin-bottom: .25rem; }
+.question-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+.question { display: flex; gap: .75rem; align-items: flex-start; padding: .6rem 0; border-bottom: 1px solid var(--border); }
+.question form { margin: 0; }
+.q-check {
+  width: 32px; height: 32px; flex: none; border-radius: 8px; border: 2px solid var(--text-2); background: var(--surface);
+  color: var(--primary-text); font-weight: 700; cursor: pointer; display: grid; place-items: center;
+}
+.question.done .q-check { background: var(--primary); border-color: var(--primary); }
+.q-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.q-text { font-weight: 600; }
+.question.done .q-text { color: var(--text-2); }
+.q-answer { margin: .3rem 0 0; padding: .35rem .6rem; border-left: 3px solid var(--primary); background: var(--surface-2); border-radius: 0 6px 6px 0; }
+.q-edit { margin-top: .3rem; }
+.q-edit summary { color: var(--text-2); }
+.q-edit form { margin-top: .4rem; }
+.suggestions { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
+.print-only { display: none; }
+@media print {
+  .print-only { display: block; }
+  .no-print, .q-toggle, .q-edit { display: none !important; }
+  .appt-sheet .card { border: 0; padding: 0; margin-bottom: 1rem; box-shadow: none; }
+  .question { break-inside: avoid; }
+  .question::before { content: "☐"; font-size: 1.2rem; line-height: 1; }
+  .question.done::before { content: "☑"; }
+  .answer-lines { height: 2.2rem; border-bottom: 1px solid #999; margin-top: .4rem; }
+  .answer-lines.tall { height: 8rem; background: repeating-linear-gradient(transparent 0 1.9rem, #bbb 1.9rem 2rem); border: 0; }
+}
+
+/* ---------- Dose change history ---------- */
+.last-change { margin: 0 0 .5rem; padding: .3rem .6rem; border-radius: 6px; background: var(--surface-2); color: var(--text-2); }
+.timeline { list-style: none; margin: 0; padding: 0 0 0 .5rem; border-left: 2px solid var(--border); }
+.tl-item { position: relative; display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: baseline; padding: .6rem 0 .6rem 1rem; }
+.tl-item::before { content: ""; position: absolute; left: -.5rem; top: 1rem; width: .75rem; height: .75rem; border-radius: 50%; background: var(--surface); border: 2px solid var(--text-2); }
+.tl-increased::before { border-color: var(--warn); background: var(--warn-bg); }
+.tl-decreased::before { border-color: var(--info); background: var(--info-bg); }
+.tl-started::before, .tl-restarted::before { border-color: var(--ok); background: var(--ok-bg); }
+.tl-stopped::before { border-color: var(--bad); background: var(--bad-bg); }
+.tl-date { min-width: 7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tl-body { flex: 1 1 240px; min-width: 0; }
+.tl-body .badge { margin-right: .35rem; }
+.tl-item form { margin: 0; }
+
+/* ---------- Travel mode ---------- */
+.travel-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; background: var(--info-bg); color: var(--info); }
+.trip-active { border-color: var(--primary); border-width: 2px; }
+.trip-preview tr.away td { background: var(--surface-2); }
+.trip-preview td div { padding: .1rem 0; }
+.mode-cards { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.mode-card { display: flex; gap: .6rem; align-items: flex-start; padding: .75rem; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-weight: 400; }
+.mode-card input { margin-top: .2rem; }
+.mode-card > span { display: grid; gap: .2rem; }
+.mode-card:has(input:checked) { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+[data-use-device-tz] { justify-self: start; }
+
+/* ---------- Apple Health ---------- */
+.steps { padding-left: 1.3rem; margin: 0 0 1rem; }
+.steps li { margin-bottom: .35rem; }
+pre.code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem; overflow-x: auto; white-space: pre; }
+.upload-progress progress { width: 100%; height: 12px; accent-color: var(--primary); }
+.upload-progress p { margin: .3rem 0 0; }
+
+/* ---------- Footer: version & GitHub ---------- */
+.footer-meta { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .35rem 1rem; margin: .25rem 0 0; }
+.footer-meta a { color: var(--text-2); display: inline-flex; align-items: center; gap: .3rem; }
+.footer-meta .icon { width: 15px; height: 15px; }
+.footer-meta .update-badge { color: var(--warn); background: var(--warn-bg); border-radius: 999px; padding: .1rem .6rem; font-weight: 600; text-decoration: none; }
+@media (max-width: 760px) {
+  /* Phones: the footer sits above the bottom tab bar instead of being hidden. */
+  .signed-in .container { padding-bottom: 16px; }
+  .site-footer { display: block !important; padding-bottom: calc(var(--nav-h) + 20px + env(safe-area-inset-bottom)); }
+}

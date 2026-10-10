@@ -118,14 +118,16 @@ function attempt_local_login(string $username, string $password): array|string
 /**
  * Can people sign in with a Pillbox username and password?
  * Off if 'allow_local_login' is false, or if 'disable_local_login_when_sso' is on and
- * Microsoft sign-in is enabled and configured.
+ * single sign-on (Microsoft or any OIDC provider) is enabled and configured.
  */
 function local_login_enabled(): bool
 {
     if (!config('app.allow_local_login', true)) {
         return false;
     }
-    return !(config('entra.disable_local_login_when_sso', false) && entra_enabled());
+    // The option lives under 'app'; earlier versions had it under 'entra', which still works.
+    $disable = config('app.disable_local_login_when_sso', config('entra.disable_local_login_when_sso', false));
+    return !($disable && sso_enabled());
 }
 
 function validate_new_password(string $password, string $confirm): ?string

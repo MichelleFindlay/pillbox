@@ -24,6 +24,17 @@ function url(string $path = ''): string
     return config('app.base_path', '') . '/' . ltrim($path, '/');
 }
 
+/** Full URL including scheme and host, e.g. for links used outside Pillbox (calendar feeds). */
+function absolute_url(string $path = ''): string
+{
+    $base = rtrim((string) config('app.public_url', ''), '/');
+    if ($base === '') {
+        $host = preg_replace('/[^A-Za-z0-9.\-:\[\]]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+        $base = (is_https() ? 'https' : 'http') . '://' . $host . config('app.base_path', '');
+    }
+    return $base . '/' . ltrim($path, '/');
+}
+
 /** URL for a static asset with a cache-busting version. */
 function asset(string $path): string
 {
@@ -63,10 +74,44 @@ function client_ip(): string
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
 
+/**
+ * GET (or POST a form to) a JSON endpoint of an external service.
+ * @throws RuntimeException with a user-presentable message
+ */
+function http_json(string $url, ?array $form = null, array $headers = [], string $service = 'the sign-in provider'): array
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_HTTPHEADER     => array_merge(['Accept: application/json'], $headers),
+    ]);
+    if ($form !== null) {
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($form));
+    }
+    $body = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    if ($body === false) {
+        throw new RuntimeException("Could not contact $service: " . curl_error($ch));
+    }
+    $data = json_decode((string) $body, true);
+    if (!is_array($data)) {
+        throw new RuntimeException("Unexpected response from $service (HTTP $status).");
+    }
+    if ($status >= 400) {
+        error_log("$service HTTP $status: " . substr((string) $body, 0, 1000));
+        throw new RuntimeException("$service rejected the request: " . ($data['error_description'] ?? $data['error'] ?? "HTTP $status"));
+    }
+    return $data;
+}
+
 function send_security_headers(): void
 {
+    // Sign-in forms (linking, sign-out) may redirect to these identity providers.
+    $formTargets = implode(' ', array_unique(array_merge(['https://login.microsoftonline.com'], oidc_csp_origins())));
     header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
-        . "form-action 'self' https://login.microsoftonline.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
+        . "form-action 'self' $formTargets; frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: same-origin');
@@ -172,14 +217,18 @@ function take_flashes(): array
 
 /* ---------- Dates & numbers ---------- */
 
+/** The time zone to show times in: home, or the destination while a trip is under way. */
 function user_tz(?array $user = null): DateTimeZone
 {
     $user ??= current_user();
-    try {
-        return new DateTimeZone($user['timezone'] ?? config('app.default_timezone'));
-    } catch (Exception) {
-        return new DateTimeZone('UTC');
+    if ($trip = active_trip($user)) {
+        try {
+            return new DateTimeZone($trip['destination_tz']);
+        } catch (Exception) {
+            // fall back to home
+        }
     }
+    return home_tz($user);
 }
 
 function utc_now(): string

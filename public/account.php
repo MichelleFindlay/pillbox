@@ -107,19 +107,28 @@ if (is_post()) {
             redirect('account.php#metrics');
 
         case 'link_entra':
-            if (entra_enabled() && $isLocal) {
+            if (entra_enabled() && $user['auth_provider'] !== 'entra') {
                 $_SESSION['entra_link_uid'] = $uid;
                 entra_begin_login();
             }
             break;
 
         case 'unlink_entra':
-            // Only for accounts that still have a password, so nobody is locked out.
-            if ($isLocal && $hasPassword) {
+            // Never remove someone's last way of signing in.
+            if ($user['auth_provider'] !== 'entra' && $user['entra_oid'] !== null && sign_in_method_count($user) > 1) {
                 q('UPDATE users SET entra_oid = NULL, entra_tid = NULL WHERE id = ?', [$uid]);
-                flash('success', 'Your Microsoft account has been unlinked. Sign in with your username and password from now on.');
+                flash('success', 'Your Microsoft account has been unlinked.');
             }
-            redirect('account.php#microsoft');
+            redirect('account.php#sign-in-options');
+
+        case 'unlink_oidc':
+            $provider = post('provider');
+            $identities = user_identities($uid);
+            if (isset($identities[$provider]) && sign_in_method_count($user) > 1) {
+                q('DELETE FROM user_identities WHERE user_id = ? AND provider = ?', [$uid, $provider]);
+                flash('success', (oidc_provider($provider)['name'] ?? $provider) . ' account unlinked.');
+            }
+            redirect('account.php#sign-in-options');
 
         case 'delete_account':
             if (is_last_admin($user)) {
@@ -148,6 +157,19 @@ $counts = q(
     [$uid, $uid, $uid]
 )->fetch();
 $posted = is_post() ? $_POST : [];
+$identities = user_identities($uid);
+$methods = [];
+if ($hasPassword && local_login_enabled()) {
+    $methods[] = 'your username and password';
+}
+if ($user['entra_oid'] && entra_enabled()) {
+    $methods[] = 'Microsoft';
+}
+foreach ($identities as $key => $identity) {
+    if ($identity['subject'] !== null && ($p = oidc_provider($key))) {
+        $methods[] = $p['name'];
+    }
+}
 
 render_header('Account', 'account');
 ?>
@@ -158,7 +180,7 @@ render_header('Account', 'account');
     <a class="chip" href="#profile">Profile</a>
     <a class="chip" href="#appearance">Appearance</a>
     <a class="chip" href="#security">Password &amp; security</a>
-    <?php if (entra_enabled() || $user['entra_oid']): ?><a class="chip" href="#microsoft">Microsoft</a><?php endif; ?>
+    <?php if (sso_enabled() || $user['entra_oid'] || $identities): ?><a class="chip" href="#sign-in-options">Sign-in options</a><?php endif; ?>
     <a class="chip" href="#metrics">Measurements</a>
     <a class="chip" href="#install">Phone app</a>
     <a class="chip" href="#data">Your data</a>
@@ -223,10 +245,7 @@ render_header('Account', 'account');
 <section class="card" id="security">
     <h2>Password &amp; security</h2>
     <p class="muted small">
-        You sign in with
-        <?php if ($isLocal && $user['entra_oid']): ?>your username and password, or Microsoft.
-        <?php elseif ($isLocal): ?>your username and password.
-        <?php else: ?>your Microsoft account.<?php endif; ?>
+        You can sign in with <?= h(implode(' or ', $methods) ?: 'no method that is currently switched on') ?>.
         <?= $user['last_login_at'] ? 'Last sign-in: ' . h(local_time($user['last_login_at'])) . '.' : '' ?>
     </p>
 
@@ -264,26 +283,50 @@ render_header('Account', 'account');
     </form>
 </section>
 
-<?php if (entra_enabled() || $user['entra_oid']): ?>
-<section class="card" id="microsoft">
-    <h2>Microsoft sign-in</h2>
-    <?php if (!$isLocal): ?>
-        <p>You sign in to Pillbox with your Microsoft account.</p>
-    <?php elseif ($user['entra_oid']): ?>
-        <p>&#10003; Your Microsoft account is linked. You can sign in with <strong>Microsoft</strong> or with your username and password.</p>
-        <form method="post" data-confirm="Unlink your Microsoft account? You'll need your username and password to sign in.">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="unlink_entra">
-            <button class="btn" type="submit">Unlink Microsoft account</button>
-        </form>
-    <?php elseif (entra_enabled()): ?>
-        <p>Link your work or school Microsoft account so you can also sign in with Microsoft. Your medications and readings stay exactly as they are.</p>
-        <form method="post">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="link_entra">
-            <button class="btn btn-primary" type="submit">Link my Microsoft account</button>
-        </form>
-    <?php endif; ?>
+<?php if (sso_enabled() || $user['entra_oid'] || $identities): ?>
+<section class="card" id="sign-in-options">
+    <h2>Sign-in options</h2>
+    <p class="muted small">Link other accounts so you can sign in with them too. Your medications and readings stay exactly as they are.</p>
+    <?php $canUnlink = sign_in_method_count($user) > 1; ?>
+    <ul class="signin-options">
+        <?php if (entra_enabled() || $user['entra_oid']): ?>
+        <li>
+            <span><strong>Microsoft</strong>
+                <?php if ($user['auth_provider'] === 'entra'): ?><span class="muted small">&mdash; your main sign-in</span>
+                <?php elseif ($user['entra_oid']): ?><span class="muted small">&#10003; linked</span><?php endif; ?></span>
+            <?php if ($user['auth_provider'] !== 'entra' && $user['entra_oid'] && $canUnlink): ?>
+            <form method="post" data-confirm="Unlink your Microsoft account?">
+                <?= csrf_field() ?><input type="hidden" name="action" value="unlink_entra">
+                <button class="btn btn-small" type="submit">Unlink</button>
+            </form>
+            <?php elseif ($user['auth_provider'] !== 'entra' && !$user['entra_oid'] && entra_enabled()): ?>
+            <form method="post">
+                <?= csrf_field() ?><input type="hidden" name="action" value="link_entra">
+                <button class="btn btn-small btn-primary" type="submit">Link</button>
+            </form>
+            <?php endif; ?>
+        </li>
+        <?php endif; ?>
+        <?php foreach (oidc_providers() + array_fill_keys(array_keys($identities), null) as $key => $p):
+            $p ??= oidc_provider($key);
+            $identity = $identities[$key] ?? null;
+            $linked = $identity && $identity['subject'] !== null; ?>
+        <li>
+            <span><strong><?= h($p['name'] ?? $key) ?></strong>
+                <?php if ($linked): ?><span class="muted small">&#10003; linked<?= $identity['email'] ? ' as ' . h($identity['email']) : '' ?></span><?php endif; ?>
+                <?php if (!$p): ?><span class="muted small">(switched off)</span><?php endif; ?></span>
+            <?php if ($identity && $canUnlink): ?>
+            <form method="post" data-confirm="Unlink your <?= h($p['name'] ?? $key) ?> account?">
+                <?= csrf_field() ?><input type="hidden" name="action" value="unlink_oidc"><input type="hidden" name="provider" value="<?= h($key) ?>">
+                <button class="btn btn-small" type="submit">Unlink</button>
+            </form>
+            <?php elseif (!$linked && $p): ?>
+            <a class="btn btn-small btn-primary" href="<?= h(url('oidc_start.php?' . http_build_query(['provider' => $key, 'link' => 1, 'csrf' => csrf_token()]))) ?>">Link</a>
+            <?php endif; ?>
+        </li>
+        <?php endforeach; ?>
+    </ul>
+    <?php if (!$canUnlink && ($user['entra_oid'] || $identities)): ?><p class="muted small">You can't unlink your only way of signing in. Add a password or link another account first.</p><?php endif; ?>
 </section>
 <?php endif; ?>
 

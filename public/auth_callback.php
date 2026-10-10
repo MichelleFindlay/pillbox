@@ -15,13 +15,13 @@ try {
     if ($linking) {
         entra_link_account($linkUserId, $claims);
         flash('success', 'Your Microsoft account is now linked. You can sign in with Microsoft or with your username and password.');
-        redirect('account.php#microsoft');
+        redirect('account.php#sign-in-options');
     }
     $user = entra_find_or_create_user($claims);
 } catch (RuntimeException $e) {
     error_log('Entra sign-in failed: ' . $e->getMessage());
     flash('error', $e->getMessage());
-    redirect($linking ? 'account.php#microsoft' : 'login.php');
+    redirect($linking ? 'account.php#sign-in-options' : 'login.php');
 }
 
 login_user($user, 'entra');

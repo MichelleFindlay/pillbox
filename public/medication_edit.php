@@ -143,6 +143,7 @@ if (is_post()) {
             $nullable($form['stock_count']), (int) $form['low_stock_days'], $form['start_date'], $nullable($form['end_date']),
         ];
 
+        $oldSchedules = $med ? current_schedules((int) $med['id'], $todayYmd) : [];
         $medId = transaction(function () use ($med, $values, $rows, $uid, $form, $today, $todayYmd) {
             if ($med) {
                 q('UPDATE medications SET name = ?, dmd_code = ?, strength = ?, form = ?, dose_unit = ?, colour = ?, reason = ?, instructions = ?,
@@ -206,7 +207,23 @@ if (is_post()) {
             return $medId;
         });
 
-        flash('success', $form['name'] . ($med ? ' updated.' : ' added.'));
+        // Dose change history.
+        $saved = find_medication($medId, $uid);
+        $newSchedules = current_schedules($medId, $todayYmd);
+        $changeReason = mb_substr(post('change_reason'), 0, 255);
+        $changeDate = parse_date(post('change_date')) ? post('change_date') : $todayYmd;
+        $changes = [];
+        if (!$med) {
+            record_med_change($uid, $medId, $saved['start_date'], 'started',
+                'Started ' . trim(($saved['strength'] ?? '') . ' ' . medication_regimen($saved, $newSchedules)), $changeReason);
+        } else {
+            $changes = describe_med_changes($med, $oldSchedules, $saved, $newSchedules);
+            foreach ($changes as [$kind, $summary]) {
+                record_med_change($uid, $medId, $changeDate, $kind, $summary, $changeReason);
+            }
+        }
+
+        flash('success', $form['name'] . ($med ? ' updated.' : ' added.') . ($changes ? ' Change recorded: ' . lcfirst($changes[0][1]) . '.' : ''));
         redirect('medications.php');
     }
 }
@@ -358,6 +375,20 @@ render_header($med ? 'Edit ' . $med['name'] : 'Add medication', 'meds');
                 <input type="number" min="0" max="365" name="low_stock_days" value="<?= (int) ($form['low_stock_days'] ?? 7) ?>"></label>
         </div>
         <label>Notes <textarea name="notes" rows="3" maxlength="5000"><?= h($form['notes'] ?? '') ?></textarea></label>
+    </section>
+
+    <section class="card">
+        <h2><?= $med ? 'Changing the dose?' : 'Notes for your history' ?></h2>
+        <p class="muted small"><?= $med
+            ? 'If you change the strength, amount or timing, Pillbox records it in this medicine\'s history (e.g. "Increased from 10mg to 20mg a day"). Add when and why if you like.'
+            : 'Optional: who prescribed it and why, for this medicine\'s history.' ?></p>
+        <div class="grid-2">
+            <?php if ($med): ?>
+            <label>Change takes effect from <input type="date" name="change_date" value="<?= h(post('change_date') ?: $todayYmd) ?>"></label>
+            <?php endif; ?>
+            <label><span>Reason or who changed it <span class="muted small">(optional)</span></span>
+                <input name="change_reason" maxlength="255" value="<?= h(post('change_reason')) ?>" placeholder="e.g. Dr Patel, after blood pressure review"></label>
+        </div>
     </section>
 
     <div class="form-actions">

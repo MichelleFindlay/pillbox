@@ -15,10 +15,12 @@ if (is_post()) {
         case 'archive':
             // Keep history; stop the medication from today.
             q('UPDATE medications SET is_active = 0, end_date = LEAST(COALESCE(end_date, ?), ?) WHERE id = ?', [$todayYmd, $todayYmd, $med['id']]);
+            record_med_change($uid, (int) $med['id'], $todayYmd, 'stopped', 'Stopped');
             flash('success', $med['name'] . ' stopped. Its history is kept for your reports.');
             break;
         case 'restore':
             q('UPDATE medications SET is_active = 1, end_date = NULL WHERE id = ?', [$med['id']]);
+            record_med_change($uid, (int) $med['id'], $todayYmd, 'restarted', 'Restarted');
             flash('success', $med['name'] . ' restarted.');
             break;
         case 'restock':
@@ -54,6 +56,7 @@ if (is_post()) {
 $meds = user_medications($uid, false);
 $schedules = schedules_by_medication(array_column($meds, 'id'), $todayYmd);
 $active = array_filter($meds, fn ($m) => $m['is_active']);
+$latestChanges = latest_med_changes($uid);
 // Most recent collection per medication, to show and to pre-fill the next one.
 $lastCollected = [];
 foreach (q(
@@ -69,7 +72,10 @@ render_header('Medications', 'meds');
 ?>
 <div class="page-head">
     <h1>Medications</h1>
-    <a class="btn btn-primary" href="<?= h(url('medication_edit.php')) ?>">+ Add medication</a>
+    <span class="inline-actions">
+        <a class="btn" href="<?= h(url('travel.php')) ?>">&#9992; Travel</a>
+        <a class="btn btn-primary" href="<?= h(url('medication_edit.php')) ?>">+ Add medication</a>
+    </span>
 </div>
 
 <?php if (!$active): ?>
@@ -132,8 +138,12 @@ render_header('Medications', 'meds');
                 <p class="muted small">Currently <?= $m['stock_count'] !== null ? h(dose_label($m['stock_count'], $m['dose_unit'])) : 'not tracked' ?>.</p>
             </form>
         </details>
+        <?php if (isset($latestChanges[$m['id']]) && $latestChanges[$m['id']]['kind'] !== 'started'): $lc = $latestChanges[$m['id']]; ?>
+        <p class="small last-change">Changed <?= h(date('j M Y', strtotime($lc['effective_date']))) ?>: <?= h($lc['summary']) ?></p>
+        <?php endif; ?>
         <footer class="med-actions">
             <a class="btn btn-small" href="<?= h(url('medication_edit.php?id=' . $m['id'])) ?>">Edit</a>
+            <a class="btn btn-small" href="<?= h(url('medication_history.php?id=' . $m['id'])) ?>">History</a>
             <form method="post" data-confirm="Stop taking <?= h($m['name']) ?>? It will be removed from your daily list but its history is kept.">
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
@@ -158,6 +168,7 @@ render_header('Medications', 'meds');
                     <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
                     <button class="btn btn-small" name="action" value="restore">Restart</button>
                 </form>
+                <a class="btn btn-small" href="<?= h(url('medication_history.php?id=' . $m['id'])) ?>">History</a>
                 <form method="post" data-confirm="Permanently delete <?= h($m['name']) ?> and ALL of its dose history? This cannot be undone.">
                     <?= csrf_field() ?>
                     <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">

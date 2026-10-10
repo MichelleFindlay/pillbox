@@ -200,10 +200,17 @@ function schedule_lines(array $schedules, string $unit): array
  */
 function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $toDay, bool $activeOnly = false, ?int $medId = null): array
 {
-    $tz = user_tz($user);
+    $tz = user_tz($user);       // where times are shown (the destination during a trip)
+    $home = home_tz($user);     // doses belong to dates on the home calendar
+    $plans = user_travel_plans((int) $user['id']);
     $utc = new DateTimeZone('UTC');
     $fromDay = $fromDay->setTimezone($tz)->setTime(0, 0);
     $toDay = $toDay->setTimezone($tz)->setTime(0, 0);
+    $fromYmd = $fromDay->format('Y-m-d');
+    $toYmd = $toDay->format('Y-m-d');
+    // Time zone differences can move a dose onto the neighbouring date, so look one day either side.
+    $scanFrom = new DateTimeImmutable($fromYmd . ' -1 day', $home);
+    $scanTo = new DateTimeImmutable($toYmd . ' +1 day', $home);
 
     $sql = 'SELECT s.*, m.name, m.strength, m.dose_unit, m.colour, m.instructions, m.start_date, m.end_date, m.is_active
             FROM medication_schedules s
@@ -211,7 +218,7 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
             WHERE m.user_id = ? AND m.as_needed = 0
               AND m.start_date <= ? AND (m.end_date IS NULL OR m.end_date >= ?)
               AND (s.valid_from IS NULL OR s.valid_from <= ?) AND (s.valid_to IS NULL OR s.valid_to >= ?)';
-    $params = [$user['id'], $toDay->format('Y-m-d'), $fromDay->format('Y-m-d'), $toDay->format('Y-m-d'), $fromDay->format('Y-m-d')];
+    $params = [$user['id'], $scanTo->format('Y-m-d'), $scanFrom->format('Y-m-d'), $scanTo->format('Y-m-d'), $scanFrom->format('Y-m-d')];
     if ($activeOnly) {
         $sql .= ' AND m.is_active = 1';
     }
@@ -224,8 +231,8 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
         return [];
     }
 
-    $rangeStartUtc = $fromDay->setTimezone($utc)->format('Y-m-d H:i:s');
-    $rangeEndUtc = $toDay->modify('+1 day')->setTimezone($utc)->format('Y-m-d H:i:s');
+    $rangeStartUtc = $fromDay->modify('-1 day')->setTimezone($utc)->format('Y-m-d H:i:s');
+    $rangeEndUtc = $toDay->modify('+2 days')->setTimezone($utc)->format('Y-m-d H:i:s');
     $logs = [];
     foreach (q(
         'SELECT * FROM dose_logs WHERE user_id = ? AND schedule_id IS NOT NULL AND scheduled_for >= ? AND scheduled_for < ?',
@@ -238,7 +245,7 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
     $missedAfter = (int) config('doses.missed_after_minutes', 120);
     $slots = [];
 
-    for ($day = $fromDay; $day <= $toDay; $day = $day->modify('+1 day')) {
+    for ($day = $scanFrom; $day <= $scanTo; $day = $day->modify('+1 day')) {
         $ymd = $day->format('Y-m-d');
         $bit = weekday_bit($day);
         foreach ($schedules as $s) {
@@ -248,8 +255,12 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
                 continue;
             }
             [$hh, $mm] = array_map('intval', explode(':', $s['dose_time']));
-            $local = $day->setTime($hh, $mm);
-            $slotUtc = $local->setTimezone($utc);
+            [$moment, $trip] = dose_moment($ymd, $hh, $mm, $home, $plans);
+            $local = $moment->setTimezone($tz);
+            if ($local->format('Y-m-d') < $fromYmd || $local->format('Y-m-d') > $toYmd) {
+                continue;
+            }
+            $slotUtc = $moment->setTimezone($utc);
             $utcStr = $slotUtc->format('Y-m-d H:i:s');
             $log = $logs[$s['id'] . '|' . $utcStr] ?? null;
 
@@ -262,7 +273,9 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
             } else {
                 $status = 'due';
             }
-            $slots[] = ['schedule' => $s, 'local' => $local, 'utc' => $utcStr, 'log' => $log, 'status' => $status];
+            $slots[] = ['schedule' => $s, 'local' => $local, 'utc' => $utcStr, 'log' => $log, 'status' => $status,
+                // During travel: the dose's time back home, for reference.
+                'home_time' => $trip || $tz->getName() !== $home->getName() ? $moment->setTimezone($home)->format('H:i') : null];
         }
     }
     usort($slots, fn ($a, $b) => [$a['local'], $a['schedule']['name']] <=> [$b['local'], $b['schedule']['name']]);
@@ -349,4 +362,121 @@ function status_label(string $status): string
         'due' => 'Due now',
         default => 'Upcoming',
     };
+}
+
+/* ---------- Dose change history ---------- */
+
+const CHANGE_KINDS = [
+    'started' => 'Started', 'increased' => 'Increased', 'decreased' => 'Reduced', 'strength' => 'Strength changed',
+    'timing' => 'Timing changed', 'as_needed' => 'Changed', 'stopped' => 'Stopped', 'restarted' => 'Restarted', 'note' => 'Note',
+];
+
+function record_med_change(int $userId, int $medId, string $effectiveDate, string $kind, string $summary, ?string $reason = null): void
+{
+    q('INSERT INTO medication_changes (user_id, medication_id, effective_date, kind, summary, reason) VALUES (?, ?, ?, ?, ?, ?)',
+        [$userId, $medId, $effectiveDate, $kind, mb_substr($summary, 0, 500), $reason !== null && $reason !== '' ? mb_substr($reason, 0, 255) : null]);
+}
+
+function medication_changes(int $medId): array
+{
+    return q('SELECT * FROM medication_changes WHERE medication_id = ? ORDER BY effective_date DESC, id DESC', [$medId])->fetchAll();
+}
+
+/** Most recent change per medication: [med_id => row]. */
+function latest_med_changes(int $userId): array
+{
+    $latest = [];
+    // Latest by the date it took effect (not when it was typed in), then by entry order.
+    foreach (q('SELECT c.* FROM medication_changes c
+                WHERE c.user_id = ? AND NOT EXISTS (
+                    SELECT 1 FROM medication_changes n WHERE n.medication_id = c.medication_id
+                      AND (n.effective_date > c.effective_date OR (n.effective_date = c.effective_date AND n.id > c.id)))', [$userId]) as $c) {
+        $latest[$c['medication_id']] = $c;
+    }
+    return $latest;
+}
+
+/** "20mg" -> [20.0, 'mg']; null if the strength isn't a simple number and unit. */
+function parse_strength(?string $strength): ?array
+{
+    if ($strength !== null && preg_match('~^\s*(\d+(?:\.\d+)?)\s*([a-zµ%]+(?:/[a-z0-9.]+)?)\s*$~i', $strength, $m)) {
+        return [(float) $m[1], strtolower($m[2])];
+    }
+    return null;
+}
+
+/** How a medicine is taken, in a few words: "1 tablet a day at 08:00" or "as needed". */
+function medication_regimen(array $med, array $schedules): string
+{
+    if ($med['as_needed']) {
+        return 'as needed';
+    }
+    return $schedules ? implode('; ', schedule_lines($schedules, $med['dose_unit'])) : 'no dose times';
+}
+
+/**
+ * Describe what changed between two versions of a medication.
+ * @return list<array{0: string, 1: string}> [kind, summary]
+ */
+function describe_med_changes(array $old, array $oldSchedules, array $new, array $newSchedules): array
+{
+    $unit = $new['dose_unit'];
+    if ((bool) $old['as_needed'] !== (bool) $new['as_needed']) {
+        return [['as_needed', $new['as_needed']
+            ? 'Changed to as needed (was ' . medication_regimen($old, $oldSchedules) . ')'
+            : 'Changed from as needed to regular doses: ' . medication_regimen($new, $newSchedules)]];
+    }
+
+    $oldDaily = daily_usage($old, $oldSchedules);
+    $newDaily = daily_usage($new, $newSchedules);
+    $strengthChanged = mb_strtolower(trim((string) $old['strength'])) !== mb_strtolower(trim((string) $new['strength']));
+    $dailyChanged = abs($oldDaily - $newDaily) > 0.001;
+    $timingChanged = schedule_lines($oldSchedules, $old['dose_unit']) !== schedule_lines($newSchedules, $unit);
+    $everyDay = !array_filter($newSchedules, fn ($s) => (int) $s['days_mask'] !== EVERY_DAY)
+        && !array_filter($oldSchedules, fn ($s) => (int) $s['days_mask'] !== EVERY_DAY);
+    // Weekly patterns (e.g. 5mg Mon/Wed/Fri, 3mg other days) read best as weekly totals.
+    $factor = $everyDay ? 1 : 7;
+    $perDay = $everyDay ? ' a day' : ' a week';
+    $oldDaily *= $factor;
+    $newDaily *= $factor;
+    $amount = fn (float $n) => num(round($n, 2));
+    // Only whole units (tablets, capsules, ...) can be multiplied by their strength;
+    // a liquid's strength is a concentration (e.g. 250mg/5ml).
+    $countable = in_array($unit, ['tablet', 'capsule', 'sachet', 'patch', 'suppository', 'lozenge'], true);
+
+    if ($strengthChanged || $dailyChanged) {
+        $os = parse_strength($old['strength']);
+        $ns = parse_strength($new['strength']);
+        if (!$new['as_needed'] && $countable && $os && $ns && $os[1] === $ns[1] && !str_contains($ns[1], '/') && $oldDaily > 0 && $newDaily > 0) {
+            $oldTotal = $os[0] * $oldDaily;
+            $newTotal = $ns[0] * $newDaily;
+            $kind = $newTotal > $oldTotal + 0.0001 ? 'increased' : ($newTotal < $oldTotal - 0.0001 ? 'decreased' : 'strength');
+            $words = ['increased' => 'Increased', 'decreased' => 'Reduced', 'strength' => 'Changed'][$kind];
+            $summary = $kind === 'strength'
+                ? "Changed to {$new['strength']} (same total of " . $amount($newTotal) . $ns[1] . $perDay . ')'
+                : "$words from " . $amount($oldTotal) . $os[1] . ' to ' . $amount($newTotal) . $ns[1] . $perDay;
+            $detail = [];
+            if ($strengthChanged) {
+                $detail[] = "now {$new['strength']} " . ($unit === 'tablet' || $unit === 'capsule' ? $unit . 's' : 'strength');
+            }
+            if ($dailyChanged) {
+                $detail[] = dose_label($amount($newDaily), $unit) . $perDay;
+            }
+            return [[$kind, $summary . ($detail && $kind !== 'strength' ? ' (' . implode(', ', $detail) . ')' : '')]];
+        }
+        if ($dailyChanged) {
+            $kind = $newDaily > $oldDaily ? 'increased' : 'decreased';
+            $changes = [[$kind, ($kind === 'increased' ? 'Increased' : 'Reduced') . ' from ' . dose_label($amount($oldDaily), $unit)
+                . ' to ' . dose_label($amount($newDaily), $unit) . $perDay]];
+            if ($strengthChanged) {
+                $changes[] = ['strength', "Strength changed from " . ($old['strength'] ?: 'not set') . " to " . ($new['strength'] ?: 'not set')];
+            }
+            return $changes;
+        }
+        return [['strength', 'Strength changed from ' . ($old['strength'] ?: 'not set') . ' to ' . ($new['strength'] ?: 'not set')]];
+    }
+    if ($timingChanged && !$new['as_needed']) {
+        return [['timing', 'Dose times changed to ' . medication_regimen($new, $newSchedules) . ' (was ' . medication_regimen($old, $oldSchedules) . ')']];
+    }
+    return [];
 }

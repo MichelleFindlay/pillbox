@@ -30,6 +30,8 @@ foreach ($meds as $m) {
     }
 }
 
+$soonAppointments = array_slice(appointments_between($uid, gmdate('Y-m-d H:i:s', time() - 3600), gmdate('Y-m-d H:i:s', strtotime('+14 days'))), 0, 3);
+
 $metrics = enabled_metrics($user);
 $latest = [];
 if ($metrics) {
@@ -69,6 +71,14 @@ render_header('Today', 'today');
     <?php endif; ?>
 </div>
 
+<?php if ($trip = active_trip($user)): ?>
+<div class="flash travel-banner" role="status">
+    <span>&#9992; <strong>Travel mode:</strong> times are shown in <?= h(tz_place($trip['destination_tz'])) ?> time (<?= h(tz_offset_label($trip['destination_tz'])) ?>)
+        until you get back on <?= h(date('D j M', strtotime($trip['end_date']))) ?>. Doses: <?= h(mb_strtolower(TRAVEL_MODES[$trip['mode']][0])) ?>.</span>
+    <a class="btn btn-small" href="<?= h(url('travel.php')) ?>">Travel settings</a>
+</div>
+<?php endif; ?>
+
 <div class="flash install-banner" hidden>
     <span>Add Pillbox to your home screen to use it like an app.</span>
     <span class="inline-actions">
@@ -83,6 +93,24 @@ render_header('Today', 'today');
     <a href="<?= h(url('medications.php#med-' . $m['id'])) ?>">Collected it?</a>
 </div>
 <?php endforeach; ?>
+
+<?php if ($soonAppointments): ?>
+<section class="card">
+    <div class="card-head">
+        <h2>Upcoming appointments</h2>
+        <a class="btn btn-small" href="<?= h(url('appointments.php')) ?>">All appointments</a>
+    </div>
+    <ul class="plain">
+        <?php foreach ($soonAppointments as $a): $local = local_time($a['starts_at'], 'Y-m-d'); ?>
+        <li class="logline">
+            <span><strong><?= h($local === $today->format('Y-m-d') ? 'Today' : ($local === $today->modify('+1 day')->format('Y-m-d') ? 'Tomorrow' : local_time($a['starts_at'], 'D j M'))) ?>,
+                <?= h(local_time($a['starts_at'], 'H:i')) ?></strong> &middot; <a href="<?= h(url('appointment.php?id=' . $a['id'])) ?>"><?= h(appointment_title($a)) ?></a>
+                <span class="muted small"><?= $a['with_whom'] ? 'with ' . h($a['with_whom']) : '' ?><?= $a['location'] ? ' · ' . h($a['location']) : '' ?></span></span>
+        </li>
+        <?php endforeach; ?>
+    </ul>
+</section>
+<?php endif; ?>
 
 <?php if ($missedYesterday): ?>
 <section class="card">
