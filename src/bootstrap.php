@@ -25,6 +25,10 @@ require APP_ROOT . '/src/care.php';
 require APP_ROOT . '/src/health_checks.php';
 require APP_ROOT . '/src/cycle.php';
 require APP_ROOT . '/src/mind.php';
+require APP_ROOT . '/src/mailer.php';
+require APP_ROOT . '/src/webauthn.php';
+require APP_ROOT . '/src/demo.php';
+require APP_ROOT . '/src/tasks.php';
 require APP_ROOT . '/src/metrics.php';
 require APP_ROOT . '/src/health_import.php';
 require APP_ROOT . '/src/charts.php';
@@ -52,5 +56,6 @@ set_exception_handler(static function (Throwable $e): void {
 send_security_headers();
 if (!defined('PILLBOX_NO_SESSION')) {
     start_session();
+    remember_site_url();
 }
 ensure_schema();

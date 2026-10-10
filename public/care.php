@@ -11,6 +11,9 @@ $user = require_login();
 $uid = (int) $user['id'];
 $today = local_today();
 $enabled = user_care_areas($user);
+if (get('area') === 'mind') {
+    require_mind($user);
+}
 $areaKey = isset(CARE_AREAS[get('area')]) ? get('area') : null;
 $area = $areaKey ? CARE_AREAS[$areaKey] : null;
 $self = $areaKey ? 'care.php?area=' . $areaKey : 'care.php';
@@ -90,12 +93,14 @@ if (is_post()) {
             }
             [$values, $errors] = check_from_post($areaKey, $check);
             if (!$errors) {
+                $cols = [$values['label'], $values['interval_days'], $values['last_done'], $values['due_date'], $values['quantity'], $values['unit'],
+                    $values['low_at'], $values['per_week'], $values['counted_on'], $values['items'], $values['notes'], $values['remind']];
                 if ($check) {
-                    q('UPDATE health_checks SET label = ?, interval_days = ?, last_done = ?, due_date = ?, notes = ?, remind = ? WHERE id = ?',
-                        [$values['label'], $values['interval_days'], $values['last_done'], $values['due_date'], $values['notes'], $values['remind'], $check['id']]);
+                    q('UPDATE health_checks SET label = ?, interval_days = ?, last_done = ?, due_date = ?, quantity = ?, unit = ?, low_at = ?, per_week = ?,
+                       counted_on = ?, items = ?, notes = ?, remind = ? WHERE id = ?', [...$cols, $check['id']]);
                 } else {
-                    q('INSERT INTO health_checks (user_id, area, label, interval_days, last_done, due_date, notes, remind) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                        [$uid, $areaKey, $values['label'], $values['interval_days'], $values['last_done'], $values['due_date'], $values['notes'], $values['remind']]);
+                    q('INSERT INTO health_checks (label, interval_days, last_done, due_date, quantity, unit, low_at, per_week, counted_on, items, notes, remind, user_id, area, track)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$cols, $uid, $areaKey, $values['track']]);
                 }
                 flash('success', $values['label'] . ($check ? ' updated.' : ' added.'));
                 redirect($self . '#checks');
@@ -112,6 +117,39 @@ if (is_post()) {
             [$next] = check_next_due($check, $user, $today);
             flash('success', $check['label'] . ' marked done' . ($next ? '. Next due ' . $next->format('j F Y') . '.' : '.'));
             redirect($back);
+        case 'check_replaced':
+            $expiry = parse_date(post('expiry'));
+            if (!$check || !$expiry) {
+                flash('error', 'Enter the expiry date of the new one.');
+                redirect($self . '#check-' . ($check['id'] ?? ''));
+            }
+            q('UPDATE health_checks SET last_done = ?, due_date = ? WHERE id = ?', [$today->format('Y-m-d'), $expiry->format('Y-m-d'), $check['id']]);
+            flash('success', $check['label'] . ': replaced. The new one expires ' . $expiry->format('j F Y') . '.');
+            redirect($back);
+        case 'check_count':
+            $n = post('quantity');
+            if (!$check || !is_numeric($n) || (float) $n < 0 || (float) $n > 99999) {
+                flash('error', 'Enter how many as a number.');
+                redirect($self . '#check-' . ($check['id'] ?? ''));
+            }
+            $now = post('mode') === 'add' ? stock_left($check, $today) + (float) $n : (float) $n;
+            q('UPDATE health_checks SET quantity = ?, counted_on = ?, last_done = ? WHERE id = ?',
+                [$now, $today->format('Y-m-d'), post('mode') === 'add' ? $today->format('Y-m-d') : $check['last_done'], $check['id']]);
+            flash('success', $check['label'] . ': ' . num(round($now)) . ($check['unit'] ? ' ' . $check['unit'] : '') . ' now.');
+            redirect($back);
+        case 'check_level':
+            if ($check) {
+                $collected = post('collected') === '1';
+                $level = $collected ? 0 : (isset(FILL_LEVELS[(int) post('quantity')]) ? (int) post('quantity') : 0);
+                q('UPDATE health_checks SET quantity = ?, counted_on = ?, last_done = ? WHERE id = ?',
+                    [$level, $today->format('Y-m-d'), $collected ? $today->format('Y-m-d') : $check['last_done'], $check['id']]);
+                flash('success', $collected ? $check['label'] . ': collected or replaced.' : $check['label'] . ': ' . mb_strtolower(FILL_LEVELS[$level]) . '.');
+            }
+            redirect($back);
+        case 'med_returned':
+            q('UPDATE medications SET stock_count = 0 WHERE id = ? AND user_id = ? AND is_active = 0', [(int) post('med_id'), $uid]);
+            flash('success', 'Thanks: marked as returned.');
+            redirect($self . '#returns');
         case 'check_delete':
             if ($check) {
                 q('DELETE FROM health_checks WHERE id = ?', [$check['id']]);
@@ -206,8 +244,8 @@ if (!$areaKey) {
     <?php foreach ($comingUp as $c): $a = CARE_AREAS[$c['check']['area']]; ?>
         <li class="logline">
             <span><?= $a['icon'] ?> <a href="<?= h(url('care.php?area=' . $c['check']['area'] . '#check-' . $c['check']['id'])) ?>"><strong><?= h($c['check']['label']) ?></strong></a>
-                <span class="muted small"><?= h(due_label($c['due'], $today)) ?></span></span>
-            <span class="badge badge-<?= $c['status'] === 'overdue' ? 'missed' : 'due' ?>"><?= $c['status'] === 'overdue' ? 'Overdue' : 'Due soon' ?></span>
+                <span class="muted small"><?= h(check_due_text($c['check'], $c['due'], $today)) ?></span></span>
+            <?= check_badge($c['check'], $c['status']) ?>
         </li>
     <?php endforeach; ?>
     </ul>
@@ -232,14 +270,14 @@ if (!$areaKey) {
     <a class="care-tile" href="<?= h(url('care.php?area=' . $key)) ?>">
         <span class="care-tile-title"><?= $a['icon'] ?> <?= h($a['title']) ?></span>
         <span class="muted small"><?= $tasks ? ($due ? "$done of $due done today" : 'Nothing to do today') : ($a['presets'] ? 'No routine yet' : '') ?></span>
-        <?php if ($next): ?><span class="small">Next: <?= h($next[0]['label']) ?>, <?= h(lcfirst(due_label($next[1], $today))) ?></span>
+        <?php if ($next): ?><span class="small">Next: <?= h($next[0]['label']) ?>, <?= h(lcfirst(check_due_text($next[0], $next[1], $today))) ?></span>
         <?php elseif ($key === 'screening' && !$user['date_of_birth']): ?><span class="small">Add your date of birth to see when you're due</span>
         <?php elseif (!$tasks): ?><span class="small">Set up</span><?php endif; ?>
     </a>
     <?php endforeach; ?>
 </div>
-<?php if (count($enabled) < count(CARE_AREAS)): ?>
-<p class="muted small">Also available: <?= h(implode(', ', array_map(fn ($k) => CARE_AREAS[$k]['title'], array_diff(array_keys(CARE_AREAS), $enabled)))) ?>.
+<?php if (count($enabled) < count(care_categories())): ?>
+<p class="muted small">Also available: <?= h(implode(', ', array_map(fn ($k) => CARE_AREAS[$k]['title'], array_diff(array_keys(care_categories()), $enabled)))) ?>.
     <a href="<?= h(url('account.php#health-profile')) ?>">Switch them on in your health profile</a>.</p>
 <?php endif; ?>
 <?php
@@ -329,30 +367,103 @@ function care_fields(array $t, string $idPrefix): void
     <?php
 }
 
-/** Fields shared by the check add and change forms. */
-function check_fields(array $c): void
+/** Status badge, worded for the kind of check. */
+function check_badge(array $c, string $status): string
+{
+    $words = match ($c['track']) {
+        'expiry' => ['overdue' => 'Expired', 'soon' => 'Expires soon', 'later' => 'In date'],
+        'stock'  => ['overdue' => 'Restock', 'soon' => 'Restock soon', 'later' => 'Stocked'],
+        'level'  => ['overdue' => 'Collect now', 'soon' => 'Collect soon', 'later' => 'OK'],
+        'kit'    => ['overdue' => 'Needs attention', 'soon' => 'Check soon', 'later' => 'Up to date'],
+        default  => ['overdue' => 'Overdue', 'soon' => 'Due soon', 'later' => 'Up to date'],
+    };
+    $class = ['overdue' => 'missed', 'soon' => 'due', 'later' => 'taken'][$status] ?? null;
+    return $class ? '<span class="badge badge-' . $class . '">' . h($words[$status]) . '</span>' : '';
+}
+
+/** The quick action for a check: mark done, replaced (new expiry), count, or fill level. */
+function check_actions(array $c, string $self, DateTimeImmutable $today): void
+{
+    $id = (int) $c['id'];
+    ?>
+    <form method="post" action="<?= h(url($self)) ?>" class="done-form">
+        <?= csrf_field() ?><input type="hidden" name="check_id" value="<?= $id ?>">
+        <?php if ($c['track'] === 'expiry'): ?>
+            <input type="hidden" name="action" value="check_replaced">
+            <label><span class="small">New one expires</span><input type="date" name="expiry" required min="<?= h($today->format('Y-m-d')) ?>"></label>
+            <button class="btn btn-small btn-primary" type="submit">Replaced</button>
+        <?php elseif ($c['track'] === 'stock'): ?>
+            <input type="hidden" name="action" value="check_count">
+            <label><span class="small">How many</span><input type="number" name="quantity" min="0" step="any" inputmode="decimal" required class="count-input"></label>
+            <select name="mode" aria-label="Count or restock"><option value="set">I have this many</option><option value="add">Add to it (restocked)</option></select>
+            <button class="btn btn-small btn-primary" type="submit">Update</button>
+        <?php elseif ($c['track'] === 'level'): ?>
+            <input type="hidden" name="action" value="check_level">
+            <select name="quantity" aria-label="How full"><?php foreach (FILL_LEVELS as $v => $l): ?><option value="<?= $v ?>"<?= selected((int) $c['quantity'] === $v) ?>><?= h($l) ?></option><?php endforeach; ?></select>
+            <button class="btn btn-small" type="submit">Update</button>
+            <button class="btn btn-small btn-primary" type="submit" name="collected" value="1">Collected</button>
+        <?php else: ?>
+            <input type="hidden" name="action" value="check_done">
+            <label class="sr" for="done-<?= $id ?>">Date</label>
+            <input type="date" id="done-<?= $id ?>" name="date" required max="<?= h($today->format('Y-m-d')) ?>" value="<?= h($today->format('Y-m-d')) ?>">
+            <button class="btn btn-small btn-primary" type="submit"><?= $c['track'] === 'kit' ? 'Checked' : 'Mark done' ?></button>
+        <?php endif; ?>
+    </form>
+    <?php
+}
+
+/**
+ * Fields for the check add and change forms. $prefix set = a new check, so the type can be chosen
+ * (the other types' fields are hidden by app.js until picked).
+ */
+function check_fields(array $c, ?string $prefix = null): void
 {
     [$n, $unit] = interval_parts($c['interval_days'] ? (int) $c['interval_days'] : null);
+    $track = $c['track'] ?? 'due';
+    $show = fn (array $tracks) => $prefix
+        ? ' data-show-when="' . h(implode(' ', array_map(fn ($t) => "$prefix-$t", $tracks))) . '"'
+        : (in_array($track, $tracks, true) ? '' : ' hidden');
+    $today = local_today()->format('Y-m-d');
     ?>
+    <label>Name <input name="label" maxlength="100" required value="<?= h($c['label']) ?>"></label>
+    <?php if ($prefix): ?>
+    <fieldset><legend>What kind?</legend>
+        <div class="repeat-choice">
+            <?php foreach (CHECK_TRACKS as $k => $l): ?>
+            <label class="check"><input type="radio" name="track" value="<?= h($k) ?>" id="<?= h("$prefix-$k") ?>"<?= checked($track === $k) ?>> <?= h($l) ?></label>
+            <?php endforeach; ?>
+        </div>
+    </fieldset>
+    <?php endif; ?>
     <div class="grid-2">
-        <label>Name <input name="label" maxlength="100" required value="<?= h($c['label']) ?>"></label>
         <?php if (empty($c['rule'])): ?>
-        <label><span>Repeats every <span class="muted small">(empty = one-off)</span></span>
+        <label<?= $show(['due', 'level', 'kit']) ?>><span>Repeats every <span class="muted small">(empty = one-off)</span></span>
             <span class="inline-input"><input type="number" name="interval_n" min="1" max="7300" inputmode="numeric" value="<?= h($n) ?>">
                 <select name="interval_unit" aria-label="Unit">
                     <?php foreach (['days', 'weeks', 'months', 'years'] as $u): ?><option<?= selected($unit === $u) ?>><?= $u ?></option><?php endforeach; ?>
                 </select></span></label>
         <?php endif; ?>
-        <label>Last done <input type="date" name="last_done" max="<?= h(local_today()->format('Y-m-d')) ?>" value="<?= h($c['last_done'] ?? '') ?>"></label>
-        <label><span>Next due <span class="muted small">(optional: overrides the worked-out date)</span></span> <input type="date" name="due_date" value="<?= h($c['due_date'] ?? '') ?>"></label>
+        <label<?= $show(['due', 'level', 'kit', 'expiry']) ?>><?= $track === 'kit' && !$prefix ? 'Last checked' : ($track === 'level' && !$prefix ? 'Last collected' : ($track === 'expiry' && !$prefix ? 'Last replaced' : 'Last done')) ?>
+            <input type="date" name="last_done" max="<?= h($today) ?>" value="<?= h($c['last_done'] ?? '') ?>"></label>
+        <label<?= $show(['due', 'expiry']) ?>><span><?= $track === 'expiry' && !$prefix ? 'Expiry date' : 'Next due, or expiry date' ?>
+            <span class="muted small"><?= $track === 'expiry' ? '' : '(optional: overrides the worked-out date)' ?></span></span>
+            <input type="date" name="due_date" value="<?= h($c['due_date'] ?? '') ?>"></label>
+        <label<?= $show(['stock']) ?>>How many you have <input type="number" name="quantity" min="0" step="any" inputmode="decimal" value="<?= h($track === 'stock' && $c['quantity'] !== null ? num($c['quantity']) : '') ?>"></label>
+        <label<?= $show(['stock']) ?>><span>Called <span class="muted small">(e.g. strips)</span></span> <input name="unit" maxlength="20" value="<?= h($c['unit'] ?? '') ?>"></label>
+        <label<?= $show(['stock']) ?>>Restock when down to <input type="number" name="low_at" min="0" step="any" inputmode="decimal" value="<?= h(isset($c['low_at']) ? num($c['low_at']) : '') ?>"></label>
+        <label<?= $show(['stock']) ?>><span>Roughly how many you use a week <span class="muted small">(optional)</span></span>
+            <input type="number" name="per_week" min="0" step="any" inputmode="decimal" value="<?= h(!empty($c['per_week']) ? num($c['per_week']) : '') ?>"></label>
+        <?php if (!$prefix && $track === 'level'): ?><input type="hidden" name="quantity" value="<?= (int) $c['quantity'] ?>"><?php endif; ?>
     </div>
+    <label<?= $show(['kit']) ?>><span>Contents <span class="muted small">(one per line; add an expiry after a bar, e.g. "Paracetamol | 2027-03")</span></span>
+        <textarea name="items" rows="6" maxlength="5000"><?= h($c['items'] ?? '') ?></textarea></label>
     <label><span>Notes <span class="muted small">(optional)</span></span> <input name="notes" maxlength="500" value="<?= h($c['notes'] ?? '') ?>"></label>
     <label class="check"><input type="checkbox" name="remind" value="1"<?= checked(!empty($c['remind'])) ?>>
-        <span>Show in my calendar feed on the due date</span></label>
+        <span>Show in my calendar feed when it's due</span></label>
     <?php
 }
 
-render_header($area['title'], 'care');
+render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
 ?>
 <div class="page-head">
     <div>
@@ -360,18 +471,24 @@ render_header($area['title'], 'care');
         <?php if ($tasks): ?><p class="muted"><?= $streak ? "$streak day" . ($streak === 1 ? '' : 's') . ' in a row with your whole routine done' : 'Tick tasks off on the Today page' ?></p><?php endif; ?>
     </div>
     <span class="inline-actions">
+        <?php if ($areaKey === 'mind'): ?>
+        <a class="btn btn-small" href="<?= h(url('mind.php')) ?>">&larr; Mind</a>
+        <?php else: ?>
         <a class="btn btn-small" href="<?= h(url('care_summary.php?area=' . $areaKey)) ?>">Summary</a>
         <a class="btn btn-small" href="<?= h(url('care.php')) ?>">&larr; Care</a>
+        <?php endif; ?>
     </span>
 </div>
 
+<?php if ($areaKey !== 'mind'): ?>
 <nav class="chips" aria-label="Care categories">
     <?php foreach (array_unique([...$enabled, $areaKey]) as $key): $a = CARE_AREAS[$key]; ?>
     <a class="chip" href="<?= h(url('care.php?area=' . $key)) ?>"<?= $key === $areaKey ? ' aria-current="page"' : '' ?>><?= $a['icon'] ?> <?= h($a['short']) ?></a>
     <?php endforeach; ?>
 </nav>
+<?php endif; ?>
 
-<?php if (!in_array($areaKey, $enabled, true)): ?>
+<?php if (!in_array($areaKey, routine_areas($user), true)): ?>
 <p class="flash flash-warning">This category is switched off, so it isn't on your Today page or calendar feed.
     <a href="<?= h(url('account.php#health-profile')) ?>">Switch it on in your health profile</a>.</p>
 <?php endif; ?>
@@ -487,6 +604,46 @@ render_header($area['title'], 'care');
 </section>
 <?php endif; ?>
 
+<?php if ($areaKey === 'respiratory'):
+    $inhalers = array_filter(user_medications($uid), fn ($m) => $m['form'] === 'inhaler' || $m['dose_unit'] === 'puff');
+    $inhSchedules = schedules_by_medication(array_column($inhalers, 'id'), $today->format('Y-m-d')); ?>
+<section class="card" id="inhalers">
+    <div class="card-head"><h2>My inhalers</h2><a class="btn btn-small" href="<?= h(url('medications.php')) ?>">Meds</a></div>
+    <?php if (!$inhalers): ?>
+    <p class="muted">Add your reliever and preventer as medications (form "inhaler", dose unit "puff"). Put the number on the dose counter in
+        "Stock on hand" and the expiry date from the box: Pillbox counts down as you log puffs, and warns you before either runs out.</p>
+    <?php endif; ?>
+    <ul class="plain">
+        <?php foreach ($inhalers as $m): $days = stock_days_left($m, $inhSchedules[$m['id']] ?? []); [$expState, $expText] = expiry_status($m['expiry_date'], $today); ?>
+        <li class="logline"><span><?= med_dot($m['colour']) ?> <strong><?= h($m['name']) ?></strong> <span class="muted small"><?= h($m['strength']) ?><?= $m['as_needed'] ? ' · reliever (as needed)' : ' · preventer' ?></span>
+            <br><span class="small<?= $days !== null && $days <= (int) $m['low_stock_days'] ? ' warn' : '' ?>"><?= $m['stock_count'] !== null
+                ? h(num($m['stock_count'])) . ' doses left on the counter' . ($days !== null ? ' (about ' . (int) floor($days) . ' days)' : '') : 'Dose counter not recorded' ?></span>
+            <?= $expText ? '<span class="small' . ($expState ? ' warn' : ' muted') . '"> · ' . h(lcfirst($expText)) . '</span>' : '<span class="muted small"> · no expiry date</span>' ?></span>
+            <a class="btn btn-small" href="<?= h(url('medication_edit.php?id=' . $m['id'])) ?>">Update</a></li>
+        <?php endforeach; ?>
+    </ul>
+</section>
+<?php endif; ?>
+
+<?php if ($areaKey === 'sharps'):
+    $toReturn = q('SELECT * FROM medications WHERE user_id = ? AND ((is_active = 0 AND stock_count > 0) OR (is_active = 1 AND expiry_date < ?)) ORDER BY name',
+        [$uid, $today->format('Y-m-d')])->fetchAll(); ?>
+<section class="card" id="returns">
+    <h2>Medicines to take back to a pharmacy</h2>
+    <?php if (!$toReturn): ?><p class="muted">Nothing at the moment: Pillbox lists stopped medicines you still have some of, and anything past its expiry date.</p><?php endif; ?>
+    <ul class="plain">
+        <?php foreach ($toReturn as $m): ?>
+        <li class="logline"><span><strong><?= h($m['name']) ?></strong> <span class="muted small"><?= h($m['strength']) ?> ·
+            <?= $m['is_active'] ? 'expired ' . h(date('j M Y', strtotime($m['expiry_date']))) : 'stopped, ' . h(dose_label($m['stock_count'], $m['dose_unit'])) . ' left' ?></span></span>
+            <?php if (!$m['is_active']): ?>
+            <form method="post" action="<?= h(url($self)) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="med_returned"><input type="hidden" name="med_id" value="<?= (int) $m['id'] ?>">
+                <button class="btn btn-small" type="submit">Returned</button></form>
+            <?php else: ?><a class="btn btn-small" href="<?= h(url('medications.php#med-' . $m['id'])) ?>">New supply</a><?php endif; ?></li>
+        <?php endforeach; ?>
+    </ul>
+</section>
+<?php endif; ?>
+
 <?php if ($areaKey === 'screening' && (!$user['date_of_birth'] || !$user['sex'])): ?>
 <p class="flash flash-warning">Add your <?= !$user['date_of_birth'] ? 'date of birth' : '' ?><?= !$user['date_of_birth'] && !$user['sex'] ? ' and ' : '' ?><?= !$user['sex'] ? 'sex' : '' ?>
     to <a href="<?= h(url('account.php#health-profile')) ?>">your health profile</a> to see which screening you're invited to and when.</p>
@@ -512,21 +669,23 @@ render_header($area['title'], 'care');
         <li class="check-item" id="check-<?= (int) $c['id'] ?>">
             <div class="logline">
                 <span><strong><?= h($c['label']) ?></strong>
-                    <?= ['overdue' => '<span class="badge badge-missed">Overdue</span>', 'soon' => '<span class="badge badge-due">Due soon</span>',
-                        'later' => '<span class="badge badge-taken">Up to date</span>', 'unknown' => ''][$status] ?>
-                    <br><span class="small"><?= h($due ? due_label($due, $today) : $note) ?></span>
-                    <span class="muted small"><?= $c['last_done'] ? ' · last done ' . h((new DateTimeImmutable($c['last_done']))->format('j M Y')) : '' ?>
+                    <?= check_badge($c, $status) ?>
+                    <br><span class="small"><?= h(check_due_text($c, $due, $today) ?: $note) ?></span>
+                    <span class="muted small"><?= $c['last_done'] ? ' · ' . h(['expiry' => 'replaced', 'stock' => 'restocked', 'level' => 'collected', 'kit' => 'checked'][$c['track']] ?? 'last done') . ' ' . h((new DateTimeImmutable($c['last_done']))->format('j M Y')) : '' ?>
                         <?= $c['rule'] === 'autumn' ? ' · every autumn' : ($c['interval_days'] ? ' · ' . h(interval_label((int) $c['interval_days'])) : '') ?></span>
                     <?php if ($due && $note): ?><br><span class="muted small"><?= h($note) ?></span><?php endif; ?>
                     <?php if ($c['tip']): ?><br><span class="muted small"><?= h($c['tip']) ?></span><?php endif; ?>
                     <?php if ($c['notes']): ?><br><span class="small"><?= h($c['notes']) ?></span><?php endif; ?></span>
-                <form method="post" action="<?= h(url($self)) ?>" class="done-form">
-                    <?= csrf_field() ?><input type="hidden" name="action" value="check_done"><input type="hidden" name="check_id" value="<?= (int) $c['id'] ?>">
-                    <label class="sr" for="done-<?= (int) $c['id'] ?>">Date done</label>
-                    <input type="date" id="done-<?= (int) $c['id'] ?>" name="date" required max="<?= h($today->format('Y-m-d')) ?>" value="<?= h($today->format('Y-m-d')) ?>">
-                    <button class="btn btn-small btn-primary" type="submit">Mark done</button>
-                </form>
+                <?php check_actions($c, $self, $today); ?>
             </div>
+            <?php if ($c['track'] === 'kit' && ($items = kit_items($c))): ?>
+            <ul class="kit-items">
+                <?php foreach ($items as $it): [$st, $txt] = expiry_status($it['expiry']?->format('Y-m-d'), $today); ?>
+                <li><?= h($it['name']) ?><?php if ($it['expiry']): ?> <span class="<?= $st ? 'warn' : 'muted' ?> small">&middot; <?= h(lcfirst($txt)) ?></span>
+                    <?php elseif ($it['has_expiry']): ?> <span class="muted small">&middot; add expiry</span><?php endif; ?></li>
+                <?php endforeach; ?>
+            </ul>
+            <?php endif; ?>
             <details class="q-edit"<?= $editing ? ' open' : '' ?>>
                 <summary>Change</summary>
                 <?= $editing ? form_errors($errors) : '' ?>
@@ -571,7 +730,8 @@ render_header($area['title'], 'care');
         <div class="preset-list">
             <?php foreach ($presets as $kind => $p): ?>
             <form method="post" action="<?= h(url($self)) ?>" class="preset"><?= csrf_field() ?><input type="hidden" name="action" value="check_preset"><input type="hidden" name="kind" value="<?= h($kind) ?>">
-                <button class="btn" type="submit"><span>+ <?= h($p['label']) ?></span><span class="muted small"><?= h(isset($p['rule']) ? 'every autumn' : (isset($p['interval']) ? interval_label($p['interval']) : 'set a date')) ?></span></button></form>
+                <button class="btn" type="submit"><span>+ <?= h($p['label']) ?></span><span class="muted small"><?= h(isset($p['rule']) ? 'every autumn' : (['expiry' => 'expiry date', 'stock' => 'keep stocked', 'level' => 'fill level'][$p['track'] ?? 'due']
+                    ?? (isset($p['interval']) ? (($p['track'] ?? '') === 'kit' ? 'check ' : '') . interval_label($p['interval']) : 'set a date'))) ?></span></button></form>
             <?php endforeach; ?>
         </div>
         <?php endif; ?>
@@ -580,7 +740,8 @@ render_header($area['title'], 'care');
             <?= $checkForm && !$checkForm['id'] ? form_errors($errors) : '' ?>
             <form method="post" action="<?= h(url($self)) ?>" class="stack">
                 <?= csrf_field() ?><input type="hidden" name="action" value="check_add">
-                <?php check_fields($checkForm && !$checkForm['id'] ? $checkForm : ['label' => '', 'interval_days' => null, 'rule' => null, 'last_done' => null, 'due_date' => null, 'notes' => '', 'remind' => 1]); ?>
+                <?php check_fields($checkForm && !$checkForm['id'] ? $checkForm : ['label' => '', 'track' => 'due', 'interval_days' => null, 'rule' => null, 'last_done' => null,
+                    'due_date' => null, 'quantity' => null, 'unit' => null, 'low_at' => null, 'per_week' => null, 'items' => null, 'notes' => '', 'remind' => 1], 'newcheck'); ?>
                 <span class="inline-actions"><button class="btn btn-primary" type="submit">Add</button></span>
             </form>
         </details>

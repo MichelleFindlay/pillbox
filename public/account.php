@@ -9,6 +9,9 @@ $errors = [];
 
 if (is_post()) {
     require_post();
+    if (in_array(post('action'), ['profile', 'password', 'sign_out_others', 'link_entra', 'unlink_entra', 'unlink_oidc', 'email_prefs', 'test_email'], true)) {
+        demo_blocked('Changing sign-in details and email');
+    }
     switch (post('action')) {
         case 'profile':
             $name = post('display_name');
@@ -42,7 +45,7 @@ if (is_post()) {
             }
             $sex = isset(SEXES[post('sex')]) ? post('sex') : null;
             $programmes = $sex === 'other' ? implode(',', array_intersect(array_keys(SCREENING_PROGRAMMES), (array) ($_POST['screening'] ?? []))) : null;
-            $areas = array_values(array_intersect(array_keys(CARE_AREAS), (array) ($_POST['care_areas'] ?? [])));
+            $areas = array_values(array_intersect(array_keys(care_categories()), (array) ($_POST['care_areas'] ?? [])));
             if (!$errors) {
                 q('UPDATE users SET date_of_birth = ?, sex = ?, screening_programmes = ?, care_areas = ?, mind_enabled = ? WHERE id = ?',
                     [$dob?->format('Y-m-d'), $sex, $programmes, implode(',', $areas), post('mind_enabled') === '1' ? 1 : 0, $uid]);
@@ -54,6 +57,17 @@ if (is_post()) {
             }
             break;
 
+        case 'email_prefs':
+            q('UPDATE users SET email_digest = ?, email_digest_hour = ?, email_appointments = ? WHERE id = ?',
+                [post('email_digest') === '1' ? 1 : 0, min(23, max(0, (int) post('email_digest_hour'))), post('email_appointments') === '1' ? 1 : 0, $uid]);
+            flash('success', 'Email settings saved.');
+            redirect('account.php#email');
+        case 'test_email':
+            $error = $user['email'] ? send_mail($user['email'], 'Pillbox test email',
+                "This is a test email from Pillbox. If you can read this, email is working.\n",
+                mail_html('Test email', '<p>If you can read this, email from Pillbox is working.</p>')) : 'Add your email address to your profile first.';
+            flash($error ? 'error' : 'success', $error ? "The test email couldn't be sent: $error" : 'Test email sent to ' . $user['email'] . '. Check your spam folder if it doesn\'t arrive.');
+            redirect('account.php#email');
         case 'appearance':
             $theme = post('theme');
             $mode = post('color_mode');
@@ -202,6 +216,7 @@ render_header('Account', 'account');
     <a class="chip" href="#security">Password &amp; security</a>
     <?php if (sso_enabled() || $user['entra_oid'] || $identities): ?><a class="chip" href="#sign-in-options">Sign-in options</a><?php endif; ?>
     <a class="chip" href="#metrics">Measurements</a>
+    <a class="chip" href="#email">Email</a>
     <a class="chip" href="#install">Phone app</a>
     <a class="chip" href="#data">Your data</a>
 </nav>
@@ -259,7 +274,7 @@ render_header('Account', 'account');
             <legend>Care categories</legend>
             <p class="muted small">Only the ones you switch on appear in the Care tab, on Today and in your calendar feed. Switching one off keeps its history.</p>
             <div class="checks">
-                <?php $myAreas = user_care_areas($user); foreach (CARE_AREAS as $key => $area): ?>
+                <?php $myAreas = user_care_areas($user); foreach (care_categories() as $key => $area): ?>
                 <label class="check"><input type="checkbox" name="care_areas[]" value="<?= h($key) ?>"<?= checked(in_array($key, $myAreas, true)) ?>> <?= $area['icon'] ?> <?= h($area['title']) ?></label>
                 <?php endforeach; ?>
             </div>
@@ -432,6 +447,29 @@ render_header('Account', 'account');
         <label>Unit <input name="unit" maxlength="30" placeholder="optional"></label>
         <button class="btn" type="submit">Add measurement</button>
     </form>
+</section>
+
+<section class="card" id="email">
+    <h2>Email</h2>
+    <?php if (!mail_enabled()): ?>
+    <p class="muted">Email isn't set up on this Pillbox yet.<?= $user['is_admin'] ? ' Fill in the mail settings in config/config.php, and set up the scheduled tasks (see the Admin page).' : ' Ask your administrator.' ?></p>
+    <?php elseif (!$user['email']): ?>
+    <p class="muted">Add your email address to your <a href="#profile">profile</a> to get emails.</p>
+    <?php endif; ?>
+    <form method="post" class="stack">
+        <?= csrf_field() ?><input type="hidden" name="action" value="email_prefs">
+        <label class="check"><input type="checkbox" name="email_digest" value="1"<?= checked((bool) $user['email_digest']) ?>>
+            <span>Daily summary <span class="muted small">(today's doses, anything missed, medicines running low or expiring, Care items coming up, appointments; nothing from Mind)</span></span></label>
+        <label class="narrow">Send it at
+            <select name="email_digest_hour"><?php for ($hr = 5; $hr <= 22; $hr++): ?><option value="<?= $hr ?>"<?= selected((int) $user['email_digest_hour'] === $hr) ?>><?= sprintf('%02d:00', $hr) ?></option><?php endfor; ?></select></label>
+        <label class="check"><input type="checkbox" name="email_appointments" value="1"<?= checked((bool) $user['email_appointments']) ?>>
+            <span>Appointment reminders <span class="muted small">(at each appointment's reminder time, or the day before; with your questions to ask)</span></span></label>
+        <span class="inline-actions"><button class="btn btn-primary" type="submit">Save</button></span>
+    </form>
+    <?php if (mail_enabled() && $user['email']): ?>
+    <form method="post" class="inline-actions"><?= csrf_field() ?><input type="hidden" name="action" value="test_email">
+        <button class="btn btn-small" type="submit">Send me a test email</button></form>
+    <?php endif; ?>
 </section>
 
 <section class="card" id="install">

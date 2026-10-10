@@ -17,6 +17,8 @@ if (is_post()) {
     switch (post('action')) {
         case 'add_question':
             $text = mb_substr(post('question'), 0, 500);
+            // A question from the Mind running list is now on this appointment.
+            q("UPDATE mind_notes SET done = 1, appointment_id = ? WHERE user_id = ? AND kind = 'question' AND done = 0 AND text = ?", [$a['id'], $user['id'], $text]);
             if ($text !== '') {
                 q('INSERT INTO appointment_questions (appointment_id, question) VALUES (?, ?)', [$a['id'], $text]);
             }
@@ -38,6 +40,20 @@ if (is_post()) {
                 q('DELETE FROM appointment_questions WHERE id = ?', [$questionId]);
             }
             redirect($self . '#questions');
+        case 'add_action':
+            $text = trim(mb_substr(post('text'), 0, 500));
+            $due = parse_date(post('due_date'));
+            if ($text !== '') {
+                q("INSERT INTO mind_notes (user_id, kind, text, appointment_id, due_date, created_at) VALUES (?, 'action', ?, ?, ?, UTC_TIMESTAMP())",
+                    [$uid, $text, $a['id'], $due?->format('Y-m-d')]);
+            }
+            redirect($self . '#actions');
+        case 'toggle_action':
+            q("UPDATE mind_notes SET done = 1 - done WHERE id = ? AND user_id = ? AND kind = 'action'", [(int) post('note_id'), $uid]);
+            redirect($self . '#actions');
+        case 'delete_action':
+            q("DELETE FROM mind_notes WHERE id = ? AND user_id = ? AND kind = 'action'", [(int) post('note_id'), $uid]);
+            redirect($self . '#actions');
         case 'save_outcome':
             q('UPDATE appointments SET outcome_notes = ? WHERE id = ?', [mb_substr(post('outcome_notes'), 0, 10000) ?: null, $a['id']]);
             flash('success', 'Notes from the appointment saved.');
@@ -150,5 +166,30 @@ render_header(appointment_title($a), 'appointments');
     </form>
     <?php if ($a['outcome_notes']): ?><p class="print-only"><?= nl2br(h($a['outcome_notes'])) ?></p><?php else: ?><span class="print-only answer-lines tall"></span><?php endif; ?>
 </section>
+
+<?php if (in_array($a['kind'], MIND_APPOINTMENT_KINDS, true) && mind_enabled($user)):
+    $actions = array_filter(mind_notes($uid, 'action'), fn ($n) => (int) $n['appointment_id'] === (int) $a['id']); ?>
+<section class="card" id="actions">
+    <h2>Actions agreed</h2>
+    <p class="muted small no-print">Homework or things to try before next time. They're also listed under Therapy and care in Mind.</p>
+    <ul class="question-list">
+        <?php foreach ($actions as $n): ?>
+        <li class="question<?= $n['done'] ? ' done' : '' ?>">
+            <form method="post" class="q-toggle"><?= csrf_field() ?><input type="hidden" name="action" value="toggle_action"><input type="hidden" name="note_id" value="<?= (int) $n['id'] ?>">
+                <button type="submit" class="q-check" aria-pressed="<?= $n['done'] ? 'true' : 'false' ?>"><?= $n['done'] ? '&#10003;' : '' ?><span class="sr"><?= $n['done'] ? 'Done' : 'Not done yet' ?></span></button></form>
+            <div class="q-body"><span class="q-text"><?= h($n['text']) ?></span><?= $n['due_date'] ? ' <span class="muted small">by ' . h(date('j M', strtotime($n['due_date']))) . '</span>' : '' ?></div>
+            <form method="post" class="no-print" data-confirm="Remove this action?"><?= csrf_field() ?><input type="hidden" name="action" value="delete_action"><input type="hidden" name="note_id" value="<?= (int) $n['id'] ?>">
+                <button class="btn-link danger small" type="submit">Remove</button></form>
+        </li>
+        <?php endforeach; ?>
+    </ul>
+    <form method="post" class="inline-form no-print">
+        <?= csrf_field() ?><input type="hidden" name="action" value="add_action">
+        <label>Action <input name="text" maxlength="500" required placeholder="e.g. Fill in a thought record twice this week"></label>
+        <label>By <span class="muted small">(optional)</span> <input type="date" name="due_date"></label>
+        <button class="btn btn-primary" type="submit">Add</button>
+    </form>
+</section>
+<?php endif; ?>
 </article>
 <?php render_footer();

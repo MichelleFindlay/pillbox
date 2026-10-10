@@ -26,7 +26,7 @@ header('Content-Type: text/calendar; charset=utf-8');
 header('Content-Disposition: inline; filename="appointments.ics"');
 header('Cache-Control: private, max-age=900');
 header('X-Robots-Tag: noindex, nofollow');
-$areas = user_care_areas($user);
+$areas = routine_areas($user);
 $careEvents = care_ics_events(array_filter(care_tasks((int) $user['id']), fn ($t) => in_array($t['area'], $areas, true)), $host)
     . checks_ics_events($user, array_filter(health_checks((int) $user['id']), fn ($c) => in_array($c['area'], $areas, true)), $host)
     . mind_ics_events($user, $host);

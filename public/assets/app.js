@@ -82,15 +82,15 @@
   }
 
   // Show/hide sections depending on a checkbox or radio:
-  // data-show-when="<input id>" / data-hide-when="<input id>"
+  // data-show-when="<input id> [<input id>...]" (shown if any is checked) / data-hide-when="<input id>"
   function syncToggles() {
     document.querySelectorAll('[data-show-when], [data-hide-when]').forEach(function (el) {
-      var showId = el.getAttribute('data-show-when');
+      var showIds = (el.getAttribute('data-show-when') || '').split(' ').filter(Boolean);
       var hideId = el.getAttribute('data-hide-when');
-      var input = document.getElementById(showId || hideId);
-      if (!input) { return; }
-      var visible = showId ? input.checked : !input.checked;
-      el.hidden = !visible;
+      var inputs = (showIds.length ? showIds : [hideId]).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+      if (!inputs.length) { return; }
+      var anyChecked = inputs.some(function (i) { return i.checked; });
+      el.hidden = showIds.length ? !anyChecked : anyChecked;
     });
   }
   document.addEventListener('change', syncToggles);
@@ -140,6 +140,61 @@
     prev.addEventListener('click', function () { if (at > 0) { at--; show(); } });
     next.addEventListener('click', function () { at = at === items.length - 1 ? 0 : at + 1; show(); });
     show();
+  });
+
+  // Checkboxes that save as soon as they're changed: <input type="checkbox" data-autosubmit>
+  document.querySelectorAll('[data-autosubmit]').forEach(function (input) {
+    input.addEventListener('change', function () { input.form.submit(); });
+  });
+
+  // Fingerprint / face unlock for Mind (WebAuthn): set up a device, or unlock with one.
+  var b64 = {
+    enc: function (buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
+    dec: function (s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) { s += '='; } return Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); }); }
+  };
+  function webauthnCall(body) {
+    return fetch(document.body.getAttribute('data-base') + '/webauthn.php', { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { if (j.error) { throw new Error(j.error); } return j; }); });
+  }
+  function webauthnButtons(selector, run) {
+    var buttons = document.querySelectorAll(selector);
+    if (!buttons.length || !window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) { return; }
+    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function (ok) {
+      if (!ok) { return; }
+      buttons.forEach(function (btn) {
+        btn.hidden = false;
+        var status = btn.parentElement.querySelector('[data-webauthn-status]');
+        btn.addEventListener('click', function () {
+          btn.disabled = true; if (status) { status.textContent = ''; }
+          run(btn).catch(function (e) {
+            if (status) { status.textContent = e.name === 'NotAllowedError' ? 'Cancelled.' : e.message; }
+          }).then(function () { btn.disabled = false; });
+        });
+      });
+    });
+  }
+  webauthnButtons('[data-webauthn-register]', function (btn) {
+    var csrf = btn.getAttribute('data-csrf');
+    return webauthnCall({ action: 'register_options', csrf: csrf }).then(function (o) {
+      o.challenge = b64.dec(o.challenge); o.user.id = b64.dec(o.user.id);
+      o.excludeCredentials = o.excludeCredentials.map(function (c) { return { type: c.type, id: b64.dec(c.id) }; });
+      return navigator.credentials.create({ publicKey: o });
+    }).then(function (cred) {
+      return webauthnCall({ action: 'register_finish', csrf: csrf, label: btn.getAttribute('data-label') || 'This device',
+        clientDataJSON: b64.enc(cred.response.clientDataJSON), attestationObject: b64.enc(cred.response.attestationObject) });
+    }).then(function () { window.location.reload(); });
+  });
+  webauthnButtons('[data-webauthn-unlock]', function (btn) {
+    var csrf = btn.getAttribute('data-csrf');
+    return webauthnCall({ action: 'unlock_options', csrf: csrf }).then(function (o) {
+      o.challenge = b64.dec(o.challenge);
+      o.allowCredentials = o.allowCredentials.map(function (c) { return { type: c.type, id: b64.dec(c.id) }; });
+      return navigator.credentials.get({ publicKey: o });
+    }).then(function (a) {
+      return webauthnCall({ action: 'unlock_finish', csrf: csrf, return: btn.getAttribute('data-return'), credential: {
+        id: a.id, clientDataJSON: b64.enc(a.response.clientDataJSON), authenticatorData: b64.enc(a.response.authenticatorData), signature: b64.enc(a.response.signature) } });
+    }).then(function (r) { window.location.href = r.next; });
   });
 
   // Scrolling chip rows (e.g. Care categories on a phone): bring the current one into view.

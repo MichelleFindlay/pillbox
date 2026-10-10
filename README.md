@@ -8,6 +8,9 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
   dose times with **different amounts**, on **chosen weekdays**, and between set dates (useful for reducing
   doses). "As needed" medicines can have a daily maximum, and any medicine an optional **expiry date**
   (set when you add it or collect a new supply), flagged on Today when it's within 30 days or past.
+  **Dose changes only apply from now on**: past days keep the dose they had, and if any of today's doses
+  are already logged the change starts tomorrow (or on a later "takes effect from" date). The latest
+  change under each medicine is hidden unless you tick **Show dose changes**.
 - **Today view**: tick off doses (Take, Skip or Undo), see missed doses, get low-stock warnings and log
   as-needed doses.
 - **Health readings**: blood pressure, heart rate, blood glucose, ketones, weight, temperature, SpO₂,
@@ -22,15 +25,22 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
   add earlier changes by hand.
 - **Travel mode**: plan trips across time zones and choose to switch to local time, stay on home time, or
   shift gradually by 1–4 hours a day, with a day-by-day preview of dose times.
-- **Care** (the **Care** tab): dental care, eye care, sleep, physical activity & rehab, foot health, women's health,
-  hearing, skin, screening and vaccinations. Choose which appear under **Account → Health profile**, along with your
+- **Care** (the **Care** tab): dental care, eye care, sleep, physical activity & rehab, respiratory, diabetes and
+  monitoring, foot health, women's health, hearing, skin and wound care, mobility and supports, emergency and first aid,
+  sharps and disposal, screening and vaccinations. Choose which appear under **Account → Health profile**, along with your
   date of birth and sex (for screening). Each category can have:
   - **Routines** ticked off on the Today page: one-tap presets (brushing, screen breaks, physio exercises with reps,
     stretching, foot checks, monthly mole checks, CPAP cleaning...) or your own, at set times on chosen days or every
     few days or weeks, with a streak and a 7-day view for catching up on missed ticks.
-  - **Checks and renewals** with a next due date: eye and hearing tests, skin checks, pill reviews, implant and coil
-    replacements, flu (every autumn), COVID boosters, tetanus, travel jabs. Anything overdue or due within 30 days is
-    listed under **Coming up** on Today.
+  - **Checks and renewals**, each tracked the way that suits it:
+    - *due every so often*: eye and hearing tests, night guard checks, spacer and CPAP part replacements, pill reviews,
+      flu (every autumn), tetanus, smoke alarm tests...
+    - *expiry dates*: adrenaline auto-injectors, test strips, sunscreen once opened ("Replaced" asks for the new date);
+    - *stock*: test strips, lancets, CGM sensors, dressings, with "restock by" worked out from how many you use a week;
+    - *fill level*: the sharps bin, flagged for collection at three-quarters full;
+    - *kits*: first aid kit and emergency meds bag, with contents and an expiry date per item.
+    Anything overdue, expiring, low or due within 30 days is listed under **Coming up** on Today. Respiratory shows your
+    inhalers' doses left and expiry from Meds; Sharps lists stopped or expired medicines to take back to a pharmacy.
   - **NHS screening**: cervical, breast, bowel and AAA, on NHS England intervals, worked out from your date of birth
     and when you were last screened.
   - **Cycle tracking** (Women's health): log periods, see your average cycle and when the next is expected.
@@ -49,6 +59,14 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
     "Not at all" to PHQ-9 question 9, goes straight here.
   - **Coping toolkit** of what helps you, shown after a low check-in, plus box breathing and 5-4-3-2-1 grounding timers.
   - **PHQ-9** and **GAD-7** with scores over time; **journal** with prompts, and CBT **thought records**.
+  - **Therapy and care**: therapy and psychiatrist appointments (suggested topics include your mood since last time,
+    PHQ-9/GAD-7 changes, medication notes and your running list of questions), actions agreed, care team contacts.
+  - **Mental health medication**: mark medicines as such, and keep side-effect and "how I've felt since the change" notes.
+  - **Today** on the Mind page: a self-care checklist (eaten, water, outside...), planned activities, and reminders
+    to get in touch with people you've chosen. After a few low days, your own early-warning steps are shown.
+  - **Symptoms** of your own, rated in each check-in; **activity scheduling** with enjoyment and achievement ratings;
+    **habits and routines** (morning, evening, screen-time limits) on Today; a **wins and gratitude** log shown on hard days.
+  - **Staying well plan** (relapse prevention: well, early warning signs, crisis) and a printable **advance statement**.
   - **Summary**: a printable 4, 8 or 12-week report (notes and journal only if you tick them).
   - **Privacy**: an optional PIN (locks after 10 minutes; crisis contacts are never locked), and a daily check-in
     reminder in the calendar feed worded just "Pillbox check-in".
@@ -151,6 +169,11 @@ The server needs PHP's `xmlreader` extension (standard) and, to read `export.zip
    `chown www-data storage` (or set it to 775 in your file manager).
 
 5. **Open the site**. On a new install you'll be asked to create the first administrator account.
+
+6. **Set up the scheduled tasks** (optional, but needed for emails): run them every 5 to 15 minutes, either
+   with cron, `*/10 * * * * php /var/www/pillbox/bin/cron.php`, or, if your host has no cron, set a long
+   random `token` under `'cron'` in `config/config.php` and have a web cron service call
+   `https://your-site/cron.php?token=...`. The Admin page shows when they last ran and what they did.
 
 ### Where the web root should point
 
@@ -322,6 +345,39 @@ Admin page has **Check now** and links to the release notes.
   repository and put it in `github_token`. Without it, GitHub hides the repository and the check reports
   that it couldn't look.
 
+## Email and scheduled tasks
+
+Fill in the `'mail'` settings in `config/config.php`: `'transport' => 'mail'` uses PHP's `mail()` (most shared
+hosting), or `'smtp'` with a host, port, `'secure' => 'tls'` (587) or `'ssl'` (465), username and password.
+Each person chooses under **Account → Email**:
+
+- **Daily summary** at a chosen hour: today's doses, anything not logged yesterday, medicines running low or
+  expiring, Care items coming up, and appointments today and tomorrow. Nothing from Mind is ever included.
+- **Appointment reminders**, at each appointment's reminder time (or the day before), with the questions
+  you want to ask.
+
+Admins are emailed once when a new version is released. The scheduled tasks also refresh the update check
+and tidy up (old sign-in attempts, leftover upload files, stale sessions, finished demo accounts). They
+check for updates but never install them. **Send me a test email** on the Account page checks the settings.
+
+## Sharing with a carer or partner
+
+Under **Sharing** (the people icon), you can let someone with an account on the same Pillbox see your
+Pillbox (**view only**) or help keep it up to date (**can help**: log doses, tick tasks, add readings).
+Mind is only included if you tick it. They open it from their own Sharing page, with a banner showing
+whose Pillbox it is and **Back to mine**. They can never see or change your account settings, sign-in
+details, sync and calendar links, data export or Mind PIN, can't permanently delete medicines, and can't
+share your Pillbox further. You can see when they last looked, and stop sharing at any time.
+
+## Demo mode
+
+Set `'demo' => ['enabled' => true]` in `config/config.php` to add **Try the demo** to the sign-in page.
+Each visitor gets their own copy of a sample account for Nell Whitcombe, a made-up person (the same one as
+the ICE demo), with a few weeks of doses, readings, appointments, Care and Mind data. Everything they change
+is deleted when they end the demo or sign out, or after `'hours'` if they just leave. Sign-in details,
+email, sharing, Apple Health sync, calendar links and fingerprint unlock are switched off in the demo, and
+demo accounts don't appear in the admin's user list.
+
 ## Security notes
 
 - Passwords are hashed with PHP's `password_hash`. Local logins are rate-limited per username and per IP.
@@ -329,7 +385,11 @@ Admin page has **Check now** and links to the release notes.
 - A strict Content-Security-Policy is sent: no inline scripts or styles, and no third-party assets.
 - Entra ID tokens are obtained with the authorisation-code flow plus PKCE. The ID token's signature,
   audience, issuer, expiry, nonce and tenant are all checked.
-- Every query is scoped to the signed-in user, so people can only see their own data.
+- Every query is scoped to the signed-in user, so people can only see their own data, or data that has
+  been shared with them (see Sharing above).
+- Mind can have its own PIN, plus fingerprint or face unlock (WebAuthn, platform authenticators only;
+  needs HTTPS). The device signs a one-time challenge; the origin, site, user verification and signature
+  are all checked, and the PIN still works. Crisis contacts are never locked.
 - Health data is sensitive. Use HTTPS, keep the server patched, back up the database, and check what
   your local data-protection rules require.
 
@@ -337,7 +397,8 @@ Admin page has **Check now** and links to the release notes.
 
 ```
 public/      web root: pages, assets (CSS, JS, logo)
-src/         application code (auth, Entra OIDC, scheduling, metrics, charts, layout)
+src/         application code (auth, Entra OIDC, scheduling, metrics, charts, layout, care, mind, mail, tasks, demo)
+bin/         cron.php: the scheduled tasks, for the command line
 config/      config.example.php (template) -> copy to config.php (your settings)
 database/    schema.sql
 storage/     cache (must be writable)

@@ -7,6 +7,9 @@
 require __DIR__ . '/../src/bootstrap.php';
 
 $user = require_login();
+if (isset($user['_acting']) && !$user['_acting']['mind']) {
+    $user = real_user(); // the safety plan is Mind content: show the carer's own help, not the owner's
+}
 $uid = (int) $user['id'];
 seed_crisis_contacts($uid);
 $contacts = mind_contacts($uid);
@@ -51,7 +54,8 @@ render_header('Help now', 'help');
     <ul class="plain contact-list">
         <?php foreach ([...$contacts['professional'], ...$contacts['person']] as $c): ?>
         <li class="contact">
-            <div><strong><?= h($c['name']) ?></strong><?= $c['detail'] ? '<br><span class="muted small">' . h($c['detail']) . '</span>' : '' ?></div>
+            <div><strong><?= h($c['name']) ?></strong><?= $c['detail'] ? '<br><span class="muted small">' . h($c['detail']) . '</span>' : '' ?>
+                <?php if ($c['helps_with']): ?><br><?php foreach (explode(',', $c['helps_with']) as $k): ?><span class="amount-chip"><?= h(HELPS_WITH[$k] ?? $k) ?></span> <?php endforeach; ?><?php endif; ?></div>
             <div class="inline-actions"><?= contact_links($c) ?></div>
         </li>
         <?php endforeach; ?>

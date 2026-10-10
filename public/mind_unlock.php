@@ -47,6 +47,12 @@ render_header('Mind locked', 'mind');
         <label>PIN <input type="password" name="pin" inputmode="numeric" autocomplete="off" required autofocus></label>
         <button class="btn btn-primary" type="submit">Unlock</button>
     </form>
+    <?php if (q('SELECT 1 FROM webauthn_credentials WHERE user_id = ? LIMIT 1', [$uid])->fetch()): ?>
+    <p class="inline-actions">
+        <button class="btn" type="button" hidden data-webauthn-unlock data-csrf="<?= h(csrf_token()) ?>" data-return="<?= h($return) ?>">Use fingerprint or face</button>
+        <span class="small warn" data-webauthn-status></span>
+    </p>
+    <?php endif; ?>
     <?php if ($freshLogin): ?>
     <form method="post" class="inline-actions" data-confirm="Remove the PIN from Mind? Your entries are kept.">
         <?= csrf_field() ?><input type="hidden" name="action" value="reset">

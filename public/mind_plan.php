@@ -34,11 +34,14 @@ if (is_post()) {
                 flash('error', $name === '' ? 'Give the contact a name.' : 'Add a number to call or text.');
                 redirect('mind_plan.php#contacts');
             }
-            $values = [$kind, $name, trim(mb_substr(post('detail'), 0, 255)) ?: null, $phone, $textTo, trim(mb_substr(post('text_body'), 0, 40)) ?: null];
+            $helps = implode(',', array_intersect(array_keys(HELPS_WITH), (array) ($_POST['helps_with'] ?? []))) ?: null;
+            $every = (int) post('reach_out_days');
+            $values = [$kind, $name, trim(mb_substr(post('detail'), 0, 255)) ?: null, $phone, $textTo, trim(mb_substr(post('text_body'), 0, 40)) ?: null,
+                $helps, $every >= 1 && $every <= 365 ? $every : null];
             if (post('id') !== '') {
-                q('UPDATE mind_contacts SET kind = ?, name = ?, detail = ?, phone = ?, text_to = ?, text_body = ? WHERE id = ? AND user_id = ?', [...$values, (int) post('id'), $uid]);
+                q('UPDATE mind_contacts SET kind = ?, name = ?, detail = ?, phone = ?, text_to = ?, text_body = ?, helps_with = ?, reach_out_days = ? WHERE id = ? AND user_id = ?', [...$values, (int) post('id'), $uid]);
             } else {
-                q('INSERT INTO mind_contacts (kind, name, detail, phone, text_to, text_body, user_id, sort) VALUES (?, ?, ?, ?, ?, ?, ?, 100)', [...$values, $uid]);
+                q('INSERT INTO mind_contacts (kind, name, detail, phone, text_to, text_body, helps_with, reach_out_days, user_id, sort) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 100)', [...$values, $uid]);
             }
             flash('success', $name . ' saved.');
             redirect('mind_plan.php#contacts');
@@ -64,7 +67,17 @@ function contact_fields(array $c): void
         <label><span>What for <span class="muted small">(optional)</span></span> <input name="detail" maxlength="255" value="<?= h($c['detail'] ?? '') ?>" placeholder="e.g. practical help, to talk, distraction"></label>
         <label><span>Text number <span class="muted small">(optional)</span></span> <input type="tel" name="text_to" maxlength="40" value="<?= h($c['text_to'] ?? '') ?>"></label>
         <label><span>Message to text <span class="muted small">(optional)</span></span> <input name="text_body" maxlength="40" value="<?= h($c['text_body'] ?? '') ?>" placeholder="e.g. SHOUT"></label>
+        <label><span>Remind me to get in touch every <span class="muted small">(days, optional)</span></span>
+            <input type="number" name="reach_out_days" min="1" max="365" inputmode="numeric" value="<?= h((string) ($c['reach_out_days'] ?? '')) ?>" placeholder="e.g. 14"></label>
     </div>
+    <fieldset>
+        <legend>Good for <span class="muted small">(optional)</span></legend>
+        <div class="checks">
+            <?php $helps = explode(',', (string) ($c['helps_with'] ?? '')); foreach (HELPS_WITH as $k => $l): ?>
+            <label class="check"><input type="checkbox" name="helps_with[]" value="<?= h($k) ?>"<?= checked(in_array($k, $helps, true)) ?>> <?= h($l) ?></label>
+            <?php endforeach; ?>
+        </div>
+    </fieldset>
     <?php
 }
 
@@ -100,7 +113,9 @@ render_header('Safety plan', 'mind');
         <?php foreach ($contacts[$kind] as $c): ?>
         <li class="care-task">
             <div class="logline">
-                <span><strong><?= h($c['name']) ?></strong> <span class="muted small"><?= h(implode(' · ', array_filter([$c['phone'], $c['text_to'] ? 'text ' . trim($c['text_body'] . ' to ' . $c['text_to']) : null]))) ?></span>
+                <span><strong><?= h($c['name']) ?></strong> <span class="muted small"><?= h(implode(' · ', array_filter([$c['phone'], $c['text_to'] ? 'text ' . trim($c['text_body'] . ' to ' . $c['text_to']) : null,
+                    $c['helps_with'] ? 'good for ' . mb_strtolower(implode(', ', array_map(fn ($k) => HELPS_WITH[$k] ?? $k, explode(',', $c['helps_with'])))) : null,
+                    $c['reach_out_days'] ? 'reminder every ' . $c['reach_out_days'] . ' days' : null]))) ?></span>
                     <?= $c['detail'] ? '<br><span class="muted small">' . h($c['detail']) . '</span>' : '' ?></span>
                 <form method="post" data-confirm="Remove <?= h($c['name']) ?>?">
                     <?= csrf_field() ?><input type="hidden" name="action" value="delete_contact"><input type="hidden" name="id" value="<?= (int) $c['id'] ?>">

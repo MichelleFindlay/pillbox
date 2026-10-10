@@ -59,6 +59,7 @@ function json_reply(array $data, int $status = 200): never
 }
 
 if (is_post()) {
+    demo_blocked('Importing and syncing Apple Health');
     // PHP throws away a form that's bigger than post_max_size, so there's nothing to check.
     if (!$_POST && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > ini_bytes((string) ini_get('post_max_size'))) {
         flash('error', 'That file is bigger than this server accepts in one go. Turn on JavaScript in your browser so Pillbox can upload it in pieces.');

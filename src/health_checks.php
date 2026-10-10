@@ -27,6 +27,16 @@ const SCREENING_PROGRAMMES = [
 
 const SEXES = ['female' => 'Female', 'male' => 'Male', 'other' => 'Other'];
 
+// How a check is tracked: a due date, an expiry date, a stock count, a fill level, or a kit's contents.
+const CHECK_TRACKS = [
+    'due'    => 'Due every so often',
+    'expiry' => 'Expiry date',
+    'stock'  => 'Stock to keep up',
+    'level'  => 'Fill level (e.g. sharps bin)',
+    'kit'    => 'Kit with contents to check',
+];
+const FILL_LEVELS = [0 => 'Empty', 25 => 'A quarter full', 50 => 'Half full', 75 => 'Three-quarters full', 100 => 'Full (at the fill line)'];
+
 /** Does this screening programme apply to the user, from their profile? */
 function screening_applies(array $user, string $kind): bool
 {
@@ -41,7 +51,7 @@ function check_preset(string $area, string $kind): ?array
 {
     $p = $area === 'screening' ? (isset(SCREENING_PROGRAMMES[$kind]) ? SCREENING_PROGRAMMES[$kind] + ['rule' => 'screening'] : null)
         : (CARE_AREAS[$area]['checks'][$kind] ?? null);
-    return $p === null ? null : $p + ['interval' => null, 'rule' => null, 'tip' => null];
+    return $p === null ? null : $p + ['interval' => null, 'rule' => null, 'tip' => null, 'track' => 'due', 'unit' => null, 'low' => null, 'items' => null];
 }
 
 /** A user's checks: one area or all, without hidden screening programmes unless asked. */
@@ -62,8 +72,8 @@ function add_preset_check(int $userId, string $area, string $kind): ?array
     if (!$p) {
         return null;
     }
-    q('INSERT INTO health_checks (user_id, area, kind, label, interval_days, rule, tip) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [$userId, $area, $kind, $p['label'], $p['interval'], $p['rule'], $p['tip']]);
+    q('INSERT INTO health_checks (user_id, area, kind, label, interval_days, rule, track, unit, low_at, items, tip) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$userId, $area, $kind, $p['label'], $p['interval'], $p['rule'], $p['track'], $p['unit'], $p['low'], $p['items'], $p['tip']]);
     return $p;
 }
 
@@ -104,10 +114,44 @@ function check_next_due(array $check, array $user, DateTimeImmutable $today): ar
 {
     $tz = $today->getTimezone();
     $date = fn (string $ymd) => new DateTimeImmutable($ymd, $tz);
+    $last = $check['last_done'] ? $date($check['last_done']) : null;
+
+    switch ($check['track'] ?? 'due') {
+        case 'expiry':
+            return $check['due_date'] ? [$date($check['due_date']), ''] : [null, 'Add the expiry date.'];
+        case 'stock':
+            if ($check['quantity'] === null) {
+                return [null, 'Add how many you have.'];
+            }
+            $left = stock_left($check, $today);
+            $low = (float) ($check['low_at'] ?? 0);
+            if ($left <= $low) {
+                return [$today->modify('-1 day'), '']; // low now: restock
+            }
+            if ((float) $check['per_week'] > 0) {
+                $counted = $date($check['counted_on'] ?? $today->format('Y-m-d'));
+                $days = (int) floor(max(0, (float) $check['quantity'] - $low) / ((float) $check['per_week'] / 7));
+                return [$counted->modify("+$days days"), ''];
+            }
+            return [null, ''];
+        case 'level':
+            $level = (int) ($check['quantity'] ?? 0);
+            return match (true) {
+                $level >= 100 => [$today->modify('-1 day'), ''],
+                $level >= 75 => [$today->modify('+14 days'), ''],
+                default => [$check['interval_days'] && $last ? $last->modify('+' . (int) $check['interval_days'] . ' days') : null, ''],
+            };
+        case 'kit':
+            $due = $check['due_date'] ? $date($check['due_date']) : ($check['interval_days'] && $last ? $last->modify('+' . (int) $check['interval_days'] . ' days') : null);
+            $expiries = array_filter(array_column(kit_items($check), 'expiry'));
+            $first = $expiries ? min($expiries) : null;
+            $note = $last ? '' : 'Mark it checked to start the schedule.';
+            return [$first && (!$due || $first < $due) ? $first : $due, $note];
+    }
+
     if ($check['due_date']) {
         return [$date($check['due_date']), ''];
     }
-    $last = $check['last_done'] ? $date($check['last_done']) : null;
 
     if ($check['rule'] === 'autumn') {
         // The season runs from 1 September; the jab is due from then until spring.
@@ -162,6 +206,81 @@ function check_status(?DateTimeImmutable $due, DateTimeImmutable $today): string
         $due <= $today->modify('+30 days') => 'soon',
         default => 'later',
     };
+}
+
+/** Stock left now: the last count, less what's been used since at the weekly rate. */
+function stock_left(array $check, DateTimeImmutable $today): float
+{
+    $qty = (float) $check['quantity'];
+    if ((float) $check['per_week'] > 0 && $check['counted_on']) {
+        $days = (new DateTimeImmutable($check['counted_on']))->diff($today)->days;
+        $qty -= (float) $check['per_week'] / 7 * $days;
+    }
+    return max(0, $qty);
+}
+
+/**
+ * Kit contents: one per line, "Name" or "Name | YYYY-MM-DD" (or YYYY-MM, meaning the end of that month).
+ * @return array<int, array{name: string, expiry: ?DateTimeImmutable}>
+ */
+function kit_items(array $check): array
+{
+    $out = [];
+    foreach (preg_split('/\R/', (string) $check['items']) as $line) {
+        [$name, $exp] = array_map('trim', explode('|', $line, 2) + [1 => '']);
+        if ($name === '') {
+            continue;
+        }
+        $expiry = null;
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $exp)) {
+            $expiry = parse_date($exp);
+        } elseif (preg_match('/^(\d{4})-(\d{2})$/', $exp, $m) && checkdate((int) $m[2], 1, (int) $m[1])) {
+            $expiry = (new DateTimeImmutable("$exp-01", local_today()->getTimezone()))->modify('last day of this month');
+        }
+        $out[] = ['name' => $name, 'expiry' => $expiry, 'has_expiry' => $exp !== '' || str_contains($line, '|')];
+    }
+    return $out;
+}
+
+/** The main line for a check: due, expiry, stock or fill level, in words. */
+function check_due_text(array $check, ?DateTimeImmutable $due, DateTimeImmutable $today): string
+{
+    $track = $check['track'] ?? 'due';
+    if ($track === 'stock' && $check['quantity'] !== null) {
+        $left = stock_left($check, $today);
+        $unit = $check['unit'] ?: 'left';
+        $count = ((float) $check['per_week'] > 0 ? 'About ' : '') . num(round($left)) . ($check['unit'] ? ' ' . $unit . ' left' : ' left');
+        if ($left <= (float) ($check['low_at'] ?? 0)) {
+            return 'Running low: ' . lcfirst($count) . '. Time to restock.';
+        }
+        return $count . ($due ? ' · restock by ' . $due->format($due->format('Y') === $today->format('Y') ? 'j M' : 'j M Y') : '');
+    }
+    if ($track === 'level') {
+        $level = (int) ($check['quantity'] ?? 0);
+        $text = FILL_LEVELS[$level] ?? "$level% full";
+        return $level >= 100 ? "$text: close it and arrange collection" : ($level >= 75 ? "$text: arrange collection soon" : $text);
+    }
+    if ($due === null) {
+        return '';
+    }
+    if ($track === 'kit') {
+        // Say which item is behind the date, if it's an expiry rather than the regular check.
+        $expiring = array_values(array_filter(kit_items($check), fn ($i) => $i['expiry'] && $i['expiry'] == $due));
+        if ($expiring) {
+            [, $text] = expiry_status($due->format('Y-m-d'), $today);
+            return $expiring[0]['name'] . (count($expiring) > 1 ? ' and ' . (count($expiring) - 1) . ' more' : '') . ': ' . lcfirst($text);
+        }
+    }
+    if ($track === 'expiry') {
+        $days = (int) $today->diff($due)->format('%r%a');
+        return match (true) {
+            $days < 0 => 'Expired ' . $due->format('j M Y'),
+            $days === 0 => 'Expires today',
+            $days <= 30 => "Expires in $days day" . ($days === 1 ? '' : 's') . ' (' . $due->format('j M') . ')',
+            default => 'Expires ' . $due->format('j M Y'),
+        };
+    }
+    return due_label($due, $today);
 }
 
 function due_label(?DateTimeImmutable $due, DateTimeImmutable $today): string
@@ -237,13 +356,35 @@ function check_from_post(string $area, ?array $existing): array
     }
     $due = post('due_date') === '' ? null : parse_date(post('due_date'));
     if (post('due_date') !== '' && !$due) {
-        $errors[] = 'Enter the due date as a date.';
+        $errors[] = 'Enter the ' . ((post('track') ?: ($existing['track'] ?? 'due')) === 'expiry' ? 'expiry' : 'due') . ' date as a date.';
     }
+    $track = $existing['track'] ?? (isset(CHECK_TRACKS[post('track')]) ? post('track') : 'due');
+    $number = function (string $field, string $what) use (&$errors): ?float {
+        $v = post($field);
+        if ($v === '') {
+            return null;
+        }
+        if (!is_numeric($v) || (float) $v < 0 || (float) $v > 99999) {
+            $errors[] = "$what must be a number.";
+            return null;
+        }
+        return (float) $v;
+    };
+    $quantity = $track === 'stock' ? $number('quantity', 'How many you have') : ($track === 'level' ? (float) (isset(FILL_LEVELS[(int) post('quantity')]) ? (int) post('quantity') : 0) : null);
+    $items = $track === 'kit' ? trim(mb_substr(str_replace("\r", '', (string) ($_POST['items'] ?? '')), 0, 5000)) : null;
     return [[
         'label'         => $label ?: ($existing['label'] ?? ''),
+        'track'         => $track,
         'interval_days' => $existing && $existing['rule'] ? $existing['interval_days'] : $interval,
         'last_done'     => $last?->format('Y-m-d'),
         'due_date'      => $due?->format('Y-m-d'),
+        'quantity'      => $quantity,
+        'unit'          => $track === 'stock' ? (trim(mb_substr(post('unit'), 0, 20)) ?: null) : null,
+        'low_at'        => $track === 'stock' ? $number('low_at', 'The restock level') : null,
+        'per_week'      => $track === 'stock' ? $number('per_week', 'How many you use a week') : null,
+        'counted_on'    => in_array($track, ['stock', 'level'], true) && $quantity !== null
+            ? ($existing && (float) $existing['quantity'] === $quantity ? $existing['counted_on'] : local_today()->format('Y-m-d')) : null,
+        'items'         => $items ?: null,
         'notes'         => trim(mb_substr(post('notes'), 0, 500)) ?: null,
         'remind'        => post('remind') === '1' ? 1 : 0,
     ], $errors];
@@ -275,7 +416,13 @@ function checks_ics_events(array $user, array $checks, string $host): string
         if (!$due) {
             continue;
         }
-        $title = $c['label'] . ($due < $today ? ' (overdue)' : ' due');
+        $title = match ($c['track'] ?? 'due') {
+            'expiry' => preg_replace('/\s+expiry$/i', '', $c['label']) . ($due < $today ? ' has expired' : ' expires'),
+            'stock'  => 'Restock: ' . $c['label'],
+            'level'  => $c['label'] . ': arrange collection',
+            'kit'    => 'Check: ' . $c['label'],
+            default  => $c['label'] . ($due < $today ? ' (overdue)' : ' due'),
+        };
         $ics .= ics_line('BEGIN:VEVENT')
             . ics_line('UID:check-' . $c['id'] . '-' . $due->format('Ymd') . '@' . $host)
             . ics_line('DTSTAMP:' . ics_utc($c['created_at']))

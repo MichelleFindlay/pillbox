@@ -164,7 +164,7 @@ render_header('Care summary', 'care');
         <h2>Checks, screening and vaccinations</h2>
         <div class="table-wrap">
         <table class="compact care-summary-table">
-            <thead><tr><th>Item</th><th>Last done</th><th>Next due</th><th>Status</th></tr></thead>
+            <thead><tr><th>Item</th><th>Last done</th><th>Next due or level</th><th>Status</th></tr></thead>
             <tbody>
             <?php foreach ($areas as $key): if (empty($checks[$key])) { continue; } ?>
                 <tr class="group-row"><th colspan="4"><?= CARE_AREAS[$key]['icon'] ?> <?= h(CARE_AREAS[$key]['title']) ?></th></tr>
@@ -175,7 +175,7 @@ render_header('Care summary', 'care');
                         <?= $c['notes'] ? '<br><span class="small">' . h($c['notes']) . '</span>' : '' ?></td>
                     <td><?= $c['last_done'] ? h((new DateTimeImmutable($c['last_done']))->format('j M Y')) : '<span class="muted">&ndash;</span>' ?>
                         <?= $c['last_done'] && $c['last_done'] >= $range['from'] && $c['last_done'] <= $range['to'] ? '<br><span class="small">in this period</span>' : '' ?></td>
-                    <td><?= $row['due'] ? h($row['due']->format('j M Y')) : '<span class="muted small">' . h($row['note']) . '</span>' ?></td>
+                    <td><?= ($text = check_due_text($c, $row['due'], $today)) ? h($text) : '<span class="muted small">' . h($row['note']) . '</span>' ?></td>
                     <td><?= $statusBadge[$row['status']] ?></td>
                 </tr>
                 <?php endforeach; ?>

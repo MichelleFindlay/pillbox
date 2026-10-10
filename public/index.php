@@ -42,7 +42,7 @@ foreach ($meds as $m) {
 $soonAppointments = array_slice(appointments_between($uid, gmdate('Y-m-d H:i:s', time() - 3600), gmdate('Y-m-d H:i:s', strtotime('+14 days'))), 0, 3);
 
 // Care: routine tasks due today, grouped by area, and checks coming up, for the categories switched on.
-$careAreas = user_care_areas($user);
+$careAreas = routine_areas($user);
 $careTasks = care_tasks($uid);
 $careLogs = $careTasks ? care_logs($uid, $today->format('Y-m-d'), $today->format('Y-m-d')) : [];
 $careToday = [];
@@ -252,14 +252,18 @@ render_header('Today', 'today');
             <div class="dose-main">
                 <div>
                     <?= CARE_AREAS[$chk['area']]['icon'] ?> <a href="<?= h(url('care.php?area=' . $chk['area'] . '#check-' . $chk['id'])) ?>"><strong><?= h($chk['label']) ?></strong></a>
-                    <div class="small<?= $c['status'] === 'overdue' ? ' warn' : ' muted' ?>"><?= h(due_label($c['due'], $today)) ?></div>
+                    <div class="small<?= $c['status'] === 'overdue' ? ' warn' : ' muted' ?>"><?= h(check_due_text($chk, $c['due'], $today)) ?></div>
                 </div>
             </div>
+            <?php if (!in_array($chk['track'], ['due', 'kit'], true)): ?>
+            <div class="dose-actions"><a class="btn btn-small" href="<?= h(url('care.php?area=' . $chk['area'] . '#check-' . $chk['id'])) ?>">Update</a></div>
+            <?php else: ?>
             <form method="post" action="<?= h(url('care.php')) ?>" class="dose-actions">
                 <?= csrf_field() ?><input type="hidden" name="action" value="check_done"><input type="hidden" name="check_id" value="<?= (int) $chk['id'] ?>">
                 <input type="hidden" name="date" value="<?= h($today->format('Y-m-d')) ?>"><input type="hidden" name="return" value="index.php#coming-up">
-                <button class="btn btn-small" type="submit" aria-label="<?= h($chk['label']) ?>: done today">Done today</button>
+                <button class="btn btn-small" type="submit" aria-label="<?= h($chk['label']) ?>: done today"><?= $chk['track'] === 'kit' ? 'Checked today' : 'Done today' ?></button>
             </form>
+            <?php endif; ?>
         </li>
         <?php endforeach; ?>
     </ul>

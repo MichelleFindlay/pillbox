@@ -27,9 +27,12 @@ const CARE_AREAS = [
             'retainer'   => ['label' => 'Clean retainer', 'times' => ['08:00'], 'tip' => 'Brush it gently with cool water. Toothpaste can scratch it.'],
             'dentures'   => ['label' => 'Clean dentures', 'times' => ['21:00'], 'tip' => 'Brush them, then soak overnight in water or denture cleaner.'],
             'toothbrush' => ['label' => 'Replace toothbrush or brush head', 'times' => ['08:00'], 'every' => 91, 'tip' => 'Every 3 months, or sooner if the bristles are splayed.'],
+            'guard_clean' => ['label' => 'Clean night guard', 'times' => ['07:30'], 'tip' => 'Rinse and brush it gently with cool water, then let it dry in its case.'],
         ],
         'checks' => [
             'dental_checkup' => ['label' => 'Dental check-up', 'interval' => 365, 'tip' => 'Change how often to match what your dentist recommends.'],
+            'night_guard'    => ['label' => 'Night guard check (at your dental visit)', 'interval' => 365,
+                'tip' => 'Take your night guard or bite splint to your check-up so your dentist can check the fit and wear. Set it to match your check-ups.'],
             'hygienist'      => ['label' => 'Hygienist', 'interval' => 182, 'tip' => 'If your dentist recommends regular cleaning.'],
         ],
     ],
@@ -54,16 +57,14 @@ const CARE_AREAS = [
         'title' => 'Sleep', 'short' => 'Sleep', 'icon' => '&#x1F319;', 'default' => true, 'appointment' => null,
         'intro' => 'Most adults need 7 to 9 hours a night. Going to bed and getting up at about the same time every day helps most.',
         'help'  => 'See a GP if poor sleep has lasted for months or is affecting your day, or if someone notices you stop breathing, '
-                 . 'gasp or choke in your sleep (possible sleep apnoea). If you use CPAP, your sleep service can help with mask fit and supplies.',
+                 . 'gasp or choke in your sleep (possible sleep apnoea). If you use CPAP, your sleep service can help with mask fit and supplies; '
+                 . 'replacing CPAP parts is under Respiratory.',
         'presets' => [
             'wind_down'     => ['label' => 'Start winding down', 'times' => ['22:00'], 'remind' => true, 'tip' => 'Screens off and lights low. Something relaxing: a bath, reading, or gentle stretches.'],
             'bedtime'       => ['label' => 'Bedtime', 'times' => ['22:30'], 'remind' => true, 'tip' => 'About the same time every night, weekends too.'],
             'cpap_mask'     => ['label' => 'Clean CPAP mask', 'times' => ['08:00'], 'tip' => 'Wipe or wash the cushion with warm soapy water and let it air-dry.'],
             'cpap_water'    => ['label' => 'Empty CPAP humidifier', 'times' => ['08:00'], 'tip' => 'Empty it and let it dry, then refill with fresh water at night (distilled if your supplier says so).'],
             'cpap_tubing'   => ['label' => 'Wash CPAP tubing', 'times' => ['09:00'], 'every' => 7, 'tip' => 'Warm soapy water, rinse well, then hang it up to dry.'],
-            'cpap_filter'   => ['label' => 'Replace CPAP filter', 'times' => ['09:00'], 'every' => 28, 'tip' => "Disposable filters are often changed every 2 to 4 weeks. Follow your machine's or sleep service's guidance."],
-            'cpap_cushion'  => ['label' => 'Replace CPAP mask cushion', 'times' => ['09:00'], 'every' => 30, 'tip' => 'Often monthly, or sooner if it stops sealing. Your sleep service can tell you how to order one.'],
-            'cpap_new_mask' => ['label' => 'Replace CPAP mask', 'times' => ['09:00'], 'every' => 91, 'tip' => 'Many masks are replaced every 3 to 6 months. Check with your sleep service.'],
         ],
         'checks' => [
             'cpap_review' => ['label' => 'CPAP / sleep clinic review', 'interval' => 365, 'tip' => 'Change how often to match your sleep service.'],
@@ -84,6 +85,50 @@ const CARE_AREAS = [
         ],
         'checks' => [
             'physio_review' => ['label' => 'Physio review', 'interval' => 42, 'tip' => 'Set the date of your next physio appointment, or how often you go.'],
+        ],
+    ],
+    'respiratory' => [
+        'title' => 'Respiratory', 'short' => 'Breathing', 'icon' => '&#x1FAC1;', 'default' => false, 'appointment' => 'nurse',
+        'intro' => 'Inhalers, spacers, peak flow meters, CPAP and nebuliser parts, each replaced on its own schedule.',
+        'help'  => 'Call 999 if you are struggling to breathe, your reliever is not helping, or your lips or fingertips are turning blue or grey. '
+                 . 'Have an asthma or COPD review at least once a year.',
+        'presets' => [
+            'peak_flow'  => ['label' => 'Peak flow', 'times' => ['08:00', '20:00'], 'tip' => 'Best of 3 blows, before your inhaler. Record it under Readings.'],
+            'neb_clean'  => ['label' => 'Clean nebuliser', 'times' => ['21:00'], 'tip' => 'Wash the chamber and mouthpiece or mask after use, rinse and air-dry.'],
+            'spacer_wash' => ['label' => 'Wash spacer', 'times' => ['09:00'], 'every' => 30, 'tip' => 'Warm soapy water, then let it drip-dry without rinsing or wiping (stops static).'],
+        ],
+        'checks' => [
+            'review'       => ['label' => 'Asthma or COPD review', 'interval' => 365, 'tip' => 'At least yearly, with your GP or practice nurse. Take your inhalers and spacer.'],
+            'spacer'       => ['label' => 'Spacer replacement', 'interval' => 365, 'tip' => 'Roughly yearly, or sooner if it is cracked or the valve sticks.'],
+            'peak_meter'   => ['label' => 'Peak flow meter replacement', 'interval' => 365, 'tip' => 'Replace as the manufacturer advises, often every 1 to 2 years.'],
+            'cpap_cushion' => ['label' => 'CPAP mask cushion', 'interval' => 30, 'tip' => 'Often monthly, or sooner if it stops sealing. Your sleep service can tell you how to order parts.'],
+            'cpap_filter'  => ['label' => 'CPAP filter', 'interval' => 28, 'tip' => "Disposable filters are often changed every 2 to 4 weeks. Follow your machine's guidance."],
+            'cpap_tubing'  => ['label' => 'CPAP tubing', 'interval' => 91, 'tip' => 'Often every 3 to 6 months, or sooner if it is damaged.'],
+            'cpap_mask'    => ['label' => 'CPAP mask frame and headgear', 'interval' => 182, 'tip' => 'Often every 6 months, or when the straps lose their stretch.'],
+            'cpap_water'   => ['label' => 'CPAP humidifier chamber', 'interval' => 182, 'tip' => 'Often every 6 months, or if it is cloudy or cracked.'],
+            'neb_parts'    => ['label' => 'Nebuliser chamber and mask', 'interval' => 91, 'tip' => "Follow the manufacturer's guidance: often every 3 months."],
+            'neb_filter'   => ['label' => 'Nebuliser compressor filter', 'interval' => 182, 'tip' => 'When it looks grey, or as the manual says.'],
+        ],
+    ],
+    'diabetes' => [
+        'title' => 'Diabetes and monitoring', 'short' => 'Monitoring', 'icon' => '&#x1FA78;', 'default' => false, 'appointment' => 'nurse',
+        'intro' => 'Keep your meters accurate and your supplies stocked: test strips, lancets, sensors and batteries.',
+        'help'  => 'If your readings are very high or low and you feel unwell, follow your sick-day rules or hypo plan and contact your diabetes team or NHS 111.',
+        'presets' => [
+            'cgm'    => ['label' => 'Change CGM sensor', 'times' => ['09:00'], 'every' => 14, 'tip' => 'Set how often to match your sensor: often every 10 to 15 days.'],
+            'lancet' => ['label' => 'New lancet', 'times' => ['08:00'], 'every' => 7, 'tip' => 'A fresh lancet hurts less. Use each one once if you can.'],
+        ],
+        'checks' => [
+            'control'   => ['label' => 'Glucose meter control solution test', 'interval' => 30,
+                'tip' => "Also when you open a new pot of strips, or if the meter has been dropped. Note the control solution's own expiry once opened."],
+            'strips'    => ['label' => 'Test strips', 'track' => 'stock', 'unit' => 'strips', 'low' => 50, 'tip' => 'Order a repeat when you get down to about 2 weeks of strips.'],
+            'strip_exp' => ['label' => 'Test strip expiry', 'track' => 'expiry', 'tip' => 'Check the pot: some strips also expire a few months after opening.'],
+            'lancets'   => ['label' => 'Lancets', 'track' => 'stock', 'unit' => 'lancets', 'low' => 20],
+            'sensors'   => ['label' => 'CGM sensors', 'track' => 'stock', 'unit' => 'sensors', 'low' => 2, 'tip' => 'Order more when you are down to your last two.'],
+            'bp_monitor' => ['label' => 'Blood pressure monitor check and batteries', 'interval' => 365,
+                'tip' => 'Use a validated monitor. Once a year, change the batteries and compare it with a reading at your GP surgery or pharmacy.'],
+            'thermometer' => ['label' => 'Thermometer batteries', 'interval' => 365],
+            'hba1c'     => ['label' => 'Diabetes review (HbA1c)', 'interval' => 365, 'tip' => 'At least yearly; often more if your treatment is changing.'],
         ],
     ],
     'feet' => [
@@ -121,15 +166,19 @@ const CARE_AREAS = [
         'presets' => [
             'aids_clean'  => ['label' => 'Clean hearing aids', 'times' => ['22:00'], 'tip' => 'Wipe them with a dry cloth and clear the openings with the brush or wax pick.'],
             'batteries'   => ['label' => 'Change hearing aid batteries', 'times' => ['08:00'], 'every' => 7, 'tip' => 'Change how often to match how long yours last.'],
+            'charge'      => ['label' => 'Put hearing aids on charge', 'times' => ['22:00'], 'tip' => 'For rechargeable aids: in the charger overnight.'],
             'ear_protect' => ['label' => 'Ear protection', 'times' => ['08:00'], 'tip' => 'Earplugs or defenders for loud work, concerts or power tools.'],
         ],
         'checks' => [
             'hearing_test' => ['label' => 'Hearing test', 'interval' => 1095, 'tip' => 'Every few years; every year if you work around loud noise.'],
             'aid_service'  => ['label' => 'Hearing aid service', 'interval' => 365, 'tip' => 'New tubes, filters and a check of the settings.'],
+            'domes'        => ['label' => 'Change domes', 'interval' => 61, 'tip' => 'The soft tips: usually every 1 to 3 months, or when they go stiff or discoloured.'],
+            'wax_filters'  => ['label' => 'Change wax filters', 'interval' => 30, 'tip' => 'Monthly, or when the sound goes quiet or muffled.'],
+            'audiology'    => ['label' => 'Audiology review', 'interval' => 1095, 'tip' => 'A reassessment of your hearing and aids, usually every few years. Ask sooner if your hearing changes.'],
         ],
     ],
     'skin' => [
-        'title' => 'Skin', 'short' => 'Skin', 'icon' => '&#x1F9F4;', 'default' => true, 'appointment' => null,
+        'title' => 'Skin and wound care', 'short' => 'Skin', 'icon' => '&#x1F9F4;', 'default' => true, 'appointment' => null,
         'intro' => 'Check your skin and moles once a month, and see a GP about any changes. A yearly check is a good idea if you are at higher risk: '
                  . 'lots of moles, fair skin that burns easily, past skin cancer or a family history of it.',
         'help'  => 'See a GP about a mole that changes size, shape or colour, has uneven edges, bleeds or itches, or a sore that does not heal.',
@@ -140,6 +189,57 @@ const CARE_AREAS = [
         ],
         'checks' => [
             'skin_check' => ['label' => 'Skin check (GP or dermatologist)', 'interval' => 365, 'tip' => 'Yearly if you are at higher risk, or as your doctor advises.'],
+            'dressings'  => ['label' => 'Dressings', 'track' => 'stock', 'unit' => 'dressings', 'low' => 5, 'tip' => 'Restock before you run out: ask your GP surgery or nurse for a repeat if they are prescribed.'],
+            'sunscreen'  => ['label' => 'Sunscreen (once opened)', 'track' => 'expiry', 'tip' => 'Most last about 12 months once opened: look for the open-jar symbol, e.g. 12M.'],
+            'emollient'  => ['label' => 'Emollient', 'track' => 'stock', 'unit' => 'tubs or tubes', 'low' => 1, 'tip' => 'Keep a spare. Check the use-by after opening on pump dispensers.'],
+        ],
+    ],
+    'mobility' => [
+        'title' => 'Mobility and supports', 'short' => 'Mobility', 'icon' => '&#x1F9AF;', 'default' => false, 'appointment' => 'physio',
+        'intro' => 'Braces, supports, compression stockings, walking aids and insoles all wear out, often before you notice.',
+        'help'  => 'Ask your GP, physio or orthotics service if a support stops fitting, rubs, or your needs change.',
+        'presets' => [
+            'stockings_on' => ['label' => 'Compression stockings on', 'times' => ['08:00'], 'tip' => 'Put them on first thing, before your legs swell.'],
+            'stockings_wash' => ['label' => 'Wash compression stockings', 'times' => ['20:00'], 'every' => 2, 'tip' => 'Hand-warm wash and dry flat, away from direct heat.'],
+        ],
+        'checks' => [
+            'stockings' => ['label' => 'Compression stockings replacement', 'interval' => 91, 'tip' => 'Usually every 3 to 6 months, as they lose their compression.'],
+            'brace'     => ['label' => 'Brace or support replacement', 'interval' => 182, 'tip' => 'Roughly every 3 to 6 months with daily use, or when the straps or padding wear.'],
+            'ferrules'  => ['label' => 'Walking aid ferrules and tips', 'interval' => 91, 'tip' => 'Check the rubber tips: replace when the tread is worn smooth or the metal shows through.'],
+            'orthotics' => ['label' => 'Orthotics or insoles', 'interval' => 365, 'tip' => 'Often replaced yearly, or when they flatten, crack or start to hurt.'],
+            'wheelchair' => ['label' => 'Wheelchair or scooter service', 'interval' => 365],
+        ],
+    ],
+    'emergency' => [
+        'title' => 'Emergency and first aid', 'short' => 'First aid', 'icon' => '&#x26D1;&#xFE0F;', 'default' => true, 'appointment' => null,
+        'intro' => 'Emergency medicines that must be in date, a first aid kit that is actually stocked, and home safety checks.',
+        'help'  => 'In an emergency call 999. After using an adrenaline auto-injector, always call 999 and say "anaphylaxis", even if you feel better.',
+        'presets' => [],
+        'checks' => [
+            'adrenaline' => ['label' => 'Adrenaline auto-injector expiry', 'track' => 'expiry',
+                'tip' => "Carry two. Register them with the manufacturer's expiry alert service as well, if there is one."],
+            'adrenaline2' => ['label' => 'Second adrenaline auto-injector expiry', 'track' => 'expiry'],
+            'first_aid'  => ['label' => 'First aid kit', 'track' => 'kit', 'interval' => 182,
+                'tip' => 'Check it every 6 months: restock what has been used and replace anything out of date.',
+                'items' => "Plasters\nSterile dressings\nBandages\nMedical tape\nDisposable gloves\nScissors\nTweezers\nAlcohol-free cleansing wipes\nThermometer\nPainkillers | \nAntihistamine | \nAntiseptic cream | \nEyewash | "],
+            'meds_bag'   => ['label' => 'Emergency meds bag', 'track' => 'kit', 'interval' => 91,
+                'tip' => 'For travel or work. Check it before trips, and every few months.',
+                'items' => "Reliever inhaler | \nAdrenaline auto-injectors (2) | \nAntihistamine | \nGlucose tablets | \nSpare doses of regular medicines | \nMedication list\nEmergency contact card"],
+            'smoke'      => ['label' => 'Test smoke alarms', 'interval' => 30, 'tip' => 'Press the test button monthly. Replace the alarm itself about every 10 years.'],
+            'co_alarm'   => ['label' => 'Test carbon monoxide alarm', 'interval' => 30],
+            'extinguisher' => ['label' => 'Fire extinguisher check', 'interval' => 365, 'tip' => 'Check the gauge is in the green and it is not damaged. Fire blankets too.'],
+        ],
+    ],
+    'sharps' => [
+        'title' => 'Sharps and disposal', 'short' => 'Sharps', 'icon' => '&#x1F5D1;&#xFE0F;', 'default' => false, 'appointment' => null,
+        'intro' => 'Keep track of your sharps bin, collections and medicines to take back to a pharmacy.',
+        'help'  => 'Never put needles or sharps bins in household waste. Your council or pharmacy can tell you how collections work where you live.',
+        'presets' => [],
+        'checks' => [
+            'sharps_bin' => ['label' => 'Sharps bin', 'track' => 'level', 'tip' => 'Close and lock it at the fill line, then arrange collection. Note how collection works in the notes.'],
+            'collection' => ['label' => 'Sharps collection', 'interval' => 28, 'tip' => 'If you have a regular collection, set how often.'],
+            'returns'    => ['label' => 'Take unused medicines to a pharmacy', 'interval' => 182,
+                'tip' => "Out-of-date or unused medicines: any pharmacy will take them back. Don't put them in the bin or down the toilet."],
         ],
     ],
     'screening' => [
@@ -148,6 +248,23 @@ const CARE_AREAS = [
         'help'  => "Don't wait for screening if you have symptoms: see a GP. Intervals are for England; Scotland, Wales and Northern Ireland differ slightly.",
         'presets' => [],
         'checks' => [], // generated from the profile: see SCREENING_PROGRAMMES
+    ],
+    // Mind's habits and routines: run by the same code, but shown in the Mind tab, not Care.
+    'mind' => [
+        'title' => 'Habits & routines', 'short' => 'Habits', 'icon' => '&#x1F331;', 'default' => false, 'hidden' => true, 'appointment' => 'mental_health',
+        'intro' => 'Small, regular routines can make the days feel steadier. Start with one or two.',
+        'help'  => 'If you are struggling to keep up with the basics, that is worth mentioning to your GP or care team.',
+        'presets' => [
+            'morning'  => ['label' => 'Morning routine', 'times' => ['08:00'], 'tip' => 'e.g. get up, open the curtains, wash, get dressed, breakfast.'],
+            'evening'  => ['label' => 'Evening wind-down', 'times' => ['21:30'], 'tip' => 'Lights down, something calm, same time each night.'],
+            'screens'  => ['label' => 'Phone away', 'times' => ['22:00'], 'remind' => true, 'tip' => 'A screen-time limit: phone out of the bedroom, or on charge in another room.'],
+            'outside'  => ['label' => 'Get outside', 'times' => ['12:00'], 'amount' => '15 minutes', 'tip' => 'Daylight helps mood and sleep.'],
+            'meals'    => ['label' => 'Proper meal', 'times' => ['13:00', '18:30'], 'tip' => 'Even something small and simple counts.'],
+            'journal'  => ['label' => 'Journal or check in', 'times' => ['20:30'], 'amount' => '5 minutes', 'tip' => 'Write a few lines, or do a quick check-in.'],
+        ],
+        'checks' => [
+            'mh_review' => ['label' => 'Mental health medication review', 'interval' => 182, 'tip' => 'Change how often to match what your GP or psychiatrist says.'],
+        ],
     ],
     'vaccinations' => [
         'title' => 'Vaccinations', 'short' => 'Vaccines', 'icon' => '&#x1F489;', 'default' => true, 'appointment' => 'vaccination',
@@ -176,7 +293,19 @@ function user_care_areas(array $user): array
         return array_keys(array_filter(CARE_AREAS, fn ($a) => $a['default']));
     }
     $chosen = explode(',', (string) $user['care_areas']);
-    return array_values(array_filter(array_keys(CARE_AREAS), fn ($k) => in_array($k, $chosen, true)));
+    return array_values(array_filter(array_keys(CARE_AREAS), fn ($k) => empty(CARE_AREAS[$k]['hidden']) && in_array($k, $chosen, true)));
+}
+
+/** Areas whose routines and checks go on Today and in the calendar feed: Care categories, plus Mind's habits. */
+function routine_areas(array $user): array
+{
+    return [...user_care_areas($user), ...(mind_enabled($user) ? ['mind'] : [])];
+}
+
+/** Care categories a user can switch on (not Mind's habits). */
+function care_categories(): array
+{
+    return array_filter(CARE_AREAS, fn ($a) => empty($a['hidden']));
 }
 
 /** A routine preset with every field filled in. */

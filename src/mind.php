@@ -91,7 +91,8 @@ const THOUGHT_FIELDS = [
 
 function mind_enabled(array $user): bool
 {
-    return (bool) $user['mind_enabled'];
+    // Someone with shared access only sees Mind if the owner included it.
+    return (bool) $user['mind_enabled'] && (!isset($user['_acting']) || $user['_acting']['mind']);
 }
 
 /* ---------- PIN lock ---------- */
@@ -100,6 +101,10 @@ const MIND_UNLOCK_SECONDS = 600; // stays unlocked for 10 minutes after the last
 
 function mind_unlocked(array $user): bool
 {
+    // The owner chose to share Mind with this person, so their PIN isn't asked for.
+    if (isset($user['_acting'])) {
+        return $user['_acting']['mind'];
+    }
     return !$user['mind_pin_hash'] || (($_SESSION['mind_unlocked_at'] ?? 0) > time() - MIND_UNLOCK_SECONDS);
 }
 
@@ -107,6 +112,10 @@ function mind_unlocked(array $user): bool
 function require_mind(array $user): void
 {
     if (!mind_enabled($user)) {
+        if (isset($user['_acting'])) {
+            flash('error', 'Mind is private: it has not been shared with you.');
+            redirect('index.php');
+        }
         flash('success', 'The Mind tab is switched off. You can switch it on in your health profile.');
         redirect('account.php#health-profile');
     }
@@ -317,4 +326,137 @@ function mind_ics_events(array $user, string $host): string
         . ics_line('TRIGGER:PT0M')
         . ics_line('END:VALARM')
         . ics_line('END:VEVENT');
+}
+
+/* ---------- round two: care team, self-care, activities, connections, plans ---------- */
+
+const MIND_APPOINTMENT_KINDS = ['mental_health', 'psychiatrist'];
+const SELFCARE_DEFAULTS = ['Eaten', 'Drunk water', 'Been outside', 'Moved', 'Showered or washed', 'Talked to someone'];
+const HELPS_WITH = ['talk' => 'Talking', 'practical' => 'Practical help', 'distraction' => 'Distraction', 'company' => 'Company'];
+const ACTIVITY_IDEAS = ['Short walk', 'Phone a friend', 'Cook something simple', 'Tidy one drawer', 'Read for 15 minutes', 'Listen to an album',
+    'Sit in the garden or a park', 'Do a small job I have been putting off', 'Have a bath', 'Draw, write or make something'];
+
+// Relapse prevention plan: stage => [heading, [field => prompt]].
+const RELAPSE_PLAN = [
+    'green' => ['When I am well', [
+        'green_like' => 'What I am like when I am well',
+        'green_keep' => 'What keeps me well, day to day and week to week',
+    ]],
+    'amber' => ['Early warning signs', [
+        'amber_signs'  => 'Signs that things are slipping: what I notice, and what others notice',
+        'amber_me'     => 'What I will do',
+        'amber_others' => 'What I would like other people to do',
+    ]],
+    'red' => ['Crisis', [
+        'red_signs'   => 'Signs that I am in crisis',
+        'red_do'      => 'What to do, and who to contact',
+        'red_helps'   => 'What helps, and what does not, when I am this unwell',
+    ]],
+];
+
+// Advance statement: section => [heading, prompt].
+const ADVANCE_STATEMENT = [
+    'adv_prefer'     => ['Treatment and support I prefer', 'And why: what has worked for me before.'],
+    'adv_avoid'      => ['Treatment I would rather avoid', 'And why: what has not worked, or what I found distressing.'],
+    'adv_meds'       => ['Medication', 'What has helped, side effects I have had, anything I am allergic to.'],
+    'adv_hospital'   => ['If I need to go to hospital', 'Where I would prefer, what to bring, what helps me on a ward.'],
+    'adv_people'     => ['People to tell', 'Who to contact, and anyone who should not be contacted.'],
+    'adv_dependants' => ['Children, dependants and pets', 'Who will look after them.'],
+    'adv_practical'  => ['Practical things', 'Home, keys, bills, work, benefits.'],
+    'adv_needs'      => ['My needs', 'Cultural, religious, dietary, communication or accessibility needs.'],
+    'adv_other'      => ['Anything else', ''],
+    'adv_shared'     => ['Who has a copy', 'For example: my GP, care coordinator, nearest relative.'],
+];
+
+/** The self-care checklist items. */
+function selfcare_items(array $user): array
+{
+    $items = $user['mind_selfcare'] === null ? SELFCARE_DEFAULTS : array_filter(array_map('trim', explode("\n", (string) $user['mind_selfcare'])));
+    return array_values(array_unique(array_map(fn ($i) => mb_substr($i, 0, 60), $items)));
+}
+
+/** Plan sections (relapse plan, advance statement) share the mind_plan table with the safety plan. */
+function plan_text(int $userId, array $keys): array
+{
+    $in = implode(',', array_fill(0, count($keys), '?'));
+    $out = [];
+    foreach (q("SELECT section, content FROM mind_plan WHERE user_id = ? AND section IN ($in)", [$userId, ...$keys]) as $r) {
+        $out[$r['section']] = $r['content'];
+    }
+    return $out;
+}
+
+function save_plan_text(int $userId, array $keys, array $posted): void
+{
+    foreach ($keys as $key) {
+        $text = trim(mb_substr((string) ($posted[$key] ?? ''), 0, 5000));
+        if ($text === '') {
+            q('DELETE FROM mind_plan WHERE user_id = ? AND section = ?', [$userId, $key]);
+        } else {
+            q('INSERT INTO mind_plan (user_id, section, content) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE content = VALUES(content)', [$userId, $key, $text]);
+        }
+    }
+}
+
+function mind_notes(int $userId, string $kind, ?bool $done = null): array
+{
+    return q('SELECT n.*, a.starts_at, a.kind AS appointment_kind, a.title AS appointment_title FROM mind_notes n
+              LEFT JOIN appointments a ON a.id = n.appointment_id
+              WHERE n.user_id = ? AND n.kind = ?' . ($done === null ? '' : ' AND n.done = ' . (int) $done) . ' ORDER BY n.done, COALESCE(n.due_date, \'9999-12-31\'), n.id DESC',
+        [$userId, $kind])->fetchAll();
+}
+
+/** People the user wanted reminding to contact, who are now due. */
+function reach_out_due(int $userId, DateTimeImmutable $today): array
+{
+    $out = [];
+    foreach (q("SELECT * FROM mind_contacts WHERE user_id = ? AND reach_out_days IS NOT NULL ORDER BY name", [$userId]) as $c) {
+        $since = $c['last_contact'] ? (new DateTimeImmutable($c['last_contact']))->diff($today)->days : null;
+        if ($since === null || $since >= (int) $c['reach_out_days']) {
+            $out[] = $c + ['since' => $since];
+        }
+    }
+    return $out;
+}
+
+/** Mood has been low (daily average 2 or under) on each of the last 3 days with a check-in in the last 5. */
+function low_spell(int $userId, DateTimeImmutable $today): bool
+{
+    $daily = mind_daily(mind_checkins($userId, $today->modify('-4 days')->format('Y-m-d'), $today->format('Y-m-d')));
+    $last = array_slice($daily, -3, 3, true);
+    return count($last) === 3 && max(array_column($last, 'mood')) <= 2;
+}
+
+/** Active symptoms, and their ratings by check-in id. */
+function mind_symptoms(int $userId, bool $activeOnly = true): array
+{
+    return q('SELECT * FROM mind_symptoms WHERE user_id = ?' . ($activeOnly ? ' AND active = 1' : '') . ' ORDER BY name', [$userId])->fetchAll();
+}
+
+/** @return array<int, array<int, int>> checkin_id => [symptom_id => severity] */
+function symptom_ratings(array $checkinIds): array
+{
+    if (!$checkinIds) {
+        return [];
+    }
+    $out = [];
+    $in = implode(',', array_fill(0, count($checkinIds), '?'));
+    foreach (q("SELECT * FROM mind_symptom_logs WHERE checkin_id IN ($in)", array_values($checkinIds)) as $r) {
+        $out[$r['checkin_id']][$r['symptom_id']] = (int) $r['severity'];
+    }
+    return $out;
+}
+
+/** Medicines marked as mental health medicines, with their latest change. */
+function mind_medications(int $userId): array
+{
+    return q("SELECT m.*, (SELECT CONCAT(c.effective_date, '|', c.summary) FROM medication_changes c WHERE c.medication_id = m.id ORDER BY c.effective_date DESC, c.id DESC LIMIT 1) AS last_change
+              FROM medications m WHERE m.user_id = ? AND m.mental_health = 1 AND m.is_active = 1 ORDER BY m.name", [$userId])->fetchAll();
+}
+
+function med_notes(int $userId, ?int $medicationId = null, ?string $sinceUtc = null): array
+{
+    return q('SELECT n.*, m.name FROM med_notes n JOIN medications m ON m.id = n.medication_id WHERE n.user_id = ?'
+        . ($medicationId ? ' AND n.medication_id = ' . (int) $medicationId : '') . ($sinceUtc ? ' AND n.created_at >= ?' : '') . ' ORDER BY n.created_at DESC',
+        $sinceUtc ? [$userId, $sinceUtc] : [$userId])->fetchAll();
 }

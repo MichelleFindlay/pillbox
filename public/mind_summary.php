@@ -44,6 +44,24 @@ $sideEffects = q("SELECT * FROM health_readings WHERE user_id = ? AND metric = '
     [$uid, $fromUtc, $toUtc])->fetchAll();
 $journal = $withJournal ? q('SELECT * FROM mind_journal WHERE user_id = ? AND created_at >= ? AND created_at < ? ORDER BY created_at', [$uid, $fromUtc, $toUtc])->fetchAll() : [];
 $insights = mind_insights($user, $today);
+$ratings = symptom_ratings(array_column($checkins, 'id'));
+$symptomStats = [];
+foreach ($ratings as $perCheckin) {
+    foreach ($perCheckin as $sid => $v) {
+        $symptomStats[$sid][] = $v;
+    }
+}
+$symptomNames = array_column(mind_symptoms($uid, false), 'name', 'id');
+$selfcareDays = q('SELECT log_date, COUNT(*) AS n FROM mind_selfcare WHERE user_id = ? AND log_date BETWEEN ? AND ? GROUP BY log_date',
+    [$uid, $from->format('Y-m-d'), $today->format('Y-m-d')])->fetchAll(PDO::FETCH_KEY_PAIR);
+$activities = q("SELECT * FROM mind_activities WHERE user_id = ? AND planned_for BETWEEN ? AND ? AND status <> 'planned' ORDER BY planned_for",
+    [$uid, $from->format('Y-m-d'), $today->format('Y-m-d')])->fetchAll();
+$doneActs = array_filter($activities, fn ($a) => $a['status'] === 'done');
+$in = implode(',', array_fill(0, count(MIND_APPOINTMENT_KINDS), '?'));
+$sessions = q("SELECT * FROM appointments WHERE user_id = ? AND kind IN ($in) AND starts_at >= ? AND starts_at < ? ORDER BY starts_at",
+    [$uid, ...MIND_APPOINTMENT_KINDS, $fromUtc, $toUtc])->fetchAll();
+$actions = array_filter(mind_notes($uid, 'action'), fn ($n) => !$n['done'] || $n['created_at'] >= $fromUtc);
+$medNotes = array_reverse(med_notes($uid, null, $fromUtc));
 $tz = $today->getTimezone();
 $points = function (string $field) use ($daily, $tz): array {
     $out = [];
@@ -108,6 +126,41 @@ render_header('Mind summary', 'mind');
         <?php endif; ?>
     </section>
 
+    <?php if ($symptomStats || $selfcareDays || $activities): ?>
+    <section>
+        <h2>Symptoms, self-care and activities</h2>
+        <?php if ($symptomStats): ?>
+        <table class="compact">
+            <thead><tr><th>Symptom</th><th class="num">Average</th><th class="num">Highest</th><th class="num">Ratings</th></tr></thead>
+            <tbody><?php foreach ($symptomStats as $sid => $vals): ?>
+                <tr><td><?= h($symptomNames[$sid] ?? 'Symptom') ?></td><td class="num"><?= number_format(array_sum($vals) / count($vals), 1) ?> / 10</td><td class="num"><?= max($vals) ?></td><td class="num"><?= count($vals) ?></td></tr>
+            <?php endforeach; ?></tbody>
+        </table>
+        <?php endif; ?>
+        <?php if ($selfcareDays): ?>
+        <p class="small"><strong>Self-care basics:</strong> ticked off on <?= count($selfcareDays) ?> of <?= $weeks * 7 ?> days, averaging <?= number_format(array_sum($selfcareDays) / count($selfcareDays), 1) ?>
+            of <?= count(selfcare_items($user)) ?> on those days.</p>
+        <?php endif; ?>
+        <?php if ($activities): $avgOf = fn ($f) => ($v = array_filter(array_column($doneActs, $f), fn ($x) => $x !== null)) ? number_format(array_sum($v) / count($v), 1) : '–'; ?>
+        <p class="small"><strong>Planned activities:</strong> <?= count($doneActs) ?> of <?= count($activities) ?> done; average enjoyment <?= $avgOf('enjoyment') ?>, achievement <?= $avgOf('achievement') ?> out of 10.</p>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
+
+    <?php if ($sessions || $actions): ?>
+    <section>
+        <h2>Therapy and reviews</h2>
+        <?php foreach ($sessions as $s): ?>
+        <p class="small"><strong><?= h(local_time($s['starts_at'], 'j M Y')) ?></strong> <?= h(appointment_title($s)) ?><?= $s['with_whom'] ? ' with ' . h($s['with_whom']) : '' ?>
+            <?= $s['outcome_notes'] ? '<br>' . nl2br(h($s['outcome_notes'])) : '' ?></p>
+        <?php endforeach; ?>
+        <?php if ($actions): ?>
+        <h3>Actions agreed</h3>
+        <ul><?php foreach ($actions as $n): ?><li class="small"><?= h($n['text']) ?> <span class="muted">(<?= $n['done'] ? 'done' : 'in progress' ?>)</span></li><?php endforeach; ?></ul>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
+
     <?php if ($insights): ?>
     <section>
         <h2>Patterns</h2>
@@ -141,13 +194,20 @@ render_header('Mind summary', 'mind');
     </section>
     <?php endif; ?>
 
-    <?php if ($medChanges || $sideEffects): ?>
+    <?php if ($medChanges || $sideEffects || $medNotes): ?>
     <section>
         <h2>Medication</h2>
         <?php if ($medChanges): ?>
         <h3>Changes in this period</h3>
         <ul class="plain"><?php foreach ($medChanges as $m): ?>
             <li class="logline"><span><strong><?= h(date('j M', strtotime($m['effective_date']))) ?></strong> <?= h($m['name']) ?>: <?= h($m['summary']) ?><?= $m['reason'] ? ' <span class="muted small">(' . h($m['reason']) . ')</span>' : '' ?></span></li>
+        <?php endforeach; ?></ul>
+        <?php endif; ?>
+        <?php if ($medNotes): ?>
+        <h3>Medication notes</h3>
+        <ul class="plain"><?php foreach ($medNotes as $n): ?>
+            <li class="logline"><span><strong><?= h(local_time($n['created_at'], 'j M')) ?></strong> <?= h($n['name']) ?>
+                (<?= $n['kind'] === 'side_effect' ? 'side effect' . ($n['severity'] !== null ? ', ' . (int) $n['severity'] . '/10' : '') : 'how I feel' ?>): <?= h($n['note']) ?></span></li>
         <?php endforeach; ?></ul>
         <?php endif; ?>
         <?php if ($sideEffects): ?>

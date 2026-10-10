@@ -13,7 +13,8 @@ const APPOINTMENT_TYPES = [
     'scan'          => 'Scan / X-ray',
     'physio'        => 'Physiotherapy',
     'podiatry'      => 'Podiatry / foot care',
-    'mental_health' => 'Mental health / counselling',
+    'mental_health' => 'Mental health / therapy',
+    'psychiatrist'  => 'Psychiatrist',
     'pharmacy'      => 'Pharmacy / medication review',
     'vaccination'   => 'Vaccination',
     'other'         => 'Other',
@@ -168,6 +169,34 @@ function appointment_suggestions(array $user, array $appointment): array
     $sinceLabel = local_time($sinceUtc, 'j M');
     $until = min($appointment['starts_at'], utc_now());
     $out = [];
+
+    // Mental health appointments: the running question list, and how things have been in Mind.
+    if (in_array($appointment['kind'], MIND_APPOINTMENT_KINDS, true) && mind_enabled($user)) {
+        foreach (mind_notes($uid, 'question', false) as $n) {
+            $out[] = $n['text'];
+        }
+        $fromDay = local_time($sinceUtc, 'Y-m-d');
+        $daily = mind_daily(mind_checkins($uid, $fromDay, local_time($until, 'Y-m-d')));
+        if (count($daily) >= 3) {
+            $avg = fn (string $f) => ($v = array_filter(array_column($daily, $f), fn ($x) => $x !== null)) ? array_sum($v) / count($v) : null;
+            $out[] = sprintf('Since %s my mood has averaged %.1f out of 5 over %d days', $sinceLabel, $avg('mood'), count($daily))
+                . ($avg('anxiety') !== null ? sprintf(', and anxiety %.1f out of 10.', $avg('anxiety')) : '.');
+        }
+        foreach (QUESTIONNAIRES as $kind => $qn) {
+            $scores = q('SELECT score, taken_at FROM mind_questionnaires WHERE user_id = ? AND kind = ? AND taken_at >= ? ORDER BY taken_at', [$uid, $kind, $sinceUtc])->fetchAll();
+            if ($scores) {
+                $first = $scores[0];
+                $last = (int) end($scores)['score'];
+                $out[] = "My latest {$qn['title']} score is $last (" . mb_strtolower(questionnaire_band($kind, $last)) . ')'
+                    . (count($scores) > 1 ? ', ' . ((int) $first['score'] < $last ? 'up' : ((int) $first['score'] > $last ? 'down' : 'no change')) . ' from ' . (int) $first['score']
+                        . ' on ' . local_time($first['taken_at'], 'j M') . '.' : '.');
+            }
+        }
+        foreach (array_reverse(med_notes($uid, null, $sinceUtc)) as $n) {
+            $out[] = ($n['kind'] === 'side_effect' ? 'Side effect from ' : 'Since starting or changing ') . $n['name'] . ': ' . $n['note']
+                . ($n['severity'] !== null ? ' (' . $n['severity'] . '/10)' : '') . ' (' . local_time($n['created_at'], 'j M') . ').';
+        }
+    }
 
     // Symptoms and side effects logged.
     foreach (q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'symptom' AND recorded_at >= ? AND recorded_at <= ? ORDER BY recorded_at",

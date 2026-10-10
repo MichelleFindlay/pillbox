@@ -5,6 +5,11 @@ $user = require_login();
 $uid = (int) $user['id'];
 $todayYmd = local_today()->format('Y-m-d');
 
+if (is_post() && post('action') === 'show_changes') {
+    require_post();
+    q('UPDATE users SET meds_show_changes = ? WHERE id = ?', [post('show') === '1' ? 1 : 0, $uid]);
+    redirect('medications.php');
+}
 if (is_post()) {
     require_post();
     $med = find_medication((int) post('id'), $uid);
@@ -55,6 +60,7 @@ if (is_post()) {
                 . ($expiry ? ' Expiry date set to ' . $expiry->format('j M Y') . '.' : ''));
             redirect('medications.php#med-' . $med['id']);
         case 'delete':
+            owner_only('Permanently deleting a medicine');
             q('DELETE FROM medications WHERE id = ?', [$med['id']]);
             flash('success', $med['name'] . ' and all of its dose history were deleted.');
             break;
@@ -80,7 +86,14 @@ $stopped = array_filter($meds, fn ($m) => !$m['is_active']);
 render_header('Medications', 'meds');
 ?>
 <div class="page-head">
-    <h1>Medications</h1>
+    <div>
+        <h1>Medications</h1>
+        <form method="post" class="show-changes">
+            <?= csrf_field() ?><input type="hidden" name="action" value="show_changes"><input type="hidden" name="show" value="0">
+            <label class="check small"><input type="checkbox" name="show" value="1" data-autosubmit<?= checked((bool) $user['meds_show_changes']) ?>> Show dose changes</label>
+            <noscript><button class="btn btn-small" type="submit">Apply</button></noscript>
+        </form>
+    </div>
     <span class="inline-actions">
         <a class="btn" href="<?= h(url('travel.php')) ?>">&#9992; Travel</a>
         <a class="btn btn-primary" href="<?= h(url('medication_edit.php')) ?>">+ Add medication</a>
@@ -152,8 +165,11 @@ render_header('Medications', 'meds');
                 <p class="muted small">Currently <?= $m['stock_count'] !== null ? h(dose_label($m['stock_count'], $m['dose_unit'])) : 'not tracked' ?>.</p>
             </form>
         </details>
-        <?php if (isset($latestChanges[$m['id']]) && $latestChanges[$m['id']]['kind'] !== 'started'): $lc = $latestChanges[$m['id']]; ?>
+        <?php if ($user['meds_show_changes'] && isset($latestChanges[$m['id']]) && $latestChanges[$m['id']]['kind'] !== 'started'): $lc = $latestChanges[$m['id']]; ?>
         <p class="small last-change">Changed <?= h(date('j M Y', strtotime($lc['effective_date']))) ?>: <?= h($lc['summary']) ?></p>
+        <?php endif; ?>
+        <?php if ($m['mental_health'] && mind_enabled($user)): ?>
+        <p class="small"><a href="<?= h(url('mind_meds.php#med-' . $m['id'])) ?>">Side effects and how I'm feeling</a></p>
         <?php endif; ?>
         <footer class="med-actions">
             <a class="btn btn-small" href="<?= h(url('medication_edit.php?id=' . $m['id'])) ?>">Edit</a>

@@ -86,6 +86,18 @@ function ensure_schema(): void
         ['users', 'screening_programmes', 'ALTER TABLE users ADD COLUMN screening_programmes VARCHAR(100) NULL AFTER sex'],
         ['users', 'mind_enabled', "ALTER TABLE users ADD COLUMN mind_enabled TINYINT(1) NOT NULL DEFAULT 1, ADD COLUMN mind_pin_hash VARCHAR(255) NULL,
                                    ADD COLUMN mind_lock_plan TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN mind_reminder TIME NULL"],
+        ['medications', 'mental_health', 'ALTER TABLE medications ADD COLUMN mental_health TINYINT(1) NOT NULL DEFAULT 0 AFTER expiry_date'],
+        ['users', 'mind_selfcare', 'ALTER TABLE users ADD COLUMN mind_selfcare VARCHAR(500) NULL AFTER mind_reminder'],
+        ['mind_contacts', 'helps_with', 'ALTER TABLE mind_contacts ADD COLUMN helps_with VARCHAR(60) NULL AFTER text_body,
+                                          ADD COLUMN reach_out_days SMALLINT UNSIGNED NULL AFTER helps_with, ADD COLUMN last_contact DATE NULL AFTER reach_out_days'],
+        ['health_checks', 'track', "ALTER TABLE health_checks ADD COLUMN track VARCHAR(8) NOT NULL DEFAULT 'due' AFTER rule,
+                                     ADD COLUMN quantity DECIMAL(8,1) NULL AFTER due_date, ADD COLUMN unit VARCHAR(20) NULL AFTER quantity,
+                                     ADD COLUMN low_at DECIMAL(8,1) NULL AFTER unit, ADD COLUMN per_week DECIMAL(8,2) NULL AFTER low_at,
+                                     ADD COLUMN counted_on DATE NULL AFTER per_week, ADD COLUMN items TEXT NULL AFTER counted_on"],
+        ['users', 'meds_show_changes', 'ALTER TABLE users ADD COLUMN meds_show_changes TINYINT(1) NOT NULL DEFAULT 0'],
+        ['users', 'email_digest', 'ALTER TABLE users ADD COLUMN email_digest TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN email_digest_hour TINYINT UNSIGNED NOT NULL DEFAULT 7,
+                                   ADD COLUMN email_appointments TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN last_digest_on DATE NULL, ADD COLUMN is_demo TINYINT(1) NOT NULL DEFAULT 0'],
+        ['appointments', 'reminder_emailed_at', 'ALTER TABLE appointments ADD COLUMN reminder_emailed_at DATETIME NULL AFTER remind_minutes'],
         ['users', 'care_prompt_hidden', 'ALTER TABLE users ADD COLUMN care_prompt_hidden TINYINT(1) NOT NULL DEFAULT 0 AFTER health_sync_token'],
     ];
     foreach ($upgrades as [$table, $column, $alter]) {
