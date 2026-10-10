@@ -37,6 +37,9 @@ return [
         // Only needed if the repository is private: a fine-grained GitHub token with
         // read-only "Contents" access to the repository.
         'github_token'         => '',
+        // Addresses without ".php" (e.g. /medications). On automatically when Apache's mod_rewrite is
+        // available (see public/.htaccess); set to false to always use ".php".
+        // 'pretty_urls'       => false,
         // Cache folder; must be writable by the web server.
         'storage_path'         => __DIR__ . '/../storage',
     ],
@@ -162,6 +165,16 @@ return [
     'cron' => [
         // A long random secret for the web address; leave empty to allow only the command line.
         'token' => '',
+    ],
+
+    // Prescription prices (England), for the cost log and prepayment certificate calculator.
+    // They usually change in April: check https://www.nhs.uk/nhs-services/prescriptions/ and update.
+    'prescriptions' => [
+        'charge'  => 9.90,     // per item
+        'ppc_3'   => 32.05,    // 3-month prepayment certificate
+        'ppc_12'  => 114.50,   // 12-month prepayment certificate
+        'hrt_ppc' => 19.80,    // 12-month HRT prepayment certificate
+        'prices_from' => 'May 2025',
     ],
 
     // Demo mode: a "Try the demo" button on the sign-in page. Each visitor gets their own copy of a

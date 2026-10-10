@@ -57,7 +57,12 @@ function acting_user(array $real, int $ownerId): ?array
         return null;
     }
     $owner = q('SELECT * FROM users WHERE id = ?', [$ownerId])->fetch();
-    return $owner + ['_acting' => ['by' => $real, 'level' => $share['level'], 'mind' => (bool) $share['include_mind'], 'share_id' => (int) $share['id']]];
+    if ($share['expires_on'] && $share['expires_on'] < (new DateTimeImmutable('today', home_tz($owner)))->format('Y-m-d')) {
+        unset($_SESSION['acting_for']);
+        flash('error', "Your access to {$owner['display_name']}'s Pillbox ended on " . date('j F', strtotime($share['expires_on'])) . '.');
+        return null;
+    }
+    return $owner + ['_acting' => ['by' => $real, 'perms' => share_permissions($share), 'share_id' => (int) $share['id']]];
 }
 
 function require_login(): array
@@ -69,16 +74,25 @@ function require_login(): array
         $_SESSION['after_login'] = safe_return($target . ($query !== '' ? '?' . $query : ''));
         redirect('login.php');
     }
-    // Looking at someone else's Pillbox: their account settings and the like stay theirs.
-    if (isset($user['_acting']) && in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), ACTING_BLOCKED_PAGES, true)) {
-        flash('error', "That's only available in your own Pillbox. Use \"Back to mine\" first.");
-        redirect('index.php');
+    // First login: the setup wizard comes first.
+    if (!isset($user['_acting']) && $user['onboarded_at'] === null
+        && !in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), ['welcome.php', 'logout.php', 'help.php', 'breathe.php', 'sharing.php'], true)) {
+        redirect('welcome.php');
+    }
+    // Looking at someone else's Pillbox: only the parts and actions they've been given.
+    if (isset($user['_acting'])) {
+        $need = share_page_need(basename($_SERVER['SCRIPT_NAME'] ?? ''), is_post(), post('action'));
+        if ($need === false) {
+            flash('error', "That's only available in your own Pillbox. Use \"Back to mine\" first.");
+            redirect('index.php');
+        }
+        if ($need !== null && !share_can($need[0], $need[1], $user)) {
+            flash('error', is_post() ? "You can see this, but haven't been given permission to change it." : "That part of {$user['display_name']}'s Pillbox hasn't been shared with you.");
+            redirect(is_post() ? safe_return(basename(parse_url($_SERVER['HTTP_REFERER'] ?? '', PHP_URL_PATH) ?: ''), 'index.php') : 'index.php');
+        }
     }
     return $user;
 }
-
-// Pages someone with shared access can't open, even with "can help" access.
-const ACTING_BLOCKED_PAGES = ['account.php', 'account_export.php', 'admin.php', 'health_import.php', 'export.php', 'mind_unlock.php'];
 
 /** Stop someone with shared access doing something only the owner should (sync links, PINs, deleting). */
 function owner_only(string $what = 'That'): void
@@ -89,12 +103,7 @@ function owner_only(string $what = 'That'): void
     }
 }
 
-/** With view-only shared access, nothing can be changed (except going back to your own Pillbox). */
-function acting_read_only(): bool
-{
-    $user = current_user();
-    return isset($user['_acting']) && $user['_acting']['level'] !== 'manage';
-}
+
 
 function require_admin(): array
 {

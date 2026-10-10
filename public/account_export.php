@@ -1,6 +1,7 @@
 <?php
 /*
  * "Download all my data": everything Pillbox stores about the signed-in user, as JSON.
+ * The readable sections are for people; "backup" is the complete copy that "Import data" restores.
  */
 require __DIR__ . '/../src/bootstrap.php';
 
@@ -59,6 +60,7 @@ $export = [
         'contacts'       => q('SELECT kind, name, detail, phone, text_to, text_body, helps_with, reach_out_days, last_contact FROM mind_contacts WHERE user_id = ? ORDER BY kind, sort, id', [$uid])->fetchAll(),
     ],
     'health_readings' => q('SELECT id, metric, value1, value2, value3, context, notes, recorded_at, source, created_at FROM health_readings WHERE user_id = ? ORDER BY recorded_at', [$uid])->fetchAll(),
+    'backup' => export_backup($user),
 ];
 
 header('Content-Type: application/json; charset=utf-8');

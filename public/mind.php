@@ -269,7 +269,9 @@ render_header('Mind', 'mind');
 
 <div class="mind-links">
     <a class="care-tile" href="<?= h(url('mind_toolkit.php')) ?>"><span class="care-tile-title">&#x1F9F0; Coping toolkit</span><span class="muted small">Your list of what helps, breathing and grounding</span></a>
+    <?php if (!isset($user['_acting']) || $user['_acting']['perms']['journal']): ?>
     <a class="care-tile" href="<?= h(url('mind_journal.php')) ?>"><span class="care-tile-title">&#x1F4D3; Journal</span><span class="muted small">Free writing, prompts and thought records</span></a>
+    <?php endif; ?>
     <a class="care-tile" href="<?= h(url('mind_check.php')) ?>"><span class="care-tile-title">&#x1F4CB; Questionnaires</span><span class="muted small">PHQ-9 (depression) and GAD-7 (anxiety)</span></a>
     <a class="care-tile" href="<?= h(url('mind_plan.php')) ?>"><span class="care-tile-title">&#x1F6DF; Safety plan</span><span class="muted small">Warning signs, coping, people and contacts</span></a>
     <a class="care-tile" href="<?= h(url('mind_care.php')) ?>"><span class="care-tile-title">&#x1F91D; Therapy and care</span><span class="muted small">Sessions, actions agreed, questions for next time, care team</span></a>
@@ -348,17 +350,18 @@ render_header('Mind', 'mind');
     <p>Mind is locked with a PIN. It locks again after 10 minutes without using it.</p>
     <?php $devices = q('SELECT * FROM webauthn_credentials WHERE user_id = ? ORDER BY id', [$uid])->fetchAll(); ?>
     <?php if ($devices): ?>
-    <p class="small">Fingerprint or face unlock is set up on:</p>
+    <p class="small">A passkey for unlocking Mind is set up on:</p>
     <ul class="plain">
         <?php foreach ($devices as $d): ?>
         <li class="logline"><span><?= h($d['label']) ?> <span class="muted small">added <?= h(local_time($d['created_at'], 'j M Y')) ?><?= $d['last_used_at'] ? ', last used ' . h(local_time($d['last_used_at'], 'j M')) : '' ?></span></span>
-            <form method="post" data-confirm="Remove fingerprint or face unlock for <?= h($d['label']) ?>?"><?= csrf_field() ?><input type="hidden" name="action" value="remove_device"><input type="hidden" name="id" value="<?= (int) $d['id'] ?>">
+            <form method="post" data-confirm="Remove the passkey for <?= h($d['label']) ?>?"><?= csrf_field() ?><input type="hidden" name="action" value="remove_device"><input type="hidden" name="id" value="<?= (int) $d['id'] ?>">
                 <button class="btn-link danger small" type="submit">Remove</button></form></li>
         <?php endforeach; ?>
     </ul>
     <?php endif; ?>
+    <p class="muted small">A passkey lets you unlock Mind with your fingerprint, face or your device's own PIN, instead of typing your Mind PIN.</p>
     <p class="inline-actions">
-        <button class="btn btn-small" type="button" hidden data-webauthn-register data-csrf="<?= h(csrf_token()) ?>">Set up fingerprint or face unlock on this device</button>
+        <button class="btn btn-small" type="button" hidden data-webauthn-register data-csrf="<?= h(csrf_token()) ?>">Add a passkey on this device</button>
         <span class="small warn" data-webauthn-status></span>
     </p>
     <form method="post" class="inline-actions" data-confirm="Remove the PIN from Mind?">

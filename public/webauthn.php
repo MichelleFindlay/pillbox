@@ -1,6 +1,6 @@
 <?php
 /*
- * Fingerprint / face unlock for Mind (WebAuthn). JSON in and out; used by app.js
+ * Passkey unlock for Mind (WebAuthn). JSON in and out; used by app.js
  * ([data-webauthn-register] on the Mind privacy card, [data-webauthn-unlock] on mind_unlock.php).
  */
 require __DIR__ . '/../src/bootstrap.php';
@@ -41,7 +41,7 @@ try {
             [$credentialId, $pem, $count] = webauthn_register((string) ($input['clientDataJSON'] ?? ''), (string) ($input['attestationObject'] ?? ''));
             $label = trim(mb_substr((string) ($input['label'] ?? ''), 0, 100)) ?: 'This device';
             q('INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_count, label) VALUES (?, ?, ?, ?, ?)', [$uid, $credentialId, $pem, $count, $label]);
-            flash('success', 'Fingerprint or face unlock is set up on this device.');
+            flash('success', 'Passkey added. You can now unlock Mind with it on this device.');
             $reply(['ok' => true]);
         case 'unlock_options':
             $ids = q('SELECT credential_id FROM webauthn_credentials WHERE user_id = ?', [$uid])->fetchAll(PDO::FETCH_COLUMN);

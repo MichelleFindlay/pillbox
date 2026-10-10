@@ -2,7 +2,8 @@
 declare(strict_types=1);
 
 /*
- * Fingerprint / face unlock for the Mind PIN, with WebAuthn platform authenticators
+ * Passkeys for unlocking Mind: WebAuthn credentials on the device (it asks for the
+ * fingerprint, face or device PIN), as an alternative to the Mind PIN. Platform authenticators
  * (Touch ID, Face ID, Windows Hello, Android). No attestation is requested; we check the
  * challenge, origin, RP ID hash, user presence and verification flags, and the signature
  * against the public key saved at registration. Needs HTTPS (or localhost).

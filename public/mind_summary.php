@@ -14,7 +14,7 @@ $weeks = in_array(get('weeks'), ['4', '8', '12'], true) ? (int) get('weeks') : 4
 $from = $today->modify('-' . ($weeks * 7 - 1) . ' days');
 $prevFrom = $from->modify('-' . ($weeks * 7) . ' days');
 $withNotes = get('notes') === '1';
-$withJournal = get('journal') === '1';
+$withJournal = get('journal') === '1' && (!isset($user['_acting']) || $user['_acting']['perms']['journal']);
 $utc = new DateTimeZone('UTC');
 $fromUtc = $from->setTimezone($utc)->format('Y-m-d H:i:s');
 $toUtc = $today->modify('+1 day')->setTimezone($utc)->format('Y-m-d H:i:s');
@@ -94,7 +94,7 @@ render_header('Mind summary', 'mind');
 
 <article class="report">
     <header class="report-head">
-        <img src="<?= h(asset('assets/logo.svg')) ?>" alt="" width="56" height="56">
+        <?= logo_svg(56) ?>
         <div>
             <h1>Mood and wellbeing summary</h1>
             <p><strong><?= h($user['display_name']) ?></strong><?= $user['date_of_birth'] ? ' · born ' . h((new DateTimeImmutable($user['date_of_birth']))->format('j M Y')) : '' ?></p>

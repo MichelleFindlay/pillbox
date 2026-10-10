@@ -1,5 +1,16 @@
-Options -Indexes
+Options -Indexes -MultiViews
 DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Tell Pillbox that tidy addresses (without ".php") work here, so it makes links that way.
+    RewriteRule ^ - [E=PILLBOX_PRETTY_URLS:1]
+    # /medications -> medications.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^([a-z_]+)/?$ $1.php [L]
+</IfModule>
 
 <IfModule mod_headers.c>
     Header always unset X-Powered-By

@@ -118,7 +118,14 @@ function check_next_due(array $check, array $user, DateTimeImmutable $today): ar
 
     switch ($check['track'] ?? 'due') {
         case 'expiry':
-            return $check['due_date'] ? [$date($check['due_date']), ''] : [null, 'Add the expiry date.'];
+            if ($check['due_date']) {
+                return [$date($check['due_date']), ''];
+            }
+            // "Use within N days of opening": from the day it was opened.
+            if ($check['interval_days']) {
+                return $last ? [$last->modify('+' . (int) $check['interval_days'] . ' days'), ''] : [null, 'Mark it opened when you start a new one.'];
+            }
+            return [null, check_lengths($check) ? 'Add when your certificate starts.' : 'Add the expiry date.'];
         case 'stock':
             if ($check['quantity'] === null) {
                 return [null, 'Add how many you have.'];
@@ -206,6 +213,23 @@ function check_status(?DateTimeImmutable $due, DateTimeImmutable $today): string
         $due <= $today->modify('+30 days') => 'soon',
         default => 'later',
     };
+}
+
+/** Does this check keep a results log (blood tests, HbA1c...)? */
+function check_has_results(array $check): bool
+{
+    return $check['area'] === 'bloods' || !empty(CARE_AREAS[$check['area']]['checks'][$check['kind']]['results']);
+}
+
+/** Certificate lengths in months (PPCs), or [] for anything else. */
+function check_lengths(array $check): array
+{
+    return CARE_AREAS[$check['area']]['checks'][$check['kind']]['lengths'] ?? [];
+}
+
+function check_results(int $checkId, int $limit = 50): array
+{
+    return q('SELECT * FROM check_results WHERE check_id = ? ORDER BY taken_on DESC, id DESC LIMIT ' . $limit, [$checkId])->fetchAll();
 }
 
 /** Stock left now: the last count, less what's been used since at the weekly rate. */
@@ -385,6 +409,7 @@ function check_from_post(string $area, ?array $existing): array
         'counted_on'    => in_array($track, ['stock', 'level'], true) && $quantity !== null
             ? ($existing && (float) $existing['quantity'] === $quantity ? $existing['counted_on'] : local_today()->format('Y-m-d')) : null,
         'items'         => $items ?: null,
+        'medication_id' => post('medication_id') !== '' && find_medication((int) post('medication_id'), (int) current_user()['id']) ? (int) post('medication_id') : null,
         'notes'         => trim(mb_substr(post('notes'), 0, 500)) ?: null,
         'remind'        => post('remind') === '1' ? 1 : 0,
     ], $errors];

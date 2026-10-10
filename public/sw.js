@@ -3,7 +3,7 @@
 // (styles, scripts, icons) are cached - pages with health data never are.
 'use strict';
 
-const CACHE = 'pillbox-static-v1';
+const CACHE = 'pillbox-static-v3';
 const PRECACHE = [
   'offline.html',
   'assets/style.css',
@@ -61,4 +61,32 @@ self.addEventListener('fetch', (event) => {
       )
     );
   }
+});
+
+// Push notifications (sent by the scheduled tasks; the message is encrypted for this device).
+self.addEventListener('push', (event) => {
+  let msg = { title: 'Pillbox', body: 'You have a reminder.' };
+  try { msg = Object.assign(msg, event.data ? event.data.json() : {}); } catch (e) { /* keep the default */ }
+  event.waitUntil(self.registration.showNotification(msg.title, {
+    body: msg.body,
+    tag: msg.tag || 'pillbox',
+    renotify: true,
+    icon: new URL('assets/icons/icon-192.png', self.registration.scope).href,
+    badge: new URL('assets/icons/icon-192.png', self.registration.scope).href,
+    data: { url: msg.url || self.registration.scope },
+  }));
+});
+
+// Tapping a notification opens (or focuses) Pillbox at the right page.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data && event.notification.data.url ? event.notification.data.url : '', self.registration.scope).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+    for (const w of windows) {
+      if (w.url.startsWith(self.registration.scope) && 'focus' in w) {
+        return w.navigate(target).then((c) => (c || w).focus());
+      }
+    }
+    return self.clients.openWindow(target);
+  }));
 });

@@ -16,6 +16,10 @@ if (get('area') === 'mind') {
 }
 $areaKey = isset(CARE_AREAS[get('area')]) ? get('area') : null;
 $area = $areaKey ? CARE_AREAS[$areaKey] : null;
+if ($areaKey && !share_area_allowed($areaKey)) {
+    flash('error', "That part of {$user['display_name']}'s Pillbox hasn't been shared with you.");
+    redirect('care.php');
+}
 $self = $areaKey ? 'care.php?area=' . $areaKey : 'care.php';
 $errors = [];
 $form = null;        // routine task form with errors
@@ -94,13 +98,13 @@ if (is_post()) {
             [$values, $errors] = check_from_post($areaKey, $check);
             if (!$errors) {
                 $cols = [$values['label'], $values['interval_days'], $values['last_done'], $values['due_date'], $values['quantity'], $values['unit'],
-                    $values['low_at'], $values['per_week'], $values['counted_on'], $values['items'], $values['notes'], $values['remind']];
+                    $values['low_at'], $values['per_week'], $values['counted_on'], $values['items'], $values['notes'], $values['remind'], $values['medication_id']];
                 if ($check) {
                     q('UPDATE health_checks SET label = ?, interval_days = ?, last_done = ?, due_date = ?, quantity = ?, unit = ?, low_at = ?, per_week = ?,
-                       counted_on = ?, items = ?, notes = ?, remind = ? WHERE id = ?', [...$cols, $check['id']]);
+                       counted_on = ?, items = ?, notes = ?, remind = ?, medication_id = ? WHERE id = ?', [...$cols, $check['id']]);
                 } else {
-                    q('INSERT INTO health_checks (label, interval_days, last_done, due_date, quantity, unit, low_at, per_week, counted_on, items, notes, remind, user_id, area, track)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$cols, $uid, $areaKey, $values['track']]);
+                    q('INSERT INTO health_checks (label, interval_days, last_done, due_date, quantity, unit, low_at, per_week, counted_on, items, notes, remind, medication_id, user_id, area, track)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$cols, $uid, $areaKey, $values['track']]);
                 }
                 flash('success', $values['label'] . ($check ? ' updated.' : ' added.'));
                 redirect($self . '#checks');
@@ -115,7 +119,9 @@ if (is_post()) {
             q('UPDATE health_checks SET last_done = ?, due_date = NULL WHERE id = ?', [$day->format('Y-m-d'), $check['id']]);
             $check = ['last_done' => $day->format('Y-m-d'), 'due_date' => null] + $check;
             [$next] = check_next_due($check, $user, $today);
-            flash('success', $check['label'] . ' marked done' . ($next ? '. Next due ' . $next->format('j F Y') . '.' : '.'));
+            flash('success', $check['track'] === 'expiry'
+                ? preg_replace('/\s*\(once opened\)$/', '', $check['label']) . ': opened ' . $day->format('j M') . ($next ? '. Throw away after ' . $next->format('j F Y') . '.' : '.')
+                : $check['label'] . ' marked done' . ($next ? '. Next due ' . $next->format('j F Y') . '.' : '.'));
             redirect($back);
         case 'check_replaced':
             $expiry = parse_date(post('expiry'));
@@ -146,6 +152,49 @@ if (is_post()) {
                 flash('success', $collected ? $check['label'] . ': collected or replaced.' : $check['label'] . ': ' . mb_strtolower(FILL_LEVELS[$level]) . '.');
             }
             redirect($back);
+        case 'check_certificate':
+            $start = parse_date(post('start'));
+            $months = (int) post('months');
+            if (!$check || !$start || !in_array($months, check_lengths($check), true)) {
+                flash('error', 'Enter the start date and how long the certificate lasts.');
+                redirect($self . '#check-' . ($check['id'] ?? ''));
+            }
+            $end = $start->modify("+$months months")->modify('-1 day');
+            q('UPDATE health_checks SET last_done = ?, due_date = ?, unit = ? WHERE id = ?', [$start->format('Y-m-d'), $end->format('Y-m-d'), "$months-month", $check['id']]);
+            flash('success', $check['label'] . ': valid until ' . $end->format('j F Y') . '. You will be reminded a month before.');
+            redirect($back);
+        case 'result_add':
+            $day = parse_date(post('taken_on'));
+            $result = trim(mb_substr(post('result'), 0, 200));
+            if (!$check || !$day || $day > $today || $result === '') {
+                flash('error', 'Enter the date and the result.');
+                redirect($self . '#check-' . ($check['id'] ?? ''));
+            }
+            q('INSERT INTO check_results (check_id, taken_on, result, notes) VALUES (?, ?, ?, ?)', [$check['id'], $day->format('Y-m-d'), $result, trim(mb_substr(post('notes'), 0, 500)) ?: null]);
+            if (!$check['last_done'] || $check['last_done'] < $day->format('Y-m-d')) {
+                q('UPDATE health_checks SET last_done = ?, due_date = NULL WHERE id = ?', [$day->format('Y-m-d'), $check['id']]);
+            }
+            flash('success', 'Result saved.');
+            redirect($self . '#check-' . $check['id']);
+        case 'result_delete':
+            if ($check) {
+                q('DELETE FROM check_results WHERE id = ? AND check_id = ?', [(int) post('result_id'), $check['id']]);
+            }
+            redirect($self . '#check-' . ($check['id'] ?? ''));
+        case 'payment_add':
+            $day = parse_date(post('paid_on'));
+            $amount = post('amount');
+            if (!$day || $day > $today || !is_numeric($amount) || (float) $amount < 0 || (int) post('items') < 0) {
+                flash('error', 'Enter the date and the amount paid.');
+                redirect($self . '#costs');
+            }
+            q('INSERT INTO prescription_payments (user_id, paid_on, items, amount, note, kind) VALUES (?, ?, ?, ?, ?, ?)',
+                [$uid, $day->format('Y-m-d'), max(0, (int) post('items')), round((float) $amount, 2), trim(mb_substr(post('note'), 0, 200)) ?: null,
+                    isset(SUPPLY_TYPES[post('kind')]) ? post('kind') : 'nhs']);
+            redirect($self . '#costs');
+        case 'payment_delete':
+            q('DELETE FROM prescription_payments WHERE id = ? AND user_id = ?', [(int) post('payment_id'), $uid]);
+            redirect($self . '#costs');
         case 'med_returned':
             q('UPDATE medications SET stock_count = 0 WHERE id = ? AND user_id = ? AND is_active = 0', [(int) post('med_id'), $uid]);
             flash('success', 'Thanks: marked as returned.');
@@ -388,7 +437,16 @@ function check_actions(array $c, string $self, DateTimeImmutable $today): void
     ?>
     <form method="post" action="<?= h(url($self)) ?>" class="done-form">
         <?= csrf_field() ?><input type="hidden" name="check_id" value="<?= $id ?>">
-        <?php if ($c['track'] === 'expiry'): ?>
+        <?php if ($c['track'] === 'expiry' && ($lengths = check_lengths($c))): ?>
+            <input type="hidden" name="action" value="check_certificate">
+            <label><span class="small">New certificate starts</span><input type="date" name="start" required value="<?= h($c['due_date'] && $c['due_date'] >= $today->format('Y-m-d') ? (new DateTimeImmutable($c['due_date']))->modify('+1 day')->format('Y-m-d') : $today->format('Y-m-d')) ?>"></label>
+            <select name="months" aria-label="How long"><?php foreach ($lengths as $mo): ?><option value="<?= $mo ?>"<?= selected($c['unit'] === "$mo-month") ?>><?= $mo ?> months</option><?php endforeach; ?></select>
+            <button class="btn btn-small btn-primary" type="submit">Save</button>
+        <?php elseif ($c['track'] === 'expiry' && $c['interval_days']): ?>
+            <input type="hidden" name="action" value="check_done">
+            <label><span class="small">Opened on</span><input type="date" name="date" required max="<?= h($today->format('Y-m-d')) ?>" value="<?= h($today->format('Y-m-d')) ?>"></label>
+            <button class="btn btn-small btn-primary" type="submit">Opened a new one</button>
+        <?php elseif ($c['track'] === 'expiry'): ?>
             <input type="hidden" name="action" value="check_replaced">
             <label><span class="small">New one expires</span><input type="date" name="expiry" required min="<?= h($today->format('Y-m-d')) ?>"></label>
             <button class="btn btn-small btn-primary" type="submit">Replaced</button>
@@ -437,7 +495,8 @@ function check_fields(array $c, ?string $prefix = null): void
     <?php endif; ?>
     <div class="grid-2">
         <?php if (empty($c['rule'])): ?>
-        <label<?= $show(['due', 'level', 'kit']) ?>><span>Repeats every <span class="muted small">(empty = one-off)</span></span>
+        <label<?= $show(['due', 'level', 'kit', 'expiry']) ?>><span><?= $track === 'expiry' && !$prefix ? 'Use within, once opened' : 'Repeats every' ?>
+            <span class="muted small">(<?= $prefix ? 'or, for an expiry date: use within this long of opening; ' : '' ?>empty = <?= $track === 'expiry' ? 'a fixed expiry date' : 'one-off' ?>)</span></span>
             <span class="inline-input"><input type="number" name="interval_n" min="1" max="7300" inputmode="numeric" value="<?= h($n) ?>">
                 <select name="interval_unit" aria-label="Unit">
                     <?php foreach (['days', 'weeks', 'months', 'years'] as $u): ?><option<?= selected($unit === $u) ?>><?= $u ?></option><?php endforeach; ?>
@@ -455,6 +514,10 @@ function check_fields(array $c, ?string $prefix = null): void
             <input type="number" name="per_week" min="0" step="any" inputmode="decimal" value="<?= h(!empty($c['per_week']) ? num($c['per_week']) : '') ?>"></label>
         <?php if (!$prefix && $track === 'level'): ?><input type="hidden" name="quantity" value="<?= (int) $c['quantity'] ?>"><?php endif; ?>
     </div>
+    <?php if (($GLOBALS['areaKey'] ?? '') === 'bloods' || !empty($c['medication_id'])): $meds = user_medications((int) current_user()['id']); ?>
+    <label class="narrow"><span>For which medicine <span class="muted small">(optional)</span></span>
+        <select name="medication_id"><option value="">&ndash;</option><?php foreach ($meds as $m): ?><option value="<?= (int) $m['id'] ?>"<?= selected((int) ($c['medication_id'] ?? 0) === (int) $m['id']) ?>><?= h($m['name'] . ' ' . $m['strength']) ?></option><?php endforeach; ?></select></label>
+    <?php endif; ?>
     <label<?= $show(['kit']) ?>><span>Contents <span class="muted small">(one per line; add an expiry after a bar, e.g. "Paracetamol | 2027-03")</span></span>
         <textarea name="items" rows="6" maxlength="5000"><?= h($c['items'] ?? '') ?></textarea></label>
     <label><span>Notes <span class="muted small">(optional)</span></span> <input name="notes" maxlength="500" value="<?= h($c['notes'] ?? '') ?>"></label>
@@ -502,7 +565,7 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
     </div>
     <?php if ($nights): ?>
     <p class="muted small">Last night: <strong><?= h(format_hours((float) $lastNight['value1'])) ?></strong><?= $lastNight['context'] ? ' · ' . h($lastNight['context']) : '' ?>
-        <?= $lastNight['source'] === 'apple_health' ? ' · from Apple Health' : '' ?>
+        <?= $lastNight['source'] ? ' · from ' . h(reading_source_label($lastNight['source'])) : '' ?>
         &middot; average <?= h(format_hours($avg)) ?> over your last <?= min(7, count($nights)) ?> night<?= min(7, count($nights)) === 1 ? '' : 's' ?></p>
     <?php $bars = array_reverse(array_slice($nights, 0, 14)); $w = 100 / 14; ?>
     <svg class="sleep-bars" viewBox="0 0 100 34" preserveAspectRatio="none" role="img"
@@ -644,6 +707,79 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
 </section>
 <?php endif; ?>
 
+<?php if ($areaKey === 'prescriptions'):
+    $price = fn (string $k, float $d) => (float) config("prescriptions.$k", $d);
+    $charge = $price('charge', 9.90);
+    $ppc3 = $price('ppc_3', 32.05);
+    $ppc12 = $price('ppc_12', 114.50);
+    $payments = q('SELECT * FROM prescription_payments WHERE user_id = ? ORDER BY paid_on DESC, id DESC', [$uid])->fetchAll();
+    $since = fn (int $months) => array_filter($payments, fn ($p) => $p['paid_on'] >= $today->modify("-$months months")->format('Y-m-d'));
+    $sum = fn (array $rows, string $f) => array_sum(array_map(fn ($r) => (float) $r[$f], $rows));
+    $last3 = $since(3);
+    $last12 = $since(12);
+    // Only NHS charges count towards a PPC; private and bought medicines are shown apart.
+    $nhsOnly = fn (array $rows) => array_filter($rows, fn ($p) => $p['kind'] === 'nhs');
+    $myMeds = user_medications($uid);
+    $regular = count(array_filter($myMeds, fn ($m) => !$m['as_needed'] && $m['supply_type'] === 'nhs'));
+    $notNhs = array_filter($myMeds, fn ($m) => $m['supply_type'] !== 'nhs');
+    $otherPaid = fn (array $rows) => $sum(array_filter($rows, fn ($p) => $p['kind'] !== 'nhs'), 'amount');
+    $age = $user['date_of_birth'] ? (new DateTimeImmutable($user['date_of_birth']))->diff($today)->y : null;
+    $activePpc = q("SELECT * FROM health_checks WHERE user_id = ? AND area = 'prescriptions' AND kind IN ('ppc', 'medex', 'matex', 'hc2') AND hidden = 0 AND due_date >= ? ORDER BY due_date DESC LIMIT 1",
+        [$uid, $today->format('Y-m-d')])->fetch(); ?>
+<section class="card" id="costs">
+    <h2>What prescriptions cost you</h2>
+    <?php if ($age !== null && $age >= 60): ?>
+    <p class="flash flash-success">You're <?= $age ?>, so NHS prescriptions are free in England. You shouldn't need to pay or buy a PPC.</p>
+    <?php elseif ($activePpc): ?>
+    <p class="flash flash-success">Your <?= h($activePpc['label']) ?> covers you until <?= h(date('j F Y', strtotime($activePpc['due_date']))) ?>, so there's nothing to pay for NHS prescriptions until then.</p>
+    <?php endif; ?>
+    <div class="tiles">
+        <div class="tile"><span class="tile-label">Last 3 months</span><span class="tile-value">&pound;<?= number_format($sum($last3, 'amount'), 2) ?></span><span class="tile-meta"><?= (int) $sum($last3, 'items') ?> items<?= $otherPaid($last3) > 0 ? ' · £' . number_format($otherPaid($last3), 2) . ' not NHS' : '' ?></span></div>
+        <div class="tile"><span class="tile-label">Last 12 months</span><span class="tile-value">&pound;<?= number_format($sum($last12, 'amount'), 2) ?></span><span class="tile-meta"><?= (int) $sum($last12, 'items') ?> items<?= $otherPaid($last12) > 0 ? ' · £' . number_format($otherPaid($last12), 2) . ' not NHS' : '' ?></span></div>
+    </div>
+    <h3>Would a prepayment certificate save money?</h3>
+    <ul class="insights">
+        <li>A 3-month PPC (&pound;<?= number_format($ppc3, 2) ?>) pays for itself at <?= (int) ceil($ppc3 / $charge) ?> items in 3 months; a 12-month PPC (&pound;<?= number_format($ppc12, 2) ?>)
+            at <?= (int) ceil($ppc12 / $charge) ?> items in a year (&pound;<?= number_format($charge, 2) ?> an item).</li>
+        <?php if ($nhsOnly($last12)): $paid = $sum($nhsOnly($last12), 'amount'); ?>
+        <li>In the last 12 months you paid NHS charges of &pound;<?= number_format($paid, 2) ?>: <?= $paid > $ppc12 ? '<strong>a 12-month PPC would have saved &pound;' . number_format($paid - $ppc12, 2) . '</strong>' : 'a 12-month PPC would have cost &pound;' . number_format($ppc12 - $paid, 2) . ' more' ?>.</li>
+        <?php endif; ?>
+        <?php if ($nhsOnly($last3)): $paid3 = $sum($nhsOnly($last3), 'amount'); ?>
+        <li>In the last 3 months you paid NHS charges of &pound;<?= number_format($paid3, 2) ?>: <?= $paid3 > $ppc3 ? '<strong>a 3-month PPC would have saved &pound;' . number_format($paid3 - $ppc3, 2) . '</strong>' : 'a 3-month PPC would have cost &pound;' . number_format($ppc3 - $paid3, 2) . ' more' ?>.</li>
+        <?php endif; ?>
+        <?php if ($regular): $yearly = $regular * 13 * $charge; ?>
+        <li>With <?= $regular ?> regular NHS-prescribed medicine<?= $regular === 1 ? '' : 's' ?> (about <?= $regular * 13 ?> items a year, for 28-day supplies) you'd pay about &pound;<?= number_format($yearly, 2) ?> a year.
+            <?= $yearly > $ppc12 ? '<strong>A 12-month PPC would save about &pound;' . number_format($yearly - $ppc12, 2) . '.</strong>' : 'Paying per item is cheaper.' ?></li>
+        <?php endif; ?>
+        <?php if ($notNhs): ?>
+        <li>Not covered by a PPC or exemption: <?= h(implode(', ', array_map(fn ($m) => $m['name'] . ' (' . ($m['supply_type'] === 'private' ? 'private prescription' : 'bought')
+            . ($m['supply_price'] !== null ? ', £' . number_format((float) $m['supply_price'], 2) : '') . ')', $notNhs))) ?>.
+            Their payments are logged here but left out of the sums above.</li>
+        <?php endif; ?>
+    </ul>
+    <p class="muted small">Prices from <?= h((string) config('prescriptions.prices_from', 'May 2025')) ?> (England). They usually change each April: check nhs.uk for the current ones.</p>
+    <details class="q-edit"<?= $payments ? '' : ' open' ?>><summary>Log a payment</summary>
+        <form method="post" action="<?= h(url($self)) ?>" class="inline-form"><?= csrf_field() ?><input type="hidden" name="action" value="payment_add">
+            <label>Date <input type="date" name="paid_on" required max="<?= h($today->format('Y-m-d')) ?>" value="<?= h($today->format('Y-m-d')) ?>"></label>
+            <label>Items <input type="number" name="items" min="0" max="50" value="1" class="count-input" data-charge="<?= h((string) $charge) ?>"></label>
+            <label>Paid (&pound;) <input type="number" name="amount" min="0" step="0.01" required value="<?= h(number_format($charge, 2, '.', '')) ?>" class="count-input"></label>
+            <label>For <select name="kind"><option value="nhs">NHS charge</option><option value="private">Private prescription</option><option value="otc">Bought without a prescription</option></select></label>
+            <label>Note <span class="muted small">(optional)</span><input name="note" maxlength="200"></label>
+            <button class="btn btn-primary" type="submit">Add</button></form>
+    </details>
+    <?php if ($payments): ?>
+    <details class="q-edit"><summary>Payments (<?= count($payments) ?>)</summary>
+        <ul class="plain"><?php foreach ($payments as $pay): ?>
+            <li class="logline"><span><strong><?= h(date('j M Y', strtotime($pay['paid_on']))) ?></strong> &pound;<?= number_format((float) $pay['amount'], 2) ?>
+                <span class="muted small"><?= (int) $pay['items'] ?> item<?= (int) $pay['items'] === 1 ? '' : 's' ?><?= $pay['kind'] !== 'nhs' ? ' · ' . h($pay['kind'] === 'private' ? 'private' : 'bought') : '' ?><?= $pay['note'] ? ' · ' . h($pay['note']) : '' ?></span></span>
+                <form method="post" action="<?= h(url($self)) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="payment_delete"><input type="hidden" name="payment_id" value="<?= (int) $pay['id'] ?>">
+                    <button class="btn-link danger small" type="submit">Delete</button></form></li>
+        <?php endforeach; ?></ul>
+    </details>
+    <?php endif; ?>
+</section>
+<?php endif; ?>
+
 <?php if ($areaKey === 'screening' && (!$user['date_of_birth'] || !$user['sex'])): ?>
 <p class="flash flash-warning">Add your <?= !$user['date_of_birth'] ? 'date of birth' : '' ?><?= !$user['date_of_birth'] && !$user['sex'] ? ' and ' : '' ?><?= !$user['sex'] ? 'sex' : '' ?>
     to <a href="<?= h(url('account.php#health-profile')) ?>">your health profile</a> to see which screening you're invited to and when.</p>
@@ -671,13 +807,38 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
                 <span><strong><?= h($c['label']) ?></strong>
                     <?= check_badge($c, $status) ?>
                     <br><span class="small"><?= h(check_due_text($c, $due, $today) ?: $note) ?></span>
-                    <span class="muted small"><?= $c['last_done'] ? ' · ' . h(['expiry' => 'replaced', 'stock' => 'restocked', 'level' => 'collected', 'kit' => 'checked'][$c['track']] ?? 'last done') . ' ' . h((new DateTimeImmutable($c['last_done']))->format('j M Y')) : '' ?>
+                    <span class="muted small"><?= $c['last_done'] ? ' · ' . h(['expiry' => check_lengths($c) ? 'started' : 'replaced', 'stock' => 'restocked', 'level' => 'collected', 'kit' => 'checked'][$c['track']] ?? 'last done') . ' ' . h((new DateTimeImmutable($c['last_done']))->format('j M Y')) : '' ?>
                         <?= $c['rule'] === 'autumn' ? ' · every autumn' : ($c['interval_days'] ? ' · ' . h(interval_label((int) $c['interval_days'])) : '') ?></span>
                     <?php if ($due && $note): ?><br><span class="muted small"><?= h($note) ?></span><?php endif; ?>
                     <?php if ($c['tip']): ?><br><span class="muted small"><?= h($c['tip']) ?></span><?php endif; ?>
                     <?php if ($c['notes']): ?><br><span class="small"><?= h($c['notes']) ?></span><?php endif; ?></span>
                 <?php check_actions($c, $self, $today); ?>
             </div>
+            <?php if ($c['medication_id'] && ($linked = find_medication((int) $c['medication_id'], $uid))): ?>
+            <p class="small muted check-med">For <?= med_dot($linked['colour']) ?> <?= h($linked['name']) ?> <?= h($linked['strength']) ?></p>
+            <?php endif; ?>
+            <?php if ($c['track'] === 'expiry' && $c['unit'] && check_lengths($c)): ?><p class="small muted check-med"><?= h($c['unit']) ?> certificate</p><?php endif; ?>
+            <?php if (check_has_results($c)): $results = check_results((int) $c['id']); ?>
+            <div class="results">
+                <?php if ($results): ?>
+                <table class="compact results-table">
+                    <thead><tr><th>Date</th><th>Result</th><th><span class="sr">Remove</span></th></tr></thead>
+                    <tbody><?php foreach (array_slice($results, 0, 5) as $r): ?>
+                        <tr><td class="nowrap"><?= h(date('j M Y', strtotime($r['taken_on']))) ?></td><td><strong><?= h($r['result']) ?></strong><?= $r['notes'] ? '<br><span class="muted small">' . h($r['notes']) . '</span>' : '' ?></td>
+                            <td><form method="post" action="<?= h(url($self)) ?>" data-confirm="Delete this result?"><?= csrf_field() ?><input type="hidden" name="action" value="result_delete"><input type="hidden" name="check_id" value="<?= (int) $c['id'] ?>"><input type="hidden" name="result_id" value="<?= (int) $r['id'] ?>">
+                                <button class="btn-link danger small" type="submit">Delete</button></form></td></tr>
+                    <?php endforeach; ?></tbody>
+                </table>
+                <?php endif; ?>
+                <details class="q-edit"><summary>Add a result</summary>
+                    <form method="post" action="<?= h(url($self)) ?>" class="inline-form"><?= csrf_field() ?><input type="hidden" name="action" value="result_add"><input type="hidden" name="check_id" value="<?= (int) $c['id'] ?>">
+                        <label>Date <input type="date" name="taken_on" required max="<?= h($today->format('Y-m-d')) ?>" value="<?= h($today->format('Y-m-d')) ?>"></label>
+                        <label>Result <input name="result" maxlength="200" required placeholder="e.g. 0.6 mmol/L, or All normal"></label>
+                        <label>Notes <span class="muted small">(optional)</span><input name="notes" maxlength="500"></label>
+                        <button class="btn btn-primary" type="submit">Save</button></form>
+                </details>
+            </div>
+            <?php endif; ?>
             <?php if ($c['track'] === 'kit' && ($items = kit_items($c))): ?>
             <ul class="kit-items">
                 <?php foreach ($items as $it): [$st, $txt] = expiry_status($it['expiry']?->format('Y-m-d'), $today); ?>
@@ -730,7 +891,8 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
         <div class="preset-list">
             <?php foreach ($presets as $kind => $p): ?>
             <form method="post" action="<?= h(url($self)) ?>" class="preset"><?= csrf_field() ?><input type="hidden" name="action" value="check_preset"><input type="hidden" name="kind" value="<?= h($kind) ?>">
-                <button class="btn" type="submit"><span>+ <?= h($p['label']) ?></span><span class="muted small"><?= h(isset($p['rule']) ? 'every autumn' : (['expiry' => 'expiry date', 'stock' => 'keep stocked', 'level' => 'fill level'][$p['track'] ?? 'due']
+                <button class="btn" type="submit"><span>+ <?= h($p['label']) ?></span><span class="muted small"><?= h(isset($p['rule']) ? 'every autumn' : ((($p['track'] ?? '') === 'expiry' && isset($p['interval'])) ? 'use within ' . ($p['interval'] <= 90 ? $p['interval'] . ' days' : preg_replace('/^every /', '', interval_label($p['interval']))) . ' of opening' : null)
+                    ?? (['expiry' => 'expiry date', 'stock' => 'keep stocked', 'level' => 'fill level'][$p['track'] ?? 'due']
                     ?? (isset($p['interval']) ? (($p['track'] ?? '') === 'kit' ? 'check ' : '') . interval_label($p['interval']) : 'set a date'))) ?></span></button></form>
             <?php endforeach; ?>
         </div>

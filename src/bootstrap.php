@@ -9,6 +9,10 @@ if (!is_file(APP_ROOT . '/config/config.php')) {
         . '<p>Copy <code>config/config.example.php</code> to <code>config/config.php</code> and fill in your database details.</p>');
 }
 $GLOBALS['APP_CONFIG'] = require APP_ROOT . '/config/config.php';
+// Site settings chosen by an admin in Pillbox (first-run setup or the Admin page) override config.php.
+if (is_file(APP_ROOT . '/config/settings.php')) {
+    $GLOBALS['APP_CONFIG'] = array_replace_recursive($GLOBALS['APP_CONFIG'], (array) (require APP_ROOT . '/config/settings.php'));
+}
 $GLOBALS['APP_CONFIG']['app']['base_path'] = rtrim((string) ($GLOBALS['APP_CONFIG']['app']['base_path'] ?? ''), '/');
 
 require APP_ROOT . '/src/helpers.php';
@@ -28,6 +32,12 @@ require APP_ROOT . '/src/mind.php';
 require APP_ROOT . '/src/mailer.php';
 require APP_ROOT . '/src/webauthn.php';
 require APP_ROOT . '/src/demo.php';
+require APP_ROOT . '/src/sharing.php';
+require APP_ROOT . '/src/backup.php';
+require APP_ROOT . '/src/updater.php';
+require APP_ROOT . '/src/push.php';
+require APP_ROOT . '/src/site_settings.php';
+require APP_ROOT . '/src/connectors.php';
 require APP_ROOT . '/src/tasks.php';
 require APP_ROOT . '/src/metrics.php';
 require APP_ROOT . '/src/health_import.php';
@@ -54,6 +64,14 @@ set_exception_handler(static function (Throwable $e): void {
 });
 
 send_security_headers();
+// Tidy addresses: send old ".php" page addresses to the tidy ones (feeds and sync URLs stay as they are).
+if (pretty_urls() && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
+    && preg_match('#/([a-z_]+)\.php$#', (string) parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), $m)
+    && !in_array($m[1], ['calendar', 'health_sync', 'cron', 'webauthn', 'push', 'connect'], true)) {
+    $query = (string) ($_SERVER['QUERY_STRING'] ?? '');
+    header('Location: ' . url($m[1] . '.php' . ($query !== '' ? '?' . $query : '')), true, 301);
+    exit;
+}
 if (!defined('PILLBOX_NO_SESSION')) {
     start_session();
     remember_site_url();

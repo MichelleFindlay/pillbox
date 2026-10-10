@@ -29,7 +29,7 @@ if (is_post() && local_login_enabled()) {
 render_header('Sign in');
 ?>
 <section class="auth-card card">
-    <img class="auth-logo" src="<?= h(asset('assets/logo.svg')) ?>" alt="" width="96" height="96">
+    <?= logo_svg(96, 'auth-logo') ?>
     <h1>Sign in to <?= h(config('app.name')) ?></h1>
     <p class="muted">Track your medication and the health readings your doctor asks for.</p>
 

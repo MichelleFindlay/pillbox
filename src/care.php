@@ -49,6 +49,8 @@ const CARE_AREAS = [
             'makeup'         => ['label' => 'Remove eye make-up', 'times' => ['22:00'], 'tip' => "Before bed, so it doesn't block the glands along your eyelids."],
         ],
         'checks' => [
+            'eye_drops'         => ['label' => 'Eye drops (once opened)', 'track' => 'expiry', 'interval' => 28,
+                'tip' => 'Most eye drops must be thrown away 28 days after opening. Some single-dose or preservative-free ones differ: check the leaflet.'],
             'eye_test'          => ['label' => 'Eye test', 'interval' => 730, 'tip' => 'The NHS recommends one at least every 2 years, or more often if your optician advises it.'],
             'diabetic_eye'      => ['label' => 'Diabetic eye screening', 'interval' => 365, 'tip' => 'Every 1 to 2 years if you have diabetes, as your screening service advises.'],
         ],
@@ -128,7 +130,41 @@ const CARE_AREAS = [
             'bp_monitor' => ['label' => 'Blood pressure monitor check and batteries', 'interval' => 365,
                 'tip' => 'Use a validated monitor. Once a year, change the batteries and compare it with a reading at your GP surgery or pharmacy.'],
             'thermometer' => ['label' => 'Thermometer batteries', 'interval' => 365],
-            'hba1c'     => ['label' => 'Diabetes review (HbA1c)', 'interval' => 365, 'tip' => 'At least yearly; often more if your treatment is changing.'],
+            'hba1c'     => ['label' => 'Diabetes review (HbA1c)', 'interval' => 365, 'results' => true, 'tip' => 'At least yearly; often more if your treatment is changing.'],
+        ],
+    ],
+    'bloods' => [
+        'title' => 'Blood tests', 'short' => 'Bloods', 'icon' => '&#x1F9EA;', 'default' => false, 'appointment' => 'blood_test',
+        'intro' => 'Some medicines need regular blood tests to stay safe. Keep track of when they are due, and what the results were.',
+        'help'  => 'Your prescriber decides how often you need each test. If you are unsure whether a test is still needed, ask before stopping it.',
+        'presets' => [],
+        'checks' => [
+            'lithium'      => ['label' => 'Lithium level', 'interval' => 91, 'results' => true, 'tip' => 'Usually every 3 months once settled (more often at first). Taken about 12 hours after your last dose.'],
+            'methotrexate' => ['label' => 'Methotrexate blood tests', 'interval' => 91, 'results' => true, 'tip' => 'Full blood count, liver and kidney function: often every 2 to 3 months once stable.'],
+            'inr'          => ['label' => 'INR (warfarin)', 'interval' => 42, 'results' => true, 'tip' => 'Your anticoagulation clinic sets how often: anything from weekly to every 12 weeks.'],
+            'thyroid'      => ['label' => 'Thyroid function', 'interval' => 365, 'results' => true, 'tip' => 'Usually yearly on levothyroxine, and 6 to 8 weeks after a dose change.'],
+            'kidney'       => ['label' => 'Kidney function (U&Es)', 'interval' => 365, 'results' => true, 'tip' => 'e.g. on ACE inhibitors, diuretics or metformin; often yearly.'],
+            'lipids'       => ['label' => 'Cholesterol', 'interval' => 365, 'results' => true],
+            'fbc'          => ['label' => 'Full blood count', 'interval' => 365, 'results' => true],
+        ],
+    ],
+    'prescriptions' => [
+        'title' => 'Prescriptions and payments', 'short' => 'Payments', 'icon' => '&#x1F4B7;', 'default' => false, 'appointment' => null,
+        'intro' => 'Prepayment and exemption certificates, and what you pay for prescriptions. (Prescriptions are free in Scotland, Wales and Northern Ireland.)',
+        'help'  => 'In England prescriptions are free if you are 60 or over, under 16, 16 to 18 and in full-time education, or have a valid exemption certificate. '
+                 . 'The eligibility checker on nhs.uk tells you if you qualify.',
+        'presets' => [],
+        'checks' => [
+            'ppc'     => ['label' => 'Prescription Prepayment Certificate (PPC)', 'track' => 'expiry', 'lengths' => [3, 12],
+                'tip' => 'Covers all your NHS prescriptions. Renew before it runs out (it can renew itself by Direct Debit).'],
+            'hrt_ppc' => ['label' => 'HRT Prepayment Certificate', 'track' => 'expiry', 'lengths' => [12],
+                'tip' => 'Covers HRT medicines on the HRT list only, for 12 months.'],
+            'medex'   => ['label' => 'Medical exemption certificate (MedEx)', 'track' => 'expiry',
+                'tip' => 'Usually lasts 5 years, or until you turn 60. You should be sent a renewal form; if not, ask your GP surgery.'],
+            'matex'   => ['label' => 'Maternity exemption certificate (MatEx)', 'track' => 'expiry',
+                'tip' => "Lasts until 12 months after your due date (or your baby's birth, if you applied after)."],
+            'hc2'     => ['label' => 'HC2 certificate (NHS Low Income Scheme)', 'track' => 'expiry',
+                'tip' => 'Valid for the dates printed on it. Reapply about 4 weeks before it ends.'],
         ],
     ],
     'feet' => [
@@ -190,7 +226,7 @@ const CARE_AREAS = [
         'checks' => [
             'skin_check' => ['label' => 'Skin check (GP or dermatologist)', 'interval' => 365, 'tip' => 'Yearly if you are at higher risk, or as your doctor advises.'],
             'dressings'  => ['label' => 'Dressings', 'track' => 'stock', 'unit' => 'dressings', 'low' => 5, 'tip' => 'Restock before you run out: ask your GP surgery or nurse for a repeat if they are prescribed.'],
-            'sunscreen'  => ['label' => 'Sunscreen (once opened)', 'track' => 'expiry', 'tip' => 'Most last about 12 months once opened: look for the open-jar symbol, e.g. 12M.'],
+            'sunscreen'  => ['label' => 'Sunscreen (once opened)', 'track' => 'expiry', 'interval' => 365, 'tip' => 'Most last about 12 months once opened: look for the open-jar symbol, e.g. 12M.'],
             'emollient'  => ['label' => 'Emollient', 'track' => 'stock', 'unit' => 'tubs or tubes', 'low' => 1, 'tip' => 'Keep a spare. Check the use-by after opening on pump dispensers.'],
         ],
     ],
@@ -290,10 +326,10 @@ function care_area(string $area): array
 function user_care_areas(array $user): array
 {
     if ($user['care_areas'] === null) {
-        return array_keys(array_filter(CARE_AREAS, fn ($a) => $a['default']));
+        return array_values(array_filter(array_keys(array_filter(CARE_AREAS, fn ($a) => $a['default'])), fn ($k) => share_area_allowed($k, $user)));
     }
     $chosen = explode(',', (string) $user['care_areas']);
-    return array_values(array_filter(array_keys(CARE_AREAS), fn ($k) => empty(CARE_AREAS[$k]['hidden']) && in_array($k, $chosen, true)));
+    return array_values(array_filter(array_keys(CARE_AREAS), fn ($k) => empty(CARE_AREAS[$k]['hidden']) && in_array($k, $chosen, true) && share_area_allowed($k, $user)));
 }
 
 /** Areas whose routines and checks go on Today and in the calendar feed: Care categories, plus Mind's habits. */

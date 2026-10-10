@@ -22,7 +22,7 @@ function github_repo_url(): ?string
 
 /**
  * The latest release on GitHub, cached for 12 hours (1 hour after a failure).
- * @return array{version: ?string, url: ?string, name: ?string, published_at: ?string, checked_at: int, error: ?string}|null
+ * @return array{version: ?string, tag: ?string, zip: ?string, url: ?string, name: ?string, published_at: ?string, checked_at: int, error: ?string}|null
  *         null when checking is switched off
  */
 function latest_version(bool $refresh = false): ?array
@@ -34,7 +34,7 @@ function latest_version(bool $refresh = false): ?array
     $cache = storage_path('version_check.json');
     if (!$refresh && is_file($cache)) {
         $cached = json_decode((string) file_get_contents($cache), true);
-        if (is_array($cached) && array_key_exists('url', $cached) && $cached['checked_at'] > time() - ($cached['error'] ? 3600 : 43200)) {
+        if (is_array($cached) && array_key_exists('zip', $cached) && $cached['checked_at'] > time() - ($cached['error'] ? 3600 : 43200)) {
             return $cached;
         }
     }
@@ -49,10 +49,12 @@ function latest_version(bool $refresh = false): ?array
     $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     $release = is_string($body) ? json_decode($body, true) : null;
 
-    $result = ['version' => null, 'url' => null, 'name' => null, 'published_at' => null, 'checked_at' => time(), 'error' => null];
+    $result = ['version' => null, 'tag' => null, 'zip' => null, 'url' => null, 'name' => null, 'published_at' => null, 'checked_at' => time(), 'error' => null];
     $tag = is_array($release) ? preg_replace('/^v(?=\d)/i', '', trim((string) ($release['tag_name'] ?? ''))) : '';
     if ($status === 200 && preg_match('/^\d+(\.\d+){0,3}([-+][\w.]+)?$/', $tag)) {
         $result['version'] = $tag;
+        $result['tag'] = (string) $release['tag_name'];
+        $result['zip'] = (string) ($release['zipball_url'] ?? '');
         $result['url'] = (string) ($release['html_url'] ?? '');
         $result['name'] = (string) ($release['name'] ?? '') ?: null;
         $result['published_at'] = (string) ($release['published_at'] ?? '') ?: null;

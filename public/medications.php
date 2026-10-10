@@ -45,6 +45,15 @@ if (is_post()) {
             if ($expiry) {
                 q('UPDATE medications SET expiry_date = ? WHERE id = ?', [$expiry->format('Y-m-d'), $med['id']]);
             }
+            $paid = $kind === 'collected' && $med['supply_type'] !== 'nhs' ? trim(post('paid')) : '';
+            if ($paid !== '' && (!is_numeric($paid) || (float) $paid < 0 || (float) $paid > 99999)) {
+                flash('error', 'Enter what you paid as an amount in pounds, or leave it empty.');
+                redirect('medications.php#med-' . $med['id']);
+            }
+            if ($paid !== '' && (float) $paid > 0) {
+                q('INSERT INTO prescription_payments (user_id, paid_on, items, amount, note, kind, medication_id) VALUES (?, ?, 1, ?, ?, ?, ?)',
+                    [$uid, $todayYmd, round((float) $paid, 2), mb_substr($med['name'], 0, 200), $med['supply_type'], $med['id']]);
+            }
             $after = transaction(function () use ($med, $kind, $qty, $uid) {
                 $current = q('SELECT stock_count FROM medications WHERE id = ? FOR UPDATE', [$med['id']])->fetchColumn();
                 $after = $kind === 'collected' ? (float) $current + $qty : $qty;
@@ -57,7 +66,8 @@ if (is_post()) {
             flash('success', ($kind === 'collected' ? 'Added ' . dose_label($qty, $med['dose_unit']) . ' to ' : 'Stock count updated for ')
                 . $med['name'] . '. You now have ' . dose_label($after, $med['dose_unit'])
                 . ($days !== null ? ' (about ' . (int) floor($days) . ' days).' : '.')
-                . ($expiry ? ' Expiry date set to ' . $expiry->format('j M Y') . '.' : ''));
+                . ($expiry ? ' Expiry date set to ' . $expiry->format('j M Y') . '.' : '')
+                . ($paid !== '' && (float) $paid > 0 ? ' Logged £' . number_format((float) $paid, 2) . ' paid.' : ''));
             redirect('medications.php#med-' . $med['id']);
         case 'delete':
             owner_only('Permanently deleting a medicine');
@@ -82,6 +92,11 @@ foreach (q(
     $lastCollected[$e['medication_id']] = $e;
 }
 $stopped = array_filter($meds, fn ($m) => !$m['is_active']);
+// Checks linked to a medicine (e.g. blood tests it needs).
+$medChecks = [];
+foreach (q('SELECT * FROM health_checks WHERE user_id = ? AND medication_id IS NOT NULL AND hidden = 0', [$uid]) as $c) {
+    $medChecks[$c['medication_id']][] = $c;
+}
 
 render_header('Medications', 'meds');
 ?>
@@ -117,6 +132,7 @@ render_header('Medications', 'meds');
             <div>
                 <h2><?= h($m['name']) ?> <span class="muted"><?= h($m['strength']) ?></span></h2>
                 <p class="muted small"><?= h(ucfirst($m['form'])) ?><?= $m['reason'] ? ' · for ' . h($m['reason']) : '' ?></p>
+                <?php if ($m['supply_type'] !== 'nhs'): ?><p><span class="badge"><?= h($m['supply_type'] === 'private' ? 'Private prescription' : 'Bought') ?><?= $m['supply_price'] !== null ? ' · £' . number_format((float) $m['supply_price'], 2) : '' ?></span></p><?php endif; ?>
             </div>
         </header>
         <?php if ($m['as_needed']): ?>
@@ -144,7 +160,7 @@ render_header('Medications', 'meds');
             <?= $m['prescriber'] ? ' · ' . h($m['prescriber']) : '' ?>
         </p>
         <details class="restock">
-            <summary class="btn btn-small btn-primary">Prescription collected</summary>
+            <summary class="btn btn-small btn-primary"><?= $m['supply_type'] === 'otc' ? 'Bought more' : 'Prescription collected' ?></summary>
             <form method="post" class="restock-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int) $m['id'] ?>">
@@ -160,6 +176,10 @@ render_header('Medications', 'meds');
                     </label>
                     <label><span>Expiry date <span class="muted small">(optional)</span></span>
                         <input type="date" name="expiry_date" value=""></label>
+                    <?php if ($m['supply_type'] !== 'nhs'): ?>
+                    <label><span>Paid (&pound;) <span class="muted small">(optional, for new supplies)</span></span>
+                        <input type="number" name="paid" min="0" step="0.01" inputmode="decimal" value="<?= $m['supply_price'] !== null ? h(number_format((float) $m['supply_price'], 2, '.', '')) : '' ?>"></label>
+                    <?php endif; ?>
                     <button class="btn btn-primary" type="submit">Update stock</button>
                 </div>
                 <p class="muted small">Currently <?= $m['stock_count'] !== null ? h(dose_label($m['stock_count'], $m['dose_unit'])) : 'not tracked' ?>.</p>
@@ -168,6 +188,10 @@ render_header('Medications', 'meds');
         <?php if ($user['meds_show_changes'] && isset($latestChanges[$m['id']]) && $latestChanges[$m['id']]['kind'] !== 'started'): $lc = $latestChanges[$m['id']]; ?>
         <p class="small last-change">Changed <?= h(date('j M Y', strtotime($lc['effective_date']))) ?>: <?= h($lc['summary']) ?></p>
         <?php endif; ?>
+        <?php foreach ($medChecks[$m['id']] ?? [] as $c): [$due] = check_next_due($c, $user, local_today()); $st = check_status($due, local_today()); ?>
+        <p class="small<?= in_array($st, ['overdue', 'soon'], true) ? ' warn' : '' ?>">&#x1F9EA; <a href="<?= h(url('care.php?area=' . $c['area'] . '#check-' . $c['id'])) ?>"><?= h($c['label']) ?></a>:
+            <?= h(lcfirst(check_due_text($c, $due, local_today()) ?: 'add when it was last done')) ?></p>
+        <?php endforeach; ?>
         <?php if ($m['mental_health'] && mind_enabled($user)): ?>
         <p class="small"><a href="<?= h(url('mind_meds.php#med-' . $m['id'])) ?>">Side effects and how I'm feeling</a></p>
         <?php endif; ?>

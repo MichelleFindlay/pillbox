@@ -7,7 +7,7 @@
 require __DIR__ . '/../src/bootstrap.php';
 
 $user = require_login();
-if (isset($user['_acting']) && !$user['_acting']['mind']) {
+if (isset($user['_acting']) && !share_can('mind', 'view', $user)) {
     $user = real_user(); // the safety plan is Mind content: show the carer's own help, not the owner's
 }
 $uid = (int) $user['id'];

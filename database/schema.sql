@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS users (
     email_appointments TINYINT(1)  NOT NULL DEFAULT 0,  -- appointment reminder emails
     last_digest_on   DATE          NULL,
     is_demo          TINYINT(1)    NOT NULL DEFAULT 0,  -- a throwaway demo account (deleted on sign-out)
+    push_doses       TINYINT(1)    NOT NULL DEFAULT 1,  -- push notifications: dose reminders
+    push_care        TINYINT(1)    NOT NULL DEFAULT 1,  -- ... Care reminders and "coming up"
+    push_appointments TINYINT(1)   NOT NULL DEFAULT 1,  -- ... appointment reminders
+    push_private     TINYINT(1)    NOT NULL DEFAULT 0,  -- ... just "You have a reminder" on the lock screen
+    onboarded_at     DATETIME      NULL,     -- finished (or skipped) the first-login setup
     created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at    DATETIME      NULL,
     PRIMARY KEY (id),
@@ -93,6 +98,8 @@ CREATE TABLE IF NOT EXISTS medications (
     stock_count     DECIMAL(10,2) NULL,
     low_stock_days  SMALLINT UNSIGNED NOT NULL DEFAULT 7,
     expiry_date     DATE          NULL,          -- use-by date of the current supply, if known
+    supply_type     VARCHAR(8)    NOT NULL DEFAULT 'nhs', -- nhs | private (private prescription) | otc (bought without one)
+    supply_price    DECIMAL(8,2)  NULL,          -- what a supply costs, for private and bought medicines
     mental_health   TINYINT(1)    NOT NULL DEFAULT 0, -- shown in Mind, with side-effect and "how I feel" notes
     start_date      DATE          NOT NULL,
     end_date        DATE          NULL,
@@ -305,6 +312,7 @@ CREATE TABLE IF NOT EXISTS health_checks (
     per_week       DECIMAL(8,2)  NULL,                    -- stock: roughly how many are used a week
     counted_on     DATE          NULL,                    -- stock / level: when quantity was last set
     items          TEXT          NULL,                    -- kit: contents, one per line, "Name | YYYY-MM-DD" with an optional expiry
+    medication_id  INT UNSIGNED  NULL,                    -- e.g. a blood test needed for this medicine
     tip            VARCHAR(255)  NULL,
     notes          VARCHAR(500)  NULL,
     remind         TINYINT(1)    NOT NULL DEFAULT 1,      -- show in the calendar feed on the due date
@@ -496,8 +504,10 @@ CREATE TABLE IF NOT EXISTS data_shares (
     id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
     owner_id      INT UNSIGNED NOT NULL,
     grantee_id    INT UNSIGNED NOT NULL,
-    level         VARCHAR(8)    NOT NULL DEFAULT 'view',   -- view | manage
-    include_mind  TINYINT(1)    NOT NULL DEFAULT 0,
+    level         VARCHAR(8)    NOT NULL DEFAULT 'view',   -- before 1.2: view | manage (now in permissions)
+    include_mind  TINYINT(1)    NOT NULL DEFAULT 0,        -- before 1.2 (now in permissions)
+    permissions   TEXT          NULL,                      -- JSON: section => none|view|log|edit, care_hidden [areas], journal bool
+    expires_on    DATE          NULL,                      -- access ends after this date
     created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at  DATETIME      NULL,
     PRIMARY KEY (id),
@@ -520,4 +530,88 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
     PRIMARY KEY (id),
     KEY ix_webauthn_user (user_id),
     CONSTRAINT fk_webauthn_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- What someone with shared access changed, for the owner to see.
+CREATE TABLE IF NOT EXISTS share_activity (
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    share_id    INT UNSIGNED NOT NULL,
+    happened_at DATETIME      NOT NULL,                   -- UTC
+    page        VARCHAR(40)   NOT NULL,
+    action      VARCHAR(40)   NULL,
+    PRIMARY KEY (id),
+    KEY ix_activity_share (share_id, happened_at),
+    CONSTRAINT fk_activity_share FOREIGN KEY (share_id) REFERENCES data_shares (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Results for checks that have them (blood tests, HbA1c...).
+CREATE TABLE IF NOT EXISTS check_results (
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    check_id    INT UNSIGNED NOT NULL,
+    taken_on    DATE          NOT NULL,
+    result      VARCHAR(200)  NOT NULL,                   -- e.g. "0.6 mmol/L" or "All normal"
+    notes       VARCHAR(500)  NULL,
+    PRIMARY KEY (id),
+    KEY ix_results_check (check_id, taken_on),
+    CONSTRAINT fk_results_check FOREIGN KEY (check_id) REFERENCES health_checks (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- What was paid for prescriptions, for the cost log and the prepayment certificate calculator.
+CREATE TABLE IF NOT EXISTS prescription_payments (
+    id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id    INT UNSIGNED NOT NULL,
+    paid_on    DATE          NOT NULL,
+    items      SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    amount     DECIMAL(8,2)  NOT NULL,
+    note       VARCHAR(200)  NULL,
+    kind       VARCHAR(8)    NOT NULL DEFAULT 'nhs', -- nhs (NHS charge) | private | otc
+    medication_id INT UNSIGNED NULL,
+    PRIMARY KEY (id),
+    KEY ix_payments_user (user_id, paid_on),
+    CONSTRAINT fk_payments_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Web Push: each device (browser) that has turned notifications on.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id       INT UNSIGNED NOT NULL,
+    endpoint      VARCHAR(1000) NOT NULL,
+    endpoint_hash CHAR(64)      NOT NULL,
+    p256dh        VARCHAR(200)  NOT NULL,
+    auth          VARCHAR(100)  NOT NULL,
+    label         VARCHAR(100)  NOT NULL,
+    created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at  DATETIME      NULL,
+    fail_count    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_push_endpoint (endpoint_hash),
+    KEY ix_push_user (user_id),
+    CONSTRAINT fk_push_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Notifications already sent, so each reminder goes out once.
+CREATE TABLE IF NOT EXISTS push_sent (
+    user_id   INT UNSIGNED NOT NULL,
+    ref       VARCHAR(100)  NOT NULL,
+    sent_at   DATETIME      NOT NULL,
+    PRIMARY KEY (user_id, ref),
+    KEY ix_push_sent_at (sent_at),
+    CONSTRAINT fk_push_sent_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Connected services (WHOOP, Fitbit, Withings, Oura): OAuth tokens (encrypted) and sync state.
+CREATE TABLE IF NOT EXISTS connections (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id        INT UNSIGNED NOT NULL,
+    provider       VARCHAR(20)   NOT NULL,
+    access_token   TEXT          NOT NULL,                 -- encrypted with storage/app.key
+    refresh_token  TEXT          NULL,                     -- encrypted
+    expires_at     DATETIME      NULL,                     -- UTC
+    external_user  VARCHAR(100)  NULL,
+    last_sync_at   DATETIME      NULL,
+    last_error     VARCHAR(500)  NULL,
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_connection (user_id, provider),
+    CONSTRAINT fk_connection_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

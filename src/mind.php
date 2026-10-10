@@ -92,7 +92,7 @@ const THOUGHT_FIELDS = [
 function mind_enabled(array $user): bool
 {
     // Someone with shared access only sees Mind if the owner included it.
-    return (bool) $user['mind_enabled'] && (!isset($user['_acting']) || $user['_acting']['mind']);
+    return (bool) $user['mind_enabled'] && share_can('mind', 'view', $user);
 }
 
 /* ---------- PIN lock ---------- */
@@ -103,7 +103,7 @@ function mind_unlocked(array $user): bool
 {
     // The owner chose to share Mind with this person, so their PIN isn't asked for.
     if (isset($user['_acting'])) {
-        return $user['_acting']['mind'];
+        return share_can('mind', 'view', $user);
     }
     return !$user['mind_pin_hash'] || (($_SESSION['mind_unlocked_at'] ?? 0) > time() - MIND_UNLOCK_SECONDS);
 }

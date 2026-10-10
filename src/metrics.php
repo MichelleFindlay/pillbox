@@ -40,6 +40,8 @@ function builtin_metrics(): array
         'sleep' => ['label' => 'Sleep', 'fields' => [$f('Sleep', 'hours', 0, 24, 0.25)], 'contexts' => SLEEP_QUALITY],
         'fluid_intake' => ['label' => 'Fluid intake', 'fields' => [$f('Fluid', 'ml', 0, 10000, 50)]],
         'steps' => ['label' => 'Steps', 'fields' => [$f('Steps', 'steps', 0, 100000)]],
+        'hrv' => ['label' => 'Heart rate variability', 'fields' => [$f('HRV', 'ms', 1, 300)], 'help' => 'From a watch, ring or strap: usually measured overnight.'],
+        'calories' => ['label' => 'Calories eaten', 'fields' => [$f('Calories', 'kcal', 0, 15000, 10)]],
         'symptom' => [
             'label' => 'Symptom / side effect',
             'fields' => [$f('Severity', '/10', 0, 10)],

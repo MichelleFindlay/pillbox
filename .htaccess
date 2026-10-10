@@ -8,7 +8,7 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
     RewriteEngine On
     # Block the application's private folders and files.
-    RewriteRule ^(src|config|database|storage)(/|$) - [F,L]
+    RewriteRule ^(src|config|database|storage|bin)(/|$) - [F,L]
     RewriteRule (^|/)\. - [F,L]
     RewriteRule \.(sql|md|example)$ - [F,L]
     # Serve everything else from public/.

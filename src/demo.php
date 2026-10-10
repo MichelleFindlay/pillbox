@@ -34,8 +34,8 @@ function create_demo_account(): array
     // Tidy up abandoned demos here too, for sites without the scheduled tasks.
     q('DELETE FROM users WHERE is_demo = 1 AND created_at < ?', [gmdate('Y-m-d H:i:s', time() - 3600 * max(1, (int) config('demo.hours', 2)))]);
     return transaction(function () {
-        q("INSERT INTO users (username, display_name, password_hash, auth_provider, timezone, is_demo, date_of_birth, sex, care_areas, enabled_metrics)
-           VALUES (?, 'Nell Whitcombe', NULL, 'local', 'Europe/London', 1, '1979-03-14', 'female', ?, ?)",
+        q("INSERT INTO users (username, display_name, password_hash, auth_provider, timezone, is_demo, date_of_birth, sex, care_areas, enabled_metrics, onboarded_at)
+           VALUES (?, 'Nell Whitcombe', NULL, 'local', 'Europe/London', 1, '1979-03-14', 'female', ?, ?, UTC_TIMESTAMP())",
             ['demo-' . bin2hex(random_bytes(6)), 'dental,eyes,sleep,activity,diabetes,womens,emergency,screening,vaccinations',
                 'blood_glucose,blood_pressure,weight,sleep,mood,symptom']);
         $uid = (int) db()->lastInsertId();
