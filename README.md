@@ -6,7 +6,8 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
 
 - **Medications**: search the NHS medicines dictionary (dm+d) or type them in; add, edit, stop (history is kept) or permanently delete. Each medicine can have several
   dose times with **different amounts**, on **chosen weekdays**, and between set dates (useful for reducing
-  doses). "As needed" medicines can have a daily maximum.
+  doses). "As needed" medicines can have a daily maximum, and any medicine an optional **expiry date**
+  (set when you add it or collect a new supply), flagged on Today when it's within 30 days or past.
 - **Today view**: tick off doses (Take, Skip or Undo), see missed doses, get low-stock warnings and log
   as-needed doses.
 - **Health readings**: blood pressure, heart rate, blood glucose, ketones, weight, temperature, SpO₂,
@@ -21,6 +22,36 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
   add earlier changes by hand.
 - **Travel mode**: plan trips across time zones and choose to switch to local time, stay on home time, or
   shift gradually by 1–4 hours a day, with a day-by-day preview of dose times.
+- **Care** (the **Care** tab): dental care, eye care, sleep, physical activity & rehab, foot health, women's health,
+  hearing, skin, screening and vaccinations. Choose which appear under **Account → Health profile**, along with your
+  date of birth and sex (for screening). Each category can have:
+  - **Routines** ticked off on the Today page: one-tap presets (brushing, screen breaks, physio exercises with reps,
+    stretching, foot checks, monthly mole checks, CPAP cleaning...) or your own, at set times on chosen days or every
+    few days or weeks, with a streak and a 7-day view for catching up on missed ticks.
+  - **Checks and renewals** with a next due date: eye and hearing tests, skin checks, pill reviews, implant and coil
+    replacements, flu (every autumn), COVID boosters, tetanus, travel jabs. Anything overdue or due within 30 days is
+    listed under **Coming up** on Today.
+  - **NHS screening**: cervical, breast, bowel and AAA, on NHS England intervals, worked out from your date of birth
+    and when you were last screened.
+  - **Cycle tracking** (Women's health): log periods, see your average cycle and when the next is expected.
+  - **Sleep log**: bedtime, wake time, time awake and how you slept, saved as a Sleep reading alongside Apple Health
+    nights, with the last 14 nights as a chart.
+  Tasks marked **Remind me**, and checks on their due dates, are added to your private calendar feed with an alert,
+  so your phone's calendar reminds you.
+- **Care summary**: a printable page (Care → **Summary**) for any period and one or all categories: how often each
+  routine task was done, every check, screening and vaccination with last done and next due, sleep and cycle figures.
+- **Mind** (its own tab; switch it off under Account → Health profile):
+  - **Check-ins**: mood (1 to 5), energy, motivation, anxiety (0 to 10), words that fit, triggers and a note, with
+    30 and 90-day charts and patterns such as "mood is lower after under 6 hours of sleep". No streaks.
+  - **Help now** (the lifebuoy in the header, on every page): UK crisis lines (999, NHS 111 option 2, Samaritans,
+    Shout), editable for other countries, your own people and professionals, and your **safety plan** in the
+    NHS / Stanley-Brown format. A check-in saying you're having thoughts of harming yourself, or any answer above
+    "Not at all" to PHQ-9 question 9, goes straight here.
+  - **Coping toolkit** of what helps you, shown after a low check-in, plus box breathing and 5-4-3-2-1 grounding timers.
+  - **PHQ-9** and **GAD-7** with scores over time; **journal** with prompts, and CBT **thought records**.
+  - **Summary**: a printable 4, 8 or 12-week report (notes and journal only if you tick them).
+  - **Privacy**: an optional PIN (locks after 10 minutes; crisis contacts are never locked), and a daily check-in
+    reminder in the calendar feed worded just "Pillbox check-in".
 - **Appointments**: GP, specialist, hospital, dentist, optician, blood tests and more, with a private
   calendar link per person that Apple Calendar, Google Calendar and Outlook can subscribe to.
 - **Doctor's report**: a printable summary (or save as PDF), plus CSV export.
@@ -281,10 +312,12 @@ matched to ones already in Pillbox.
 
 The installed version is in the `VERSION` file and is shown in the footer, with a link to the GitHub
 repository (`github_repo` in `config/config.php`; set it to `''` to hide both). For admins, Pillbox compares
-its `VERSION` with the one on the `update_branch` branch on GitHub, at most twice a day, and shows
-**Update available** in the footer when GitHub has a higher number. The Admin page has **Check now**.
+its `VERSION` with the newest published release on GitHub, at most twice a day, and shows
+**Update available** in the footer when that release is newer. Drafts and pre-releases are ignored. The
+Admin page has **Check now** and links to the release notes.
 
-- **To release a new version:** raise the number in `VERSION` (e.g. `1.0.0` → `1.1.0`) and merge it into `main`.
+- **To release a new version:** raise the number in `VERSION` (e.g. `1.0.0` → `1.1.0`), merge it into `main`,
+  then publish a GitHub release tagged with the same number (`v1.1.0` or `1.1.0`).
 - **Private repository:** create a fine-grained GitHub token with read-only **Contents** access to the
   repository and put it in `github_token`. Without it, GitHub hides the repository and the check reports
   that it couldn't look.

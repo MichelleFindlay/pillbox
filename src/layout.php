@@ -30,6 +30,9 @@ function icon(string $name): string
         'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 14h2M14 14h2M8 17.5h2"/>',
         'meds'     => '<rect x="1.5" y="8.5" width="21" height="7" rx="3.5" transform="rotate(-45 12 12)"/><path d="M8.3 8.3l7.4 7.4"/>',
         'readings' => '<path d="M3 12h4l2-5 4 10 2-5h6"/>',
+        'mind'     => '<path d="M12 21V11"/><path d="M12 13c-4.5 0-7-2.5-7-7 4.5 0 7 2.5 7 7z"/><path d="M12 11c0-4 2.2-6.5 7-6.5 0 4.5-2.5 6.5-7 6.5z"/>',
+        'help'     => '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>',
+        'care'     => '<path d="M12 20s-7.5-4.5-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.5 12 20 12 20z"/>',
         'history'  => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         'report'   => '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
         'account'  => '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
@@ -48,10 +51,15 @@ function render_header(string $title, string $active = ''): void
     $nav = [
         'today'    => ['index.php', 'Today'],
         'meds'     => ['medications.php', 'Meds'],
+        'care'     => ['care.php', 'Care'],
+        'mind'     => ['mind.php', 'Mind'],
         'readings' => ['readings.php', 'Readings'],
         'history'  => ['history.php', 'History'],
         'report'   => ['report.php', 'Report'],
     ];
+    if (!$user || !mind_enabled($user)) {
+        unset($nav['mind']);
+    }
     [$theme, $mode] = user_theme($user);
     [$barLight, $barDark] = THEMES[$theme]['bar'];
     ?><!doctype html>
@@ -93,6 +101,9 @@ function render_header(string $title, string $active = ''): void
         <?php endforeach; ?>
     </nav>
     <div class="usermenu">
+        <?php if (mind_enabled($user)): ?>
+        <a class="iconlink help-link" href="<?= h(url('help.php')) ?>" title="Get help now"<?= $active === 'help' ? ' aria-current="page"' : '' ?>><?= icon('help') ?><span class="help-label">Help</span></a>
+        <?php endif; ?>
         <a class="iconlink" href="<?= h(url('appointments.php')) ?>" title="Appointments"<?= $active === 'appointments' ? ' aria-current="page"' : '' ?>><?= icon('calendar') ?><span class="sr">Appointments</span></a>
         <?php if ($user['is_admin']): ?>
         <a class="iconlink" href="<?= h(url('admin.php')) ?>" title="Admin"<?= $active === 'admin' ? ' aria-current="page"' : '' ?>><?= icon('admin') ?><span class="sr">Admin</span></a>

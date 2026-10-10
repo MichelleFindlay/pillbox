@@ -83,7 +83,8 @@ function ics_utc(string $utc): string
     return (new DateTimeImmutable($utc, new DateTimeZone('UTC')))->format('Ymd\THis\Z');
 }
 
-function appointments_ics(array $user, array $appointments, string $host): string
+/** $extraEvents: more VEVENTs to include, already formatted (e.g. care routine reminders). */
+function appointments_ics(array $user, array $appointments, string $host, string $extraEvents = ''): string
 {
     $ics = ics_line('BEGIN:VCALENDAR')
         . ics_line('VERSION:2.0')
@@ -126,7 +127,7 @@ function appointments_ics(array $user, array $appointments, string $host): strin
         }
         $ics .= ics_line('END:VEVENT');
     }
-    return $ics . ics_line('END:VCALENDAR');
+    return $ics . $extraEvents . ics_line('END:VCALENDAR');
 }
 
 /* ---------- Preparing for an appointment ---------- */

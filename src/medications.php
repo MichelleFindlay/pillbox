@@ -14,6 +14,25 @@ function weekday_bit(DateTimeInterface $date): int
     return 1 << ((int) $date->format('N') - 1);
 }
 
+/**
+ * Whether a medicine's supply has expired or expires within 30 days.
+ * @return array{0: ?string, 1: string} ['expired' | 'soon' | null, wording]
+ */
+function expiry_status(?string $expiry, DateTimeImmutable $today): array
+{
+    if (!$expiry) {
+        return [null, ''];
+    }
+    $date = new DateTimeImmutable($expiry, $today->getTimezone());
+    $days = (int) $today->diff($date)->format('%r%a');
+    return match (true) {
+        $days < 0   => ['expired', 'Expired ' . $date->format('j M Y')],
+        $days === 0 => ['expired', 'Expires today'],
+        $days <= 30 => ['soon', "Expires in $days day" . ($days === 1 ? '' : 's') . ' (' . $date->format('j M') . ')'],
+        default     => [null, 'Expires ' . $date->format('j M Y')],
+    };
+}
+
 function days_label(int $mask): string
 {
     $mask &= EVERY_DAY;

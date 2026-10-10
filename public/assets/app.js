@@ -96,6 +96,60 @@
   document.addEventListener('change', syncToggles);
   syncToggles();
 
+  // Breathing exercise: a circle that grows and shrinks with each phase.
+  document.querySelectorAll('[data-breathe]').forEach(function (box) {
+    var circle = box.querySelector('.breathe-circle'), phaseEl = box.querySelector('.breathe-phase'), countEl = box.querySelector('.breathe-count');
+    var start = box.querySelector('[data-breathe-start]'), stop = box.querySelector('[data-breathe-stop]');
+    var names = ['Breathe in', 'Hold', 'Breathe out', 'Hold'], timer = null;
+    function end() {
+      clearInterval(timer); timer = null;
+      phaseEl.textContent = 'Well done'; countEl.textContent = '';
+      circle.className = 'breathe-circle'; start.hidden = false; stop.hidden = true;
+    }
+    start.addEventListener('click', function () {
+      var checked = box.querySelector('input[name=pattern]:checked');
+      var steps = (checked ? checked.value : box.getAttribute('data-breathe')).split(',').map(Number);
+      var phase = -1, left = 0, rounds = 0;
+      start.hidden = true; stop.hidden = false;
+      function next() {
+        do { phase = (phase + 1) % 4; if (phase === 0) { rounds++; } } while (!steps[phase]);
+        if (rounds > 8) { end(); return; }
+        left = steps[phase];
+        phaseEl.textContent = names[phase];
+        circle.className = 'breathe-circle ' + ['grow', 'full', 'shrink', 'small'][phase];
+        circle.style.transitionDuration = steps[phase] + 's';
+        countEl.textContent = left;
+      }
+      next();
+      timer = setInterval(function () { left--; if (left <= 0) { next(); } else { countEl.textContent = left; } }, 1000);
+    });
+    stop.addEventListener('click', end);
+  });
+
+  // 5-4-3-2-1 grounding: one step at a time.
+  document.querySelectorAll('[data-ground]').forEach(function (list) {
+    var items = list.querySelectorAll('li'), controls = list.parentElement.querySelector('[data-ground-controls]'), at = 0;
+    var prev = controls.querySelector('[data-ground-prev]'), next = controls.querySelector('[data-ground-next]');
+    function show() {
+      items.forEach(function (li, i) { li.classList.toggle('current', i === at); li.classList.toggle('done', i < at); });
+      prev.disabled = at === 0;
+      next.textContent = at === items.length - 1 ? 'Start again' : 'Next';
+    }
+    controls.hidden = false;
+    list.classList.add('stepping');
+    prev.addEventListener('click', function () { if (at > 0) { at--; show(); } });
+    next.addEventListener('click', function () { at = at === items.length - 1 ? 0 : at + 1; show(); });
+    show();
+  });
+
+  // Scrolling chip rows (e.g. Care categories on a phone): bring the current one into view.
+  document.querySelectorAll('.chips [aria-current="page"]').forEach(function (chip) {
+    var row = chip.parentElement;
+    if (row.scrollWidth > row.clientWidth) {
+      row.scrollLeft = chip.offsetLeft - row.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2;
+    }
+  });
+
   // Travel: offer to pick the time zone this device is currently set to.
   document.querySelectorAll('[data-use-device-tz]').forEach(function (button) {
     var select = document.querySelector(button.getAttribute('data-use-device-tz'));

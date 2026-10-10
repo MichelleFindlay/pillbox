@@ -55,7 +55,7 @@ function redirect(string $path): never
 function safe_return(?string $target, string $fallback = 'index.php'): string
 {
     $target = (string) $target;
-    return preg_match('#^[a-z_]+\.php(\?[A-Za-z0-9_=&%.:+\-]*)?$#', $target) ? $target : $fallback;
+    return preg_match('#^[a-z_]+\.php(\?[A-Za-z0-9_=&%.:+\-]*)?(\x23[a-z0-9-]+)?$#', $target) ? $target : $fallback;
 }
 
 function is_https(): bool

@@ -30,7 +30,34 @@ foreach ($meds as $m) {
     }
 }
 
+// Medicines past or near their expiry date.
+$expiring = [];
+foreach ($meds as $m) {
+    [$state, $text] = expiry_status($m['expiry_date'], $today);
+    if ($state) {
+        $expiring[] = [$m, $state, $text];
+    }
+}
+
 $soonAppointments = array_slice(appointments_between($uid, gmdate('Y-m-d H:i:s', time() - 3600), gmdate('Y-m-d H:i:s', strtotime('+14 days'))), 0, 3);
+
+// Care: routine tasks due today, grouped by area, and checks coming up, for the categories switched on.
+$careAreas = user_care_areas($user);
+$careTasks = care_tasks($uid);
+$careLogs = $careTasks ? care_logs($uid, $today->format('Y-m-d'), $today->format('Y-m-d')) : [];
+$careToday = [];
+if (in_array('screening', $careAreas, true)) {
+    sync_screening($user);
+}
+$comingUp = checks_coming_up($user, $careAreas, $today);
+$cycleNote = in_array('womens', $careAreas, true) ? cycle_today_note($user, $today) : null;
+foreach ($careAreas as $key) {
+    $areaTasks = array_values(array_filter($careTasks, fn ($t) => $t['area'] === $key));
+    $due = array_values(array_filter($areaTasks, fn ($t) => care_due($t, $today)));
+    if ($due) {
+        $careToday[$key] = ['due' => $due, 'progress' => care_day_progress($due, $careLogs, $today), 'streak' => care_streak($uid, $areaTasks, $today)];
+    }
+}
 
 $metrics = enabled_metrics($user);
 $latest = [];
@@ -192,6 +219,108 @@ render_header('Today', 'today');
         <?php endforeach; ?>
     </ul>
     <?php endif; ?>
+</section>
+<?php endif; ?>
+
+<?php if ($comingUp || $cycleNote || $expiring): ?>
+<section class="card" id="coming-up">
+    <div class="card-head">
+        <h2>Coming up</h2>
+        <a class="btn btn-small" href="<?= h(url('care.php')) ?>">Care</a>
+    </div>
+    <ul class="dose-list">
+        <?php foreach ($expiring as [$m, $state, $text]): ?>
+        <li class="dose-item">
+            <div class="dose-main">
+                <?= med_dot($m['colour']) ?>
+                <div>
+                    <strong><?= h($m['name']) ?></strong> <?= h($m['strength']) ?>
+                    <div class="small warn"><?= h($text) ?><?= $state === 'expired' ? '. Check with a pharmacist before using it, and take expired medicines back to a pharmacy.' : '' ?></div>
+                </div>
+            </div>
+            <div class="dose-actions"><a class="btn btn-small" href="<?= h(url('medications.php#med-' . $m['id'])) ?>">New supply</a></div>
+        </li>
+        <?php endforeach; ?>
+        <?php if ($cycleNote): ?>
+        <li class="dose-item">
+            <div class="dose-main"><div><?= CARE_AREAS['womens']['icon'] ?> <strong><?= h($cycleNote) ?></strong></div></div>
+            <div class="dose-actions"><a class="btn btn-small" href="<?= h(url('care.php?area=womens#cycle')) ?>">Log a period</a></div>
+        </li>
+        <?php endif; ?>
+        <?php foreach ($comingUp as $c): $chk = $c['check']; ?>
+        <li class="dose-item">
+            <div class="dose-main">
+                <div>
+                    <?= CARE_AREAS[$chk['area']]['icon'] ?> <a href="<?= h(url('care.php?area=' . $chk['area'] . '#check-' . $chk['id'])) ?>"><strong><?= h($chk['label']) ?></strong></a>
+                    <div class="small<?= $c['status'] === 'overdue' ? ' warn' : ' muted' ?>"><?= h(due_label($c['due'], $today)) ?></div>
+                </div>
+            </div>
+            <form method="post" action="<?= h(url('care.php')) ?>" class="dose-actions">
+                <?= csrf_field() ?><input type="hidden" name="action" value="check_done"><input type="hidden" name="check_id" value="<?= (int) $chk['id'] ?>">
+                <input type="hidden" name="date" value="<?= h($today->format('Y-m-d')) ?>"><input type="hidden" name="return" value="index.php#coming-up">
+                <button class="btn btn-small" type="submit" aria-label="<?= h($chk['label']) ?>: done today">Done today</button>
+            </form>
+        </li>
+        <?php endforeach; ?>
+    </ul>
+</section>
+<?php endif; ?>
+
+<?php foreach ($careToday as $key => $c): $area = CARE_AREAS[$key]; [$careDone, $careDue] = $c['progress']; ?>
+<section class="card" id="care-<?= h($key) ?>">
+    <div class="card-head">
+        <h2><?= $area['icon'] ?> <?= h($area['title']) ?> <span class="muted small">(<?= $careDone ?> of <?= $careDue ?> done<?= $c['streak'] > 1 ? ' · ' . $c['streak'] . ' days in a row' : '' ?>)</span></h2>
+        <span class="inline-actions">
+            <?php if ($key === 'sleep' && !sleep_nights($uid, $today)): ?>
+            <a class="btn btn-small btn-primary" href="<?= h(url('care.php?area=sleep#log')) ?>">Log last night</a>
+            <?php endif; ?>
+            <a class="btn btn-small" href="<?= h(url('care.php?area=' . $key)) ?>">Routine</a>
+        </span>
+    </div>
+    <ul class="dose-list">
+    <?php foreach ($c['due'] as $t):
+        $times = care_times($t);
+        $doneSlots = array_filter(array_keys($times), fn ($slot) => care_done($careLogs, $t, $today, $slot)); ?>
+        <li class="dose-item<?= count($doneSlots) === count($times) ? ' status-taken' : '' ?>">
+            <div class="dose-main">
+                <div>
+                    <strong><?= h($t['label']) ?></strong><?= $t['amount'] ? ' <span class="amount-chip">' . h($t['amount']) . '</span>' : '' ?>
+                    <?php if ($t['tip']): ?><div class="muted small"><?= h($t['tip']) ?></div><?php endif; ?>
+                </div>
+            </div>
+            <div class="dose-actions">
+                <?php foreach ($times as $slot => $time):
+                    $done = in_array($slot, $doneSlots, true);
+                    $name = count($times) === 1 ? ($done ? 'Done' : 'Mark done') : care_time_label($time); ?>
+                <form method="post" action="<?= h(url('care.php')) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
+                    <input type="hidden" name="date" value="<?= h($today->format('Y-m-d')) ?>"><input type="hidden" name="slot" value="<?= (int) $slot ?>">
+                    <input type="hidden" name="done" value="<?= $done ? '0' : '1' ?>"><input type="hidden" name="return" value="index.php#care-<?= h($key) ?>">
+                    <button class="btn btn-small<?= $done ? ' btn-primary' : '' ?>" type="submit" aria-pressed="<?= $done ? 'true' : 'false' ?>"
+                        title="<?= h($time) ?>" aria-label="<?= h($t['label'] . ', ' . $time . ($done ? ', done' : '')) ?>"><?= $done ? '&#10003; ' : '' ?><?= h($name) ?></button>
+                </form>
+                <?php endforeach; ?>
+            </div>
+        </li>
+    <?php endforeach; ?>
+    </ul>
+</section>
+<?php endforeach; ?>
+<?php if (!$careTasks && !$comingUp && !$expiring && !$user['care_prompt_hidden']): ?>
+<section class="card care-invite">
+    <div class="card-head">
+        <h2>Daily care routines</h2>
+        <form method="post" action="<?= h(url('care.php')) ?>">
+            <?= csrf_field() ?><input type="hidden" name="action" value="hide_prompt"><input type="hidden" name="return" value="index.php">
+            <button class="btn btn-small" type="submit">Not now</button>
+        </form>
+    </div>
+    <p class="muted small">Tick off daily routines like brushing, physio exercises or a regular bedtime, and keep track of check-ups, screening and vaccinations.</p>
+    <span class="inline-actions">
+        <a class="btn btn-small btn-primary" href="<?= h(url('care.php')) ?>">Set up care</a>
+        <a class="btn btn-small" href="<?= h(url('account.php#health-profile')) ?>">Choose categories</a>
+    </span>
 </section>
 <?php endif; ?>
 

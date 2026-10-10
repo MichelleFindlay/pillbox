@@ -35,6 +35,25 @@ if (is_post()) {
             }
             break;
 
+        case 'health_profile':
+            $dob = post('date_of_birth') === '' ? null : parse_date(post('date_of_birth'));
+            if (post('date_of_birth') !== '' && (!$dob || $dob > local_today() || $dob < new DateTimeImmutable('1900-01-01'))) {
+                $errors[] = 'Enter a valid date of birth, or leave it empty.';
+            }
+            $sex = isset(SEXES[post('sex')]) ? post('sex') : null;
+            $programmes = $sex === 'other' ? implode(',', array_intersect(array_keys(SCREENING_PROGRAMMES), (array) ($_POST['screening'] ?? []))) : null;
+            $areas = array_values(array_intersect(array_keys(CARE_AREAS), (array) ($_POST['care_areas'] ?? [])));
+            if (!$errors) {
+                q('UPDATE users SET date_of_birth = ?, sex = ?, screening_programmes = ?, care_areas = ?, mind_enabled = ? WHERE id = ?',
+                    [$dob?->format('Y-m-d'), $sex, $programmes, implode(',', $areas), post('mind_enabled') === '1' ? 1 : 0, $uid]);
+                if ($sex && ($sex !== $user['sex'] || $programmes !== $user['screening_programmes'])) {
+                    apply_screening_profile(['sex' => $sex, 'screening_programmes' => $programmes] + $user);
+                }
+                flash('success', 'Health profile saved.' . (!$areas ? ' All Care categories are switched off, so the Care tab is empty.' : ''));
+                redirect('account.php#health-profile');
+            }
+            break;
+
         case 'appearance':
             $theme = post('theme');
             $mode = post('color_mode');
@@ -178,6 +197,7 @@ render_header('Account', 'account');
 
 <nav class="chips" aria-label="Account sections">
     <a class="chip" href="#profile">Profile</a>
+    <a class="chip" href="#health-profile">Health profile</a>
     <a class="chip" href="#appearance">Appearance</a>
     <a class="chip" href="#security">Password &amp; security</a>
     <?php if (sso_enabled() || $user['entra_oid'] || $identities): ?><a class="chip" href="#sign-in-options">Sign-in options</a><?php endif; ?>
@@ -206,6 +226,50 @@ render_header('Account', 'account');
             </label>
         </div>
         <button class="btn btn-primary" type="submit">Save profile</button>
+    </form>
+</section>
+
+<section class="card" id="health-profile">
+    <h2>Health profile</h2>
+    <form method="post" class="stack">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="health_profile">
+        <div class="grid-2">
+            <label><span>Date of birth <span class="muted small">(for screening dates)</span></span>
+                <input type="date" name="date_of_birth" max="<?= h(local_today()->format('Y-m-d')) ?>" value="<?= h($user['date_of_birth'] ?? '') ?>"></label>
+        </div>
+        <fieldset>
+            <legend>Sex <span class="muted small">(which screening invitations apply)</span></legend>
+            <div class="repeat-choice">
+                <?php foreach (SEXES + ['' => 'Not set'] as $key => $label): ?>
+                <label class="check"><input type="radio" name="sex" value="<?= h($key) ?>" id="sex-<?= h($key ?: 'none') ?>"<?= checked((string) $user['sex'] === $key) ?>> <?= h($label) ?></label>
+                <?php endforeach; ?>
+            </div>
+            <div class="screening-choice" data-show-when="sex-other">
+                <p class="muted small">Tick the screening you need:</p>
+                <div class="checks">
+                    <?php $chosen = explode(',', (string) $user['screening_programmes']); foreach (SCREENING_PROGRAMMES as $key => $p): ?>
+                    <label class="check"><input type="checkbox" name="screening[]" value="<?= h($key) ?>"<?= checked(in_array($key, $chosen, true)) ?>>
+                        <span><?= h($p['label']) ?> <span class="muted small">(<?= h($p['who']) ?>)</span></span></label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Care categories</legend>
+            <p class="muted small">Only the ones you switch on appear in the Care tab, on Today and in your calendar feed. Switching one off keeps its history.</p>
+            <div class="checks">
+                <?php $myAreas = user_care_areas($user); foreach (CARE_AREAS as $key => $area): ?>
+                <label class="check"><input type="checkbox" name="care_areas[]" value="<?= h($key) ?>"<?= checked(in_array($key, $myAreas, true)) ?>> <?= $area['icon'] ?> <?= h($area['title']) ?></label>
+                <?php endforeach; ?>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Mind</legend>
+            <label class="check"><input type="checkbox" name="mind_enabled" value="1"<?= checked((bool) $user['mind_enabled']) ?>>
+                <span>Show the Mind tab <span class="muted small">(mood check-ins, coping toolkit, safety plan, journal; and the Help button with crisis contacts)</span></span></label>
+        </fieldset>
+        <button class="btn btn-primary" type="submit">Save health profile</button>
     </form>
 </section>
 

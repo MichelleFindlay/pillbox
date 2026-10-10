@@ -55,6 +55,7 @@ function login_user(array $user, ?string $method = null): void
     $_SESSION['uid'] = (int) $user['id'];
     $_SESSION['provider'] = $method ?? $user['auth_provider'];
     $_SESSION['sv'] = (int) ($user['session_version'] ?? 0);
+    $_SESSION['login_at'] = time();
     unset($_SESSION['csrf']);
     q('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [$user['id']]);
 }

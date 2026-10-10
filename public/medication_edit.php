@@ -13,7 +13,7 @@ if ($id && !$med) {
 }
 
 $fields = ['name', 'dmd_code', 'strength', 'form', 'dose_unit', 'colour', 'reason', 'instructions', 'prescriber', 'notes',
-    'as_needed', 'prn_dose_amount', 'prn_max_daily', 'stock_count', 'low_stock_days', 'start_date', 'end_date'];
+    'as_needed', 'prn_dose_amount', 'prn_max_daily', 'stock_count', 'low_stock_days', 'expiry_date', 'start_date', 'end_date'];
 $form = $med ?? ['form' => 'tablet', 'dose_unit' => 'tablet', 'colour' => MED_COLOURS[0], 'as_needed' => 0,
     'low_stock_days' => 7, 'start_date' => $todayYmd];
 $rows = $med
@@ -56,6 +56,9 @@ if (is_post()) {
     }
     if (!ctype_digit((string) $form['low_stock_days']) || (int) $form['low_stock_days'] > 365) {
         $form['low_stock_days'] = 7;
+    }
+    if ($form['expiry_date'] !== '' && !parse_date($form['expiry_date'])) {
+        $errors[] = 'Enter the expiry date as a date, or leave it empty.';
     }
     if (!parse_date($form['start_date'])) {
         $errors[] = 'Enter a valid start date.';
@@ -140,7 +143,7 @@ if (is_post()) {
             $form['name'], $nullable($form['dmd_code']), $nullable($form['strength']), $form['form'], $form['dose_unit'], $form['colour'],
             $nullable($form['reason']), $nullable($form['instructions']), $nullable($form['prescriber']), $nullable($form['notes']),
             $form['as_needed'], $nullable($form['prn_dose_amount']), $nullable($form['prn_max_daily']),
-            $nullable($form['stock_count']), (int) $form['low_stock_days'], $form['start_date'], $nullable($form['end_date']),
+            $nullable($form['stock_count']), (int) $form['low_stock_days'], $nullable($form['expiry_date']), $form['start_date'], $nullable($form['end_date']),
         ];
 
         $oldSchedules = $med ? current_schedules((int) $med['id'], $todayYmd) : [];
@@ -148,13 +151,13 @@ if (is_post()) {
             if ($med) {
                 q('UPDATE medications SET name = ?, dmd_code = ?, strength = ?, form = ?, dose_unit = ?, colour = ?, reason = ?, instructions = ?,
                      prescriber = ?, notes = ?, as_needed = ?, prn_dose_amount = ?, prn_max_daily = ?, stock_count = ?,
-                     low_stock_days = ?, start_date = ?, end_date = ? WHERE id = ? AND user_id = ?',
+                     low_stock_days = ?, expiry_date = ?, start_date = ?, end_date = ? WHERE id = ? AND user_id = ?',
                     [...$values, $med['id'], $uid]);
                 $medId = (int) $med['id'];
             } else {
                 q('INSERT INTO medications (name, dmd_code, strength, form, dose_unit, colour, reason, instructions, prescriber, notes,
-                     as_needed, prn_dose_amount, prn_max_daily, stock_count, low_stock_days, start_date, end_date, user_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
+                     as_needed, prn_dose_amount, prn_max_daily, stock_count, low_stock_days, expiry_date, start_date, end_date, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
                 $medId = (int) db()->lastInsertId();
             }
 
@@ -373,6 +376,8 @@ render_header($med ? 'Edit ' . $med['name'] : 'Add medication', 'meds');
                 <input type="number" min="0" step="any" name="stock_count" value="<?= h(num($form['stock_count'] ?? '')) ?>"></label>
             <label>Warn me when this many days are left
                 <input type="number" min="0" max="365" name="low_stock_days" value="<?= (int) ($form['low_stock_days'] ?? 7) ?>"></label>
+            <label><span>Expiry date <span class="muted small">(optional; on the box or bottle)</span></span>
+                <input type="date" name="expiry_date" value="<?= h($form['expiry_date'] ?? '') ?>"></label>
         </div>
         <label>Notes <textarea name="notes" rows="3" maxlength="5000"><?= h($form['notes'] ?? '') ?></textarea></label>
     </section>

@@ -32,6 +32,14 @@ if (is_post()) {
                 redirect('medications.php#med-' . $med['id']);
             }
             $qty = (float) $qty;
+            $expiry = post('expiry_date') === '' ? null : parse_date(post('expiry_date'));
+            if (post('expiry_date') !== '' && !$expiry) {
+                flash('error', 'Enter the expiry date as a date, or leave it empty.');
+                redirect('medications.php#med-' . $med['id']);
+            }
+            if ($expiry) {
+                q('UPDATE medications SET expiry_date = ? WHERE id = ?', [$expiry->format('Y-m-d'), $med['id']]);
+            }
             $after = transaction(function () use ($med, $kind, $qty, $uid) {
                 $current = q('SELECT stock_count FROM medications WHERE id = ? FOR UPDATE', [$med['id']])->fetchColumn();
                 $after = $kind === 'collected' ? (float) $current + $qty : $qty;
@@ -43,7 +51,8 @@ if (is_post()) {
             $days = stock_days_left(['stock_count' => $after] + $med, schedules_by_medication([(int) $med['id']], $todayYmd)[$med['id']] ?? []);
             flash('success', ($kind === 'collected' ? 'Added ' . dose_label($qty, $med['dose_unit']) . ' to ' : 'Stock count updated for ')
                 . $med['name'] . '. You now have ' . dose_label($after, $med['dose_unit'])
-                . ($days !== null ? ' (about ' . (int) floor($days) . ' days).' : '.'));
+                . ($days !== null ? ' (about ' . (int) floor($days) . ' days).' : '.')
+                . ($expiry ? ' Expiry date set to ' . $expiry->format('j M Y') . '.' : ''));
             redirect('medications.php#med-' . $med['id']);
         case 'delete':
             q('DELETE FROM medications WHERE id = ?', [$med['id']]);
@@ -115,6 +124,9 @@ render_header('Medications', 'meds');
             <?php if (isset($lastCollected[$m['id']])): $lc = $lastCollected[$m['id']]; ?>
                 Last collected <?= h(local_time($lc['created_at'], 'j M')) ?> (<?= h(dose_label($lc['quantity'], $m['dose_unit'])) ?>) ·
             <?php endif; ?>
+            <?php [$expState, $expText] = expiry_status($m['expiry_date'], local_today()); if ($expText): ?>
+                <span class="<?= $expState ? 'warn' : '' ?>"><?= $expState === 'expired' ? '&#9888; ' : '' ?><?= h($expText) ?></span> ·
+            <?php endif; ?>
             Since <?= h(date('j M Y', strtotime($m['start_date']))) ?><?= $m['end_date'] ? ' until ' . h(date('j M Y', strtotime($m['end_date']))) : '' ?>
             <?= $m['prescriber'] ? ' · ' . h($m['prescriber']) : '' ?>
         </p>
@@ -133,6 +145,8 @@ render_header('Medications', 'meds');
                         <input type="number" name="quantity" min="0" step="any" inputmode="decimal" required
                             value="<?= isset($lastCollected[$m['id']]) ? h(num($lastCollected[$m['id']]['quantity'])) : '' ?>" placeholder="e.g. 56">
                     </label>
+                    <label><span>Expiry date <span class="muted small">(optional)</span></span>
+                        <input type="date" name="expiry_date" value=""></label>
                     <button class="btn btn-primary" type="submit">Update stock</button>
                 </div>
                 <p class="muted small">Currently <?= $m['stock_count'] !== null ? h(dose_label($m['stock_count'], $m['dose_unit'])) : 'not tracked' ?>.</p>

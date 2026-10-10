@@ -79,6 +79,14 @@ function ensure_schema(): void
         ['health_readings', 'external_id', 'ALTER TABLE health_readings ADD COLUMN source VARCHAR(20) NULL AFTER recorded_at,
                                             ADD COLUMN external_id CHAR(40) NULL AFTER source, ADD UNIQUE KEY uq_readings_external (user_id, external_id)'],
         ['users', 'health_sync_token', 'ALTER TABLE users ADD COLUMN health_sync_token CHAR(40) NULL, ADD UNIQUE KEY uq_users_health_sync (health_sync_token)'],
+        ['care_tasks', 'remind', 'ALTER TABLE care_tasks ADD COLUMN remind TINYINT(1) NOT NULL DEFAULT 0 AFTER tip'],
+        ['medications', 'expiry_date', 'ALTER TABLE medications ADD COLUMN expiry_date DATE NULL AFTER low_stock_days'],
+        ['care_tasks', 'amount', 'ALTER TABLE care_tasks ADD COLUMN amount VARCHAR(60) NULL AFTER starts_on'],
+        ['users', 'care_areas', 'ALTER TABLE users ADD COLUMN care_areas VARCHAR(255) NULL, ADD COLUMN date_of_birth DATE NULL, ADD COLUMN sex VARCHAR(10) NULL'],
+        ['users', 'screening_programmes', 'ALTER TABLE users ADD COLUMN screening_programmes VARCHAR(100) NULL AFTER sex'],
+        ['users', 'mind_enabled', "ALTER TABLE users ADD COLUMN mind_enabled TINYINT(1) NOT NULL DEFAULT 1, ADD COLUMN mind_pin_hash VARCHAR(255) NULL,
+                                   ADD COLUMN mind_lock_plan TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN mind_reminder TIME NULL"],
+        ['users', 'care_prompt_hidden', 'ALTER TABLE users ADD COLUMN care_prompt_hidden TINYINT(1) NOT NULL DEFAULT 0 AFTER health_sync_token'],
     ];
     foreach ($upgrades as [$table, $column, $alter]) {
         if (isset($columns[$table]) && !isset($columns[$table][$column])) {
