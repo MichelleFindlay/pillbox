@@ -1,0 +1,2 @@
+# Never serve this directory to browsers.
+Require all denied

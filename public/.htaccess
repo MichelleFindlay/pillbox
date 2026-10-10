@@ -1,0 +1,13 @@
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_headers.c>
+    Header always unset X-Powered-By
+    # Let the browser pick up a new service worker straight away.
+    <Files "sw.js">
+        Header set Cache-Control "no-cache"
+    </Files>
+</IfModule>
+<FilesMatch "\.webmanifest$">
+    ForceType application/manifest+json
+</FilesMatch>
