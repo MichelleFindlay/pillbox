@@ -49,7 +49,7 @@ render_header('Mind locked', 'mind');
     </form>
     <?php if (q('SELECT 1 FROM webauthn_credentials WHERE user_id = ? LIMIT 1', [$uid])->fetch()): ?>
     <p class="inline-actions">
-        <button class="btn" type="button" hidden data-webauthn-unlock data-csrf="<?= h(csrf_token()) ?>" data-return="<?= h($return) ?>">Use fingerprint or face</button>
+        <button class="btn" type="button" hidden data-webauthn-unlock data-csrf="<?= h(csrf_token()) ?>" data-return="<?= h($return) ?>">Unlock with a passkey</button>
         <span class="small warn" data-webauthn-status></span>
     </p>
     <?php endif; ?>

@@ -1,33 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
-  <title id="t">Pillbox: a concrete bunker firing medicine tablets</title>
-  <!-- grassy mound -->
-  <path d="M0 55 Q32 47 64 55 V64 H0 Z" fill="#5f7f45"/>
-  <path d="M0 55 Q32 47 64 55" fill="none" stroke="#3f5a2e" stroke-width="1.2"/>
-  <!-- bunker body -->
-  <path d="M3 56 L7.5 33 H36.5 L41 56 Z" fill="#a9aeb3" stroke="#3d4349" stroke-width="1.6" stroke-linejoin="round"/>
-  <path d="M10 41 H34 M8.5 49 H35.5" stroke="#8d9399" stroke-width="1"/>
-  <!-- roof slab -->
-  <rect x="4" y="27.5" width="36" height="6.5" rx="1.5" fill="#868c92" stroke="#3d4349" stroke-width="1.6"/>
-  <!-- embrasure (gun slit) -->
-  <rect x="11" y="36.5" width="22" height="5.5" rx="1.2" fill="#1d2126"/>
-  <!-- red cross emblem -->
-  <circle cx="22" cy="49.5" r="5.2" fill="#ffffff" stroke="#3d4349" stroke-width="1"/>
-  <path d="M20.6 45.9 h2.8 v2.2 h2.2 v2.8 h-2.2 v2.2 h-2.8 v-2.2 h-2.2 v-2.8 h2.2 z" fill="#d62828"/>
-  <!-- gun barrel -->
-  <rect x="27" y="38" width="17" height="2.6" rx="0.6" fill="#2b3036"/>
-  <rect x="42.5" y="37.2" width="3" height="4.2" rx="0.6" fill="#2b3036"/>
-  <!-- muzzle flash -->
-  <path d="M46 39.3 L49.5 35.5 L49 38.3 L53 37.4 L50 39.3 L53 41.3 L49 40.4 L49.5 43.2 Z" fill="#ffb703" stroke="#e85d04" stroke-width="0.6" stroke-linejoin="round"/>
-  <!-- motion streaks -->
-  <path d="M47.5 32.5 L51 31 M44.5 24 L48.5 21.5 M50.5 13 L54 11" stroke="#8d9399" stroke-width="1.2" stroke-linecap="round"/>
-  <!-- round tablet -->
-  <circle cx="55.5" cy="29" r="3.6" fill="#ffffff" stroke="#3d4349" stroke-width="1.1"/>
-  <path d="M53 30.2 L58 27.8" stroke="#3d4349" stroke-width="0.8"/>
-  <!-- capsule -->
-  <g transform="translate(50.5 19.5) rotate(-35)">
-    <rect x="0" y="-2.9" width="13" height="5.8" rx="2.9" fill="#ffffff" stroke="#3d4349" stroke-width="1.1"/>
-    <path d="M2.9 -2.9 H6.5 V2.9 H2.9 A2.9 2.9 0 0 1 2.9 -2.9 Z" fill="#e63946" stroke="#3d4349" stroke-width="1.1"/>
+  <title id="t">Pillbox</title>
+  <style>
+    .body { fill: #4a5d3a; } .edge { fill: #89957f; } .score { stroke: #ffffff; }
+    @media (prefers-color-scheme: dark) { .body { fill: #8fae6b; } .edge { fill: #63784a; } .score { stroke: #10140d; } }
+  </style>
+  <g transform="rotate(-35 32 32)">
+    <rect class="edge" x="5" y="23.5" width="54" height="22" rx="11"/>
+    <rect class="body" x="5" y="19" width="54" height="22" rx="11"/>
+    <path class="score" d="M32 22v16" fill="none" stroke-width="2.4" stroke-linecap="round"/>
   </g>
-  <!-- small blue tablet -->
-  <circle cx="58.5" cy="7.5" r="3" fill="#8ecae6" stroke="#3d4349" stroke-width="1.1"/>
 </svg>

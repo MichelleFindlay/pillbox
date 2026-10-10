@@ -60,7 +60,7 @@ render_header('Readings', 'readings');
 <div class="page-head">
     <h1>Health readings</h1>
     <span class="inline-actions">
-        <a class="btn btn-small" href="<?= h(url('health_import.php')) ?>">Import from Apple Health</a>
+        <a class="btn btn-small" href="<?= h(url('connections.php')) ?>">Connect apps and devices</a>
         <a class="btn btn-small" href="<?= h(url('account.php#metrics')) ?>">Choose what to track</a>
     </span>
 </div>
@@ -159,7 +159,7 @@ render_header('Readings', 'readings');
                 <td><?= h(local_time($r['recorded_at'], 'D j M, H:i')) ?></td>
                 <td><strong><?= h(format_reading($def, $r)) ?></strong></td>
                 <td><?= h($r['context']) ?></td>
-                <td><?= h($r['notes']) ?><?= $r['source'] === HEALTH_SOURCE ? ' <span class="badge">Apple Health</span>' : '' ?></td>
+                <td><?= h($r['notes']) ?><?= $r['source'] ? ' <span class="badge">' . h(reading_source_label($r['source'])) . '</span>' : '' ?></td>
                 <td>
                     <form method="post" data-confirm="Delete this reading?">
                         <?= csrf_field() ?>

@@ -80,6 +80,22 @@ $taken = count(array_filter($slots, fn ($s) => $s['status'] === 'taken'));
 $total = count($slots);
 $pct = $total ? (int) round(100 * $done / $total) : 0;
 
+// Shared access: only the parts that have been shared.
+$canDoses = share_can('doses');
+if (!$canDoses) {
+    $slots = $missedYesterday = $prnMeds = $prnToday = $lowStock = $expiring = [];
+    $total = $taken = $done = $pct = 0;
+}
+if (!share_can('appointments')) {
+    $soonAppointments = [];
+}
+if (!share_can('readings')) {
+    $metrics = [];
+}
+if (!share_area_allowed('womens')) {
+    $cycleNote = null;
+}
+
 render_header('Today', 'today');
 ?>
 <div class="page-head">
@@ -148,6 +164,7 @@ render_header('Today', 'today');
 </section>
 <?php endif; ?>
 
+<?php if ($canDoses): ?>
 <section class="card">
     <h2>Scheduled doses</h2>
     <?php if (!$slots): ?>
@@ -168,6 +185,7 @@ render_header('Today', 'today');
     </ul>
     <?php endif; ?>
 </section>
+<?php endif; ?>
 
 <?php if ($prnMeds): ?>
 <section class="card">
@@ -189,6 +207,7 @@ render_header('Today', 'today');
                     <?php if ($atMax): ?><div class="warn small">Daily maximum reached &mdash; check with your doctor or pharmacist before taking more.</div><?php endif; ?>
                 </div>
             </div>
+            <?php if (share_can('doses', 'log')): ?>
             <form method="post" action="<?= h(url('dose_action.php')) ?>" class="dose-actions prn-form"<?= $atMax ? ' data-confirm="You have reached the daily maximum for this medicine. Log another dose anyway?"' : '' ?>>
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="prn">
@@ -199,6 +218,7 @@ render_header('Today', 'today');
                 <span class="unit"><?= h($m['dose_unit']) ?></span>
                 <button class="btn btn-primary" type="submit">Log dose</button>
             </form>
+            <?php endif; ?>
         </li>
     <?php endforeach; ?>
     </ul>
@@ -311,7 +331,7 @@ render_header('Today', 'today');
     </ul>
 </section>
 <?php endforeach; ?>
-<?php if (!$careTasks && !$comingUp && !$expiring && !$user['care_prompt_hidden']): ?>
+<?php if (!$careTasks && !$comingUp && !$expiring && !$user['care_prompt_hidden'] && !isset($user['_acting'])): ?>
 <section class="card care-invite">
     <div class="card-head">
         <h2>Daily care routines</h2>

@@ -197,6 +197,83 @@
     }).then(function (r) { window.location.href = r.next; });
   });
 
+  // Sharing: quick-choice buttons fill in the permission grid of their form.
+  document.querySelectorAll('[data-share-preset]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var values = JSON.parse(btn.getAttribute('data-share-preset'));
+      Object.keys(values).forEach(function (section) {
+        var radio = btn.form.querySelector('input[name="perm[' + section + ']"][value="' + values[section] + '"]');
+        if (radio) { radio.checked = true; }
+      });
+    });
+  });
+
+  // Prescription payments: for NHS charges the amount follows the number of items until it's
+  // changed by hand; private and bought medicines have their own prices, so it's left alone.
+  document.querySelectorAll('input[data-charge]').forEach(function (items) {
+    var amount = items.form.querySelector('input[name=amount]'), kind = items.form.querySelector('select[name=kind]'), touched = false;
+    amount.addEventListener('input', function () { touched = true; });
+    function follow() {
+      if (touched) { return; }
+      if (kind && kind.value !== 'nhs') { amount.value = ''; return; }
+      amount.value = (parseFloat(items.getAttribute('data-charge')) * (parseInt(items.value, 10) || 0)).toFixed(2);
+    }
+    items.addEventListener('input', follow);
+    if (kind) { kind.addEventListener('change', follow); }
+  });
+
+  // Push notifications for this device (Account page).
+  var pushBox = document.querySelector('[data-push]');
+  if (pushBox) {
+    var pStatus = pushBox.querySelector('[data-push-status]'), pOn = pushBox.querySelector('[data-push-on]'),
+      pOff = pushBox.querySelector('[data-push-off]'), pTest = pushBox.querySelector('[data-push-test]'), pCsrf = pushBox.getAttribute('data-csrf');
+    var pCall = function (body) {
+      body.csrf = pCsrf;
+      return fetch(document.body.getAttribute('data-base') + '/push.php', { method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json().then(function (j) { if (j.error) { throw new Error(j.error); } return j; }); });
+    };
+    var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    var ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      pStatus.textContent = ios && !standalone
+        ? 'On iPhone and iPad, add Pillbox to your Home Screen first (Share, then "Add to Home Screen"), then open it from there and turn notifications on.'
+        : "This browser can't show notifications.";
+    } else {
+      var show = function (sub) {
+        pOn.hidden = !!sub; pOff.hidden = !sub; pTest.hidden = !sub;
+        pStatus.textContent = Notification.permission === 'denied' ? 'Notifications are blocked for Pillbox in this browser\'s settings.'
+          : (sub ? 'Notifications are on for this device.' : 'Notifications are off for this device.');
+      };
+      navigator.serviceWorker.ready.then(function (reg) {
+        reg.pushManager.getSubscription().then(show);
+        pOn.addEventListener('click', function () {
+          pOn.disabled = true;
+          Notification.requestPermission().then(function (perm) {
+            if (perm !== 'granted') { throw new Error('Notifications were not allowed.'); }
+            return pCall({ action: 'key' });
+          }).then(function (r) {
+            return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64.dec(r.key) });
+          }).then(function (sub) {
+            var label = (navigator.userAgentData && navigator.userAgentData.platform) || (/Android/.test(navigator.userAgent) ? 'Android' : ios ? 'iPhone or iPad' : /Mac/.test(navigator.userAgent) ? 'Mac' : /Windows/.test(navigator.userAgent) ? 'Windows' : 'This device');
+            return pCall({ action: 'subscribe', subscription: sub.toJSON(), label: label }).then(function () { show(sub); });
+          }).catch(function (e) { pStatus.textContent = e.message; }).then(function () { pOn.disabled = false; });
+        });
+        pOff.addEventListener('click', function () {
+          reg.pushManager.getSubscription().then(function (sub) {
+            if (!sub) { show(null); return; }
+            return pCall({ action: 'unsubscribe', subscription: sub.toJSON() }).then(function () { return sub.unsubscribe(); }).then(function () { show(null); });
+          }).catch(function (e) { pStatus.textContent = e.message; });
+        });
+        pTest.addEventListener('click', function () {
+          pStatus.textContent = 'Sending...';
+          pCall({ action: 'test' }).then(function () { pStatus.textContent = 'Test sent: it should appear in a few seconds.'; })
+            .catch(function (e) { pStatus.textContent = e.message; });
+        });
+      });
+    }
+  }
+
   // Scrolling chip rows (e.g. Care categories on a phone): bring the current one into view.
   document.querySelectorAll('.chips [aria-current="page"]').forEach(function (chip) {
     var row = chip.parentElement;

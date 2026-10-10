@@ -98,12 +98,25 @@ function ensure_schema(): void
         ['users', 'email_digest', 'ALTER TABLE users ADD COLUMN email_digest TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN email_digest_hour TINYINT UNSIGNED NOT NULL DEFAULT 7,
                                    ADD COLUMN email_appointments TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN last_digest_on DATE NULL, ADD COLUMN is_demo TINYINT(1) NOT NULL DEFAULT 0'],
         ['appointments', 'reminder_emailed_at', 'ALTER TABLE appointments ADD COLUMN reminder_emailed_at DATETIME NULL AFTER remind_minutes'],
+        ['data_shares', 'permissions', 'ALTER TABLE data_shares ADD COLUMN permissions TEXT NULL AFTER include_mind, ADD COLUMN expires_on DATE NULL AFTER permissions'],
+        ['health_checks', 'medication_id', 'ALTER TABLE health_checks ADD COLUMN medication_id INT UNSIGNED NULL AFTER items'],
+        ['users', 'push_doses', 'ALTER TABLE users ADD COLUMN push_doses TINYINT(1) NOT NULL DEFAULT 1, ADD COLUMN push_care TINYINT(1) NOT NULL DEFAULT 1,
+                                 ADD COLUMN push_appointments TINYINT(1) NOT NULL DEFAULT 1, ADD COLUMN push_private TINYINT(1) NOT NULL DEFAULT 0'],
+        ['medications', 'supply_type', "ALTER TABLE medications ADD COLUMN supply_type VARCHAR(8) NOT NULL DEFAULT 'nhs' AFTER expiry_date,
+                                         ADD COLUMN supply_price DECIMAL(8,2) NULL AFTER supply_type"],
+        ['prescription_payments', 'kind', "ALTER TABLE prescription_payments ADD COLUMN kind VARCHAR(8) NOT NULL DEFAULT 'nhs' AFTER note,
+                                            ADD COLUMN medication_id INT UNSIGNED NULL AFTER kind"],
         ['users', 'care_prompt_hidden', 'ALTER TABLE users ADD COLUMN care_prompt_hidden TINYINT(1) NOT NULL DEFAULT 0 AFTER health_sync_token'],
     ];
     foreach ($upgrades as [$table, $column, $alter]) {
         if (isset($columns[$table]) && !isset($columns[$table][$column])) {
             db()->exec($alter);
         }
+    }
+    // First-login setup arrived in 1.2: people who were already using Pillbox don't need it.
+    if (isset($columns['users']) && !isset($columns['users']['onboarded_at'])) {
+        db()->exec('ALTER TABLE users ADD COLUMN onboarded_at DATETIME NULL');
+        db()->exec('UPDATE users SET onboarded_at = UTC_TIMESTAMP()');
     }
     if (isset($columns['users']['auth_provider']) && !str_contains($columns['users']['auth_provider'], 'oidc')) {
         db()->exec("ALTER TABLE users MODIFY COLUMN auth_provider ENUM('local','entra','oidc') NOT NULL DEFAULT 'local'");

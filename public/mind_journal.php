@@ -8,6 +8,10 @@ require __DIR__ . '/../src/bootstrap.php';
 $user = require_login();
 $uid = (int) $user['id'];
 require_mind($user);
+if (isset($user['_acting']) && !$user['_acting']['perms']['journal']) {
+    flash('error', 'The journal is private: it has not been shared with you.');
+    redirect('mind.php');
+}
 
 $entry = get('id') !== '' || post('id') !== ''
     ? q('SELECT * FROM mind_journal WHERE id = ? AND user_id = ?', [(int) (post('id') ?: get('id')), $uid])->fetch() ?: null

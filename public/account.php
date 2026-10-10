@@ -57,6 +57,15 @@ if (is_post()) {
             }
             break;
 
+        case 'push_prefs':
+            q('UPDATE users SET push_doses = ?, push_care = ?, push_appointments = ?, push_private = ? WHERE id = ?',
+                [post('push_doses') === '1' ? 1 : 0, post('push_care') === '1' ? 1 : 0, post('push_appointments') === '1' ? 1 : 0, post('push_private') === '1' ? 1 : 0, $uid]);
+            flash('success', 'Notification settings saved.');
+            redirect('account.php#notifications');
+        case 'push_remove':
+            q('DELETE FROM push_subscriptions WHERE id = ? AND user_id = ?', [(int) post('id'), $uid]);
+            flash('success', 'That device will no longer get notifications.');
+            redirect('account.php#notifications');
         case 'email_prefs':
             q('UPDATE users SET email_digest = ?, email_digest_hour = ?, email_appointments = ? WHERE id = ?',
                 [post('email_digest') === '1' ? 1 : 0, min(23, max(0, (int) post('email_digest_hour'))), post('email_appointments') === '1' ? 1 : 0, $uid]);
@@ -68,6 +77,29 @@ if (is_post()) {
                 mail_html('Test email', '<p>If you can read this, email from Pillbox is working.</p>')) : 'Add your email address to your profile first.';
             flash($error ? 'error' : 'success', $error ? "The test email couldn't be sent: $error" : 'Test email sent to ' . $user['email'] . '. Check your spam folder if it doesn\'t arrive.');
             redirect('account.php#email');
+        case 'import':
+            $file = $_FILES['backup'] ?? null;
+            if (post('confirm_text') !== 'REPLACE') {
+                flash('error', 'Type REPLACE to confirm: importing replaces everything in your Pillbox.');
+            } elseif (!$file || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
+                flash('error', $file && in_array($file['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+                    ? 'That file is too big for this server to accept.' : 'Choose the backup file to import.');
+            } else {
+                $backup = backup_from_file(json_decode((string) file_get_contents($file['tmp_name']), true));
+                if (is_string($backup)) {
+                    flash('error', $backup);
+                } else {
+                    try {
+                        $counts = import_backup($user, $backup);
+                        flash('success', 'Imported: ' . (int) ($counts['medications'] ?? 0) . ' medications, ' . (int) ($counts['dose_logs'] ?? 0) . ' dose records, '
+                            . (int) ($counts['health_readings'] ?? 0) . ' readings, ' . (int) ($counts['appointments'] ?? 0) . ' appointments and the rest of your data.');
+                    } catch (Throwable $e) {
+                        error_log('Pillbox import failed: ' . $e);
+                        flash('error', "The import didn't work, so nothing was changed. The file may be damaged or from an incompatible version.");
+                    }
+                }
+            }
+            redirect('account.php#data');
         case 'appearance':
             $theme = post('theme');
             $mode = post('color_mode');
@@ -216,6 +248,7 @@ render_header('Account', 'account');
     <a class="chip" href="#security">Password &amp; security</a>
     <?php if (sso_enabled() || $user['entra_oid'] || $identities): ?><a class="chip" href="#sign-in-options">Sign-in options</a><?php endif; ?>
     <a class="chip" href="#metrics">Measurements</a>
+    <a class="chip" href="#notifications">Notifications</a>
     <a class="chip" href="#email">Email</a>
     <a class="chip" href="#install">Phone app</a>
     <a class="chip" href="#data">Your data</a>
@@ -245,7 +278,10 @@ render_header('Account', 'account');
 </section>
 
 <section class="card" id="health-profile">
-    <h2>Health profile</h2>
+    <div class="card-head">
+        <h2>Health profile</h2>
+        <a class="btn btn-small" href="<?= h(url('welcome.php')) ?>">Run the setup again</a>
+    </div>
     <form method="post" class="stack">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="health_profile">
@@ -301,7 +337,7 @@ render_header('Account', 'account');
                 <label class="theme-choice">
                     <input type="radio" name="theme" value="<?= h($key) ?>"<?= checked($key === $currentTheme) ?>>
                     <span class="theme-card" data-palette="<?= h($key) ?>" aria-hidden="true">
-                        <span class="tc-bar"><img src="<?= h(asset('assets/logo.svg')) ?>" alt="" width="20" height="20"> Pillbox</span>
+                        <span class="tc-bar"><?= logo_svg(20) ?> Pillbox</span>
                         <span class="tc-body"><span class="tc-btn">Take</span><span class="tc-link">Link</span></span>
                     </span>
                     <span class="tc-name"><?= h($t['label']) ?></span>
@@ -449,6 +485,42 @@ render_header('Account', 'account');
     </form>
 </section>
 
+<section class="card" id="notifications">
+    <h2>Notifications</h2>
+    <?php if (!push_supported()): ?>
+    <p class="muted">This server can't send notifications (PHP's OpenSSL or curl extension is missing).</p>
+    <?php elseif ($user['is_demo']): ?>
+    <p class="muted">Notifications are switched off in the demo.</p>
+    <?php else: $devices = q('SELECT * FROM push_subscriptions WHERE user_id = ? ORDER BY id', [$uid])->fetchAll(); ?>
+    <p class="muted small">Reminders on your phone or computer, even when Pillbox isn't open. Turn them on in each browser or device you use.</p>
+    <div data-push data-csrf="<?= h(csrf_token()) ?>">
+        <p class="small" data-push-status>Checking this device&hellip;</p>
+        <span class="inline-actions">
+            <button class="btn btn-primary btn-small" type="button" hidden data-push-on>Turn on notifications on this device</button>
+            <button class="btn btn-small" type="button" hidden data-push-test>Send a test</button>
+            <button class="btn btn-small" type="button" hidden data-push-off>Turn off on this device</button>
+        </span>
+    </div>
+    <?php if ($devices): ?>
+    <details class="q-edit"><summary>Devices with notifications on (<?= count($devices) ?>)</summary>
+        <ul class="plain"><?php foreach ($devices as $d): ?>
+            <li class="logline"><span><?= h($d['label']) ?> <span class="muted small">since <?= h(local_time($d['created_at'], 'j M Y')) ?><?= $d['last_used_at'] ? ', last sent ' . h(local_time($d['last_used_at'], 'j M H:i')) : '' ?></span></span>
+                <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="push_remove"><input type="hidden" name="id" value="<?= (int) $d['id'] ?>"><button class="btn-link danger small" type="submit">Remove</button></form></li>
+        <?php endforeach; ?></ul>
+    </details>
+    <?php endif; ?>
+    <form method="post" class="stack">
+        <?= csrf_field() ?><input type="hidden" name="action" value="push_prefs">
+        <label class="check"><input type="checkbox" name="push_doses" value="1"<?= checked((bool) $user['push_doses']) ?>> <span>Dose reminders <span class="muted small">(at dose time, if it isn't logged yet)</span></span></label>
+        <label class="check"><input type="checkbox" name="push_care" value="1"<?= checked((bool) $user['push_care']) ?>> <span>Care reminders <span class="muted small">(tasks marked "Remind me", and a daily note of what's coming up)</span></span></label>
+        <label class="check"><input type="checkbox" name="push_appointments" value="1"<?= checked((bool) $user['push_appointments']) ?>> <span>Appointment reminders</span></label>
+        <label class="check"><input type="checkbox" name="push_private" value="1"<?= checked((bool) $user['push_private']) ?>> <span>Hide details on the lock screen <span class="muted small">(just "Pillbox: you have a reminder")</span></span></label>
+        <span class="inline-actions"><button class="btn" type="submit">Save</button></span>
+    </form>
+    <p class="muted small">The Mind check-in reminder (set in Mind) only ever says "Pillbox check-in". Reminders arrive when the scheduled tasks run, so ask your administrator to run them every 5 minutes.</p>
+    <?php endif; ?>
+</section>
+
 <section class="card" id="email">
     <h2>Email</h2>
     <?php if (!mail_enabled()): ?>
@@ -498,7 +570,18 @@ render_header('Account', 'account');
         <?= (int) $counts['doses'] ?> dose record<?= (int) $counts['doses'] === 1 ? '' : 's' ?> and
         <?= (int) $counts['readings'] ?> health reading<?= (int) $counts['readings'] === 1 ? '' : 's' ?> for you.</p>
     <p><a class="btn" href="<?= h(url('account_export.php')) ?>">Download all my data</a></p>
-    <p class="muted small">A single file (JSON) with your profile, medications, dose schedules, dose history and readings. For a summary to show a doctor, use the <a href="<?= h(url('report.php')) ?>">Report</a> page instead.</p>
+    <p class="muted small">A single file (JSON) with everything: medications, doses, readings, appointments, Care, Mind and your settings. Keep it safe: it's
+        your health record. For a summary to show a doctor, use the <a href="<?= h(url('report.php')) ?>">Report</a> page instead.</p>
+
+    <h3>Import data</h3>
+    <p class="muted small">Restore a file from "Download all my data", for example to move to another Pillbox. It <strong>replaces</strong> everything in your
+        Pillbox with what's in the file. Your sign-in, sharing, passkeys and calendar or sync links aren't changed.</p>
+    <form method="post" enctype="multipart/form-data" class="stack narrow" data-confirm="Replace everything in your Pillbox with this file?">
+        <?= csrf_field() ?><input type="hidden" name="action" value="import">
+        <label>Backup file <input type="file" name="backup" accept=".json,application/json" required></label>
+        <label>Type REPLACE to confirm <input name="confirm_text" required autocomplete="off" autocapitalize="characters" pattern="REPLACE"></label>
+        <span class="inline-actions"><button class="btn" type="submit">Import</button></span>
+    </form>
 
     <h3 class="danger">Delete my account</h3>
     <?php if (is_last_admin($user)): ?>

@@ -99,7 +99,6 @@ p { margin: 0 0 .75rem; }
   background: var(--topbar); color: var(--topbar-text);
 }
 .brand { display: flex; align-items: center; gap: .5rem; color: inherit; text-decoration: none; font-weight: 700; font-size: 1.2rem; letter-spacing: .02em; }
-.brand img { display: block; background: #f4f3ee; border-radius: 10px; padding: 2px; }
 .icon { width: 22px; height: 22px; flex: none; }
 .mainnav { display: flex; gap: .25rem; margin-left: 1rem; }
 .mainnav a {
@@ -339,7 +338,7 @@ details.card > summary h2 { display: inline; }
 .stats dd { margin: 0; font-weight: 600; }
 
 /* ---------- Tables ---------- */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; position: relative; }
 table { width: 100%; border-collapse: collapse; font-size: .95rem; }
 th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 th { font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; color: var(--text-2); }
@@ -663,7 +662,6 @@ meter { width: 90px; height: 10px; }
   background: var(--bg); color: var(--text);
 }
 .theme-card .tc-bar { display: flex; align-items: center; gap: .35rem; height: 34px; padding: 0 .6rem; background: var(--topbar); color: var(--topbar-text); font-size: .8rem; }
-.theme-card .tc-bar img { background: #f4f3ee; border-radius: 5px; padding: 1px; }
 .theme-card .tc-body { display: flex; align-items: center; gap: .5rem; padding: .6rem; }
 .theme-card .tc-btn { display: inline-block; padding: .2rem .6rem; border-radius: 6px; background: var(--primary); color: var(--primary-text); font-size: .8rem; }
 .theme-card .tc-link { color: var(--primary); text-decoration: underline; font-size: .8rem; }
@@ -853,7 +851,6 @@ meter { width: 90px; height: 10px; }
 }
 
 /* Small touches that follow the theme too */
-.brand img, .theme-card .tc-bar img { background: color-mix(in srgb, var(--topbar-text) 92%, var(--topbar)); }
 ::selection { background: color-mix(in srgb, var(--primary) 30%, transparent); }
 body { accent-color: var(--primary); }
 
@@ -969,6 +966,7 @@ body { accent-color: var(--primary); }
 .care-task:last-child { border-bottom: 0; }
 .care-task .logline { border-bottom: 0; }
 .preset-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.preset-group { margin: .75rem 0 .4rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
 .preset { margin: 0; }
 .preset { max-width: 100%; }
 .preset .btn { white-space: normal; text-align: left; max-width: 100%; flex-direction: column; align-items: flex-start; gap: 0; height: auto; padding-top: .45rem; padding-bottom: .45rem; line-height: 1.25; }
@@ -1055,7 +1053,7 @@ body { accent-color: var(--primary); }
 /* ---------- Apple Health ---------- */
 .steps { padding-left: 1.3rem; margin: 0 0 1rem; }
 .steps li { margin-bottom: .35rem; }
-pre.code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem; overflow-x: auto; white-space: pre; }
+pre.code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
 .upload-progress progress { width: 100%; height: 12px; accent-color: var(--primary); }
 .upload-progress p { margin: .3rem 0 0; }
 
@@ -1139,3 +1137,46 @@ pre.code { background: var(--surface-2); border: 1px solid var(--border); border
 .acting-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; padding: .6rem .9rem;
   margin-bottom: 1rem; border-radius: 10px; border: 2px solid var(--info); background: var(--info-bg); }
 .acting-banner form { margin: 0; }
+.preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.share-grid th[scope=row] { text-transform: none; letter-spacing: normal; font-size: .95rem; color: var(--text); width: 34%; }
+.share-grid th[scope=row] span { display: block; font-weight: 400; }
+.share-grid td { vertical-align: top; }
+.level-choice { display: flex; flex-wrap: wrap; gap: .3rem; }
+.level-choice .day span { min-width: 0; padding: 0 .7rem; min-height: 36px; font-size: .85rem; }
+.activity-list li { padding: .2rem 0; }
+@media (max-width: 600px) {
+  .share-grid thead { display: none; }
+  .share-grid tr { display: block; border-bottom: 1px solid var(--border); padding: .4rem 0; }
+  .share-grid th[scope=row], .share-grid td { display: block; width: auto; border: 0; padding: .2rem 0; }
+}
+@media (max-width: 420px) {
+  .usermenu { gap: 0; }
+  .usermenu .iconlink { padding: .45rem .35rem; }
+  .brand span { display: none; }
+}
+.results { margin: .25rem 0 .5rem; }
+.results-table td { vertical-align: top; }
+.results-table .nowrap { white-space: nowrap; }
+.check-med { margin: .1rem 0; }
+.wizard { max-width: 760px; margin: 0 auto; }
+.wizard-steps { display: flex; gap: .4rem; list-style: none; padding: 0; margin: 0 0 1rem; counter-reset: step; flex-wrap: wrap; }
+.wizard-steps li { flex: 1 1 0; min-width: 6rem; padding: .45rem .6rem; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-2); font-size: .85rem; font-weight: 600; counter-increment: step; }
+.wizard-steps li::before { content: counter(step) ". "; }
+.wizard-steps li.done { color: var(--text); }
+.wizard-steps li.done::before { content: "\2713  "; }
+.wizard-steps li.current { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
+.wizard-actions { margin-top: .5rem; }
+.connect-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: .5rem 1rem; padding: .85rem 0; border-bottom: 1px solid var(--border); }
+.connect-row:last-of-type { border-bottom: 0; }
+.connect-row > div { flex: 1 1 260px; min-width: 0; }
+.connect-row form { margin: 0; }
+.connect-row .inline-form { margin-top: .5rem; }
+.connect-row .disconnect form { margin-top: .4rem; }
+
+/* Logo: a scored tablet in the theme's colours (light on the top bar, the main colour elsewhere) */
+.logo { display: block; flex: none; --logo-body: var(--primary); --logo-score: var(--primary-text); }
+.topbar .logo, .tc-bar .logo { --logo-body: var(--topbar-text); --logo-score: var(--topbar); }
+.logo-body { fill: var(--logo-body); }
+.logo-edge { fill: color-mix(in srgb, var(--logo-body) 62%, var(--logo-score)); }
+.logo-score { fill: none; stroke: var(--logo-score); stroke-width: 2.4; stroke-linecap: round; }

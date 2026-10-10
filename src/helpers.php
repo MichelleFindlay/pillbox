@@ -21,7 +21,29 @@ function h(mixed $value): string
 
 function url(string $path = ''): string
 {
-    return config('app.base_path', '') . '/' . ltrim($path, '/');
+    return config('app.base_path', '') . '/' . pretty_path(ltrim($path, '/'));
+}
+
+/**
+ * Tidy addresses without ".php", when the web server supports them: public/.htaccess sets
+ * PILLBOX_PRETTY_URLS when mod_rewrite is on. 'pretty_urls' => false in config turns them off.
+ */
+function pretty_urls(): bool
+{
+    if (config('app.pretty_urls', null) === false) {
+        return false;
+    }
+    return !empty($_SERVER['PILLBOX_PRETTY_URLS']) || !empty($_SERVER['REDIRECT_PILLBOX_PRETTY_URLS'])
+        || (empty($_SERVER['HTTP_HOST']) && is_file(storage_path('pretty_urls')));
+}
+
+/** "medications.php?x=1" -> "medications?x=1", "index.php" -> "" (when tidy addresses are on). */
+function pretty_path(string $path): string
+{
+    if (!pretty_urls() || preg_match('#^(calendar|health_sync|cron|webauthn|push|connect)\.php#', $path)) {
+        return $path;
+    }
+    return preg_replace(['/^index\.php(?=$|[?#])/', '/^([a-z_]+)\.php(?=$|[?#])/'], ['', '$1'], $path);
 }
 
 /** Full URL including scheme and host, e.g. for links used outside Pillbox (calendar feeds). */
@@ -36,7 +58,7 @@ function absolute_url(string $path = ''): string
         $host = preg_replace('/[^A-Za-z0-9.\-:\[\]]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
         $base = (is_https() ? 'https' : 'http') . '://' . $host . config('app.base_path', '');
     }
-    return $base . '/' . ltrim($path, '/');
+    return $base . '/' . pretty_path(ltrim($path, '/'));
 }
 
 /** Remember the site's address (once per session) so emails sent by scheduled tasks can link back. */
@@ -46,6 +68,8 @@ function remember_site_url(): void
         return;
     }
     $_SESSION['site_url_saved'] = true;
+    // Scheduled tasks can't tell whether tidy addresses work, so remember that too.
+    pretty_urls() ? @touch(storage_path('pretty_urls')) : @unlink(storage_path('pretty_urls'));
     $url = rtrim(absolute_url(), '/');
     if (@file_get_contents(storage_path('site_url.txt')) !== $url) {
         @file_put_contents(storage_path('site_url.txt'), $url, LOCK_EX);
@@ -72,6 +96,13 @@ function redirect(string $path): never
 function safe_return(?string $target, string $fallback = 'index.php'): string
 {
     $target = (string) $target;
+    // Tidy addresses come back without ".php" (and "" for Today): put it back.
+    if ($target === '') {
+        return $fallback;
+    }
+    if (preg_match('#^([a-z_]+)(?=$|[?\x23])#', $target, $m) && !str_starts_with($target, $m[1] . '.php')) {
+        $target = $m[1] . '.php' . substr($target, strlen($m[1]));
+    }
     return preg_match('#^[a-z_]+\.php(\?[A-Za-z0-9_=&%.:+\-]*)?(\x23[a-z0-9-]+)?$#', $target) ? $target : $fallback;
 }
 
@@ -199,9 +230,10 @@ function require_post(): void
         http_response_code(400);
         exit('Your session expired or the form was submitted twice. Go back, reload the page and try again.');
     }
-    if (acting_read_only() && !in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), ['sharing.php', 'logout.php'], true)) {
-        flash('error', "You can look, but not change anything: you've been given view-only access.");
-        redirect(safe_return(basename(parse_url($_SERVER['HTTP_REFERER'] ?? '', PHP_URL_PATH) ?: ''), 'index.php'));
+    // Someone with shared access made a change (require_login() has already checked they may): note it for the owner.
+    $user = current_user();
+    if (isset($user['_acting']) && !in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), ['sharing.php', 'logout.php'], true)) {
+        share_log_activity($user['_acting']['share_id'], basename($_SERVER['SCRIPT_NAME'] ?? ''), post('action'));
     }
 }
 

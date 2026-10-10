@@ -62,7 +62,7 @@ render_header('Report', 'report');
 
 <article class="report">
     <header class="report-head">
-        <img src="<?= h(asset('assets/logo.svg')) ?>" alt="" width="56" height="56">
+        <?= logo_svg(56) ?>
         <div>
             <h1>Medication &amp; health report</h1>
             <p><strong><?= h($user['display_name']) ?></strong><?= $user['email'] ? ' · ' . h($user['email']) : '' ?></p>

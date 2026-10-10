@@ -23,6 +23,17 @@ function user_theme(?array $user): array
     return [$theme, $mode];
 }
 
+/** The Pillbox logo (a scored tablet), drawn inline so it takes the current theme's colours. */
+function logo_svg(int $size, string $class = ''): string
+{
+    return '<svg class="logo' . ($class !== '' ? ' ' . h($class) : '') . '" width="' . $size . '" height="' . $size . '" viewBox="0 0 64 64" aria-hidden="true" focusable="false">'
+        . '<g transform="rotate(-35 32 32)">'
+        . '<rect class="logo-edge" x="5" y="23.5" width="54" height="22" rx="11"/>'
+        . '<rect class="logo-body" x="5" y="19" width="54" height="22" rx="11"/>'
+        . '<path class="logo-score" d="M32 22v16"/>'
+        . '</g></svg>';
+}
+
 function icon(string $name): string
 {
     $paths = [
@@ -61,6 +72,12 @@ function render_header(string $title, string $active = ''): void
     if (!$user || !mind_enabled($user)) {
         unset($nav['mind']);
     }
+    // Shared access: only the tabs that have been shared.
+    foreach (['meds' => 'doses', 'history' => 'doses', 'readings' => 'readings', 'care' => 'care', 'report' => 'reports'] as $tab => $section) {
+        if ($user && !share_can($section, 'view', $user)) {
+            unset($nav[$tab]);
+        }
+    }
     [$theme, $mode] = user_theme($user);
     [$barLight, $barDark] = THEMES[$theme]['bar'];
     ?><!doctype html>
@@ -92,7 +109,7 @@ function render_header(string $title, string $active = ''): void
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
     <a class="brand" href="<?= h(url('index.php')) ?>">
-        <img src="<?= h(asset('assets/logo.svg')) ?>" alt="" width="40" height="40">
+        <?= logo_svg(40) ?>
         <span><?= h(config('app.name')) ?></span>
     </a>
     <?php if ($user): ?>
@@ -105,7 +122,9 @@ function render_header(string $title, string $active = ''): void
         <?php if (mind_enabled($user)): ?>
         <a class="iconlink help-link" href="<?= h(url('help.php')) ?>" title="Get help now"<?= $active === 'help' ? ' aria-current="page"' : '' ?>><?= icon('help') ?><span class="help-label">Help</span></a>
         <?php endif; ?>
+        <?php if (share_can('appointments', 'view', $user)): ?>
         <a class="iconlink" href="<?= h(url('appointments.php')) ?>" title="Appointments"<?= $active === 'appointments' ? ' aria-current="page"' : '' ?>><?= icon('calendar') ?><span class="sr">Appointments</span></a>
+        <?php endif; ?>
         <?php if ($user['is_admin'] && !isset($user['_acting'])): ?>
         <a class="iconlink" href="<?= h(url('admin.php')) ?>" title="Admin"<?= $active === 'admin' ? ' aria-current="page"' : '' ?>><?= icon('admin') ?><span class="sr">Admin</span></a>
         <?php endif; ?>
@@ -128,7 +147,7 @@ function render_header(string $title, string $active = ''): void
 <?php if (isset($user['_acting'])): ?>
     <div class="acting-banner" role="status">
         <span>You're looking at <strong><?= h($user['display_name']) ?>'s</strong> Pillbox
-            <span class="muted small">(<?= $user['_acting']['level'] === 'manage' ? 'you can help keep it up to date' : 'view only' ?>)</span></span>
+            <br><span class="muted small"><?= h(share_summary($user['_acting']['perms'])) ?></span></span>
         <form method="post" action="<?= h(url('sharing.php')) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="stop"><input type="hidden" name="return" value="index.php">
             <button class="btn btn-small" type="submit">Back to mine</button></form>
     </div>
@@ -230,7 +249,8 @@ function render_dose_item(array $slot, string $return): void
         </div>
         <div class="dose-actions">
             <?= status_badge($status) ?>
-            <?php if ($slot['log']): ?>
+            <?php if (!share_can('doses', 'log')): ?>
+            <?php elseif ($slot['log']): ?>
                 <form method="post" action="<?= h(url('dose_action.php')) ?>">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="undo">

@@ -7,6 +7,13 @@ const EVERY_DAY = 127;
 const MED_FORMS = ['tablet', 'capsule', 'liquid', 'inhaler', 'injection', 'patch', 'drops', 'cream', 'spray', 'suppository', 'sachet', 'other'];
 const DOSE_UNITS = ['tablet', 'capsule', 'ml', 'mg', 'mcg', 'g', 'puff', 'drop', 'unit', 'patch', 'sachet', 'spray', 'application', 'injection', 'suppository', 'lozenge'];
 // Medication colours, used as CSS classes (.dot-<colour>) so no inline styles are needed.
+// How a medicine is paid for. Only NHS prescriptions have the set charge that a PPC or exemption covers.
+const SUPPLY_TYPES = [
+    'nhs' => 'NHS prescription',
+    'private' => 'Private prescription',
+    'otc' => 'Bought without a prescription',
+];
+
 const MED_COLOURS = ['blue', 'red', 'green', 'orange', 'purple', 'pink', 'teal', 'yellow', 'grey'];
 
 function weekday_bit(DateTimeInterface $date): int

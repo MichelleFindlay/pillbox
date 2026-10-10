@@ -62,6 +62,29 @@ if (is_post()) {
             flash('success', $new['display_name'] . ' added.');
             redirect('admin.php');
         }
+    } elseif ($action === 'update_install' || $action === 'update_restore') {
+        @set_time_limit(300);
+        try {
+            flash('success', $action === 'update_install' ? updater_install((array) latest_version(true)) : updater_restore(post('backup')));
+        } catch (Throwable $e) {
+            updater_log('Failed: ' . $e->getMessage());
+            flash('error', $e->getMessage());
+        }
+        redirect('admin.php#version');
+    } elseif ($action === 'site_settings') {
+        [$settings, $siteErrors] = site_settings_from_post();
+        if ($siteErrors) {
+            flash('error', implode(' ', $siteErrors));
+        } else {
+            try {
+                save_site_settings(array_replace_recursive(saved_site_settings(), $settings));
+                flash('success', 'Site settings saved.');
+            } catch (RuntimeException $e) {
+                $_SESSION['site_settings_php'] = site_settings_php($settings);
+                flash('error', $e->getMessage());
+            }
+        }
+        redirect('admin.php#site');
     } elseif ($action === 'check_version') {
         $latest = latest_version(true);
         flash($latest && $latest['error'] ? 'error' : 'success', $latest === null ? 'Update checking is switched off in config.php.'
@@ -244,6 +267,18 @@ render_header('Admin', 'admin');
     </form>
 </section>
 <?php $latest = latest_version(); $repoUrl = github_repo_url(); ?>
+<section class="card" id="site">
+    <h2>Site settings</h2>
+    <p class="muted small">Saved in <code>config/settings.php</code>, which overrides <code>config/config.php</code>. Database and sign-in settings stay in config.php.</p>
+    <?php if (!site_settings_writable()): ?><p class="flash flash-warning">The <code>config/</code> folder isn't writable by the web server: saving will show you what to paste into config.php instead.</p><?php endif; ?>
+    <?php if ($paste = $_SESSION['site_settings_php'] ?? null): unset($_SESSION['site_settings_php']); ?><pre class="code"><?= h($paste) ?></pre><?php endif; ?>
+    <details class="q-edit"><summary>Change site settings</summary>
+        <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="site_settings">
+            <?php site_settings_fields(); ?>
+            <span class="inline-actions"><button class="btn btn-primary" type="submit">Save site settings</button></span></form>
+    </details>
+</section>
+
 <?php $lastRun = tasks_last_run(); ?>
 <section class="card" id="tasks">
     <h2>Scheduled tasks</h2>
@@ -275,9 +310,33 @@ render_header('Admin', 'admin');
         <?php endif; ?>
     </p>
     <?php if ($latest !== null): ?><p class="muted small">Last checked <?= h(local_time(gmdate('Y-m-d H:i:s', $latest['checked_at']), 'j M Y, H:i')) ?>.</p><?php endif; ?>
-    <?php if (update_available($latest)): ?>
-    <p class="small">To update: download the new version<?= $latest['url'] ? ' from its <a href="' . h($latest['url']) . '" target="_blank" rel="noopener">release page</a>' : '' ?> and upload the files over your current ones,
-        keeping your <code>config/config.php</code>. The database updates itself on the next page load.</p>
+    <?php $problems = updater_problems(); if (update_available($latest)): ?>
+        <?php if (!$problems): ?>
+        <form method="post" class="inline-actions" data-confirm="Install Pillbox <?= h($latest['version']) ?> now? The current files are backed up first.">
+            <?= csrf_field() ?><input type="hidden" name="action" value="update_install">
+            <button class="btn btn-primary" type="submit">Install version <?= h($latest['version']) ?> now</button>
+        </form>
+        <p class="muted small">Downloads the release from GitHub, saves a backup of the current files, then replaces them. Your config/config.php
+            and storage/ folder are never touched, and the database updates itself on the next page load. It takes a few seconds.</p>
+        <?php else: ?>
+        <p class="small">To update: download the new version<?= $latest['url'] ? ' from its <a href="' . h($latest['url']) . '" target="_blank" rel="noopener">release page</a>' : '' ?> and upload the files over your current ones,
+            keeping your <code>config/config.php</code>. The database updates itself on the next page load.</p>
+        <?php endif; ?>
+    <?php endif; ?>
+    <?php if ($problems): ?>
+    <details class="q-edit"><summary>Why can't Pillbox update itself here?</summary><ul class="small"><?php foreach ($problems as $pr): ?><li><?= h($pr) ?></li><?php endforeach; ?></ul></details>
+    <?php endif; ?>
+    <?php if ($backups = updater_backups()): ?>
+    <details class="q-edit"><summary>Backups of previous versions (<?= count($backups) ?>)</summary>
+        <ul class="plain"><?php foreach ($backups as $bk): ?>
+            <li class="logline"><span><?= h($bk['name']) ?> <span class="muted small"><?= h(local_time(gmdate('Y-m-d H:i:s', $bk['time']), 'j M Y, H:i')) ?> &middot; <?= round($bk['size'] / 1048576, 1) ?> MB</span></span>
+                <form method="post" data-confirm="Put the files from <?= h($bk['name']) ?> back? (Your data isn't affected.)"><?= csrf_field() ?><input type="hidden" name="action" value="update_restore"><input type="hidden" name="backup" value="<?= h($bk['name']) ?>">
+                    <button class="btn btn-small" type="submit">Restore</button></form></li>
+        <?php endforeach; ?></ul>
+    </details>
+    <?php endif; ?>
+    <?php if ($log = trim((string) @file_get_contents(storage_path('update.log')))): ?>
+    <details class="q-edit"><summary>Update log</summary><pre class="code"><?= h(implode("\n", array_slice(explode("\n", $log), -10))) ?></pre></details>
     <?php endif; ?>
     <span class="inline-actions">
         <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="check_version"><button class="btn btn-small" type="submit">Check now</button></form>

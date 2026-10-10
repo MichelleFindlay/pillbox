@@ -49,6 +49,8 @@ const CARE_AREAS = [
             'makeup'         => ['label' => 'Remove eye make-up', 'times' => ['22:00'], 'tip' => "Before bed, so it doesn't block the glands along your eyelids."],
         ],
         'checks' => [
+            'eye_drops'         => ['label' => 'Eye drops (once opened)', 'track' => 'expiry', 'interval' => 28,
+                'tip' => 'Most eye drops must be thrown away 28 days after opening. Some single-dose or preservative-free ones differ: check the leaflet.'],
             'eye_test'          => ['label' => 'Eye test', 'interval' => 730, 'tip' => 'The NHS recommends one at least every 2 years, or more often if your optician advises it.'],
             'diabetic_eye'      => ['label' => 'Diabetic eye screening', 'interval' => 365, 'tip' => 'Every 1 to 2 years if you have diabetes, as your screening service advises.'],
         ],
@@ -128,7 +130,87 @@ const CARE_AREAS = [
             'bp_monitor' => ['label' => 'Blood pressure monitor check and batteries', 'interval' => 365,
                 'tip' => 'Use a validated monitor. Once a year, change the batteries and compare it with a reading at your GP surgery or pharmacy.'],
             'thermometer' => ['label' => 'Thermometer batteries', 'interval' => 365],
-            'hba1c'     => ['label' => 'Diabetes review (HbA1c)', 'interval' => 365, 'tip' => 'At least yearly; often more if your treatment is changing.'],
+            'hba1c'     => ['label' => 'Diabetes review (HbA1c)', 'interval' => 365, 'results' => true, 'tip' => 'At least yearly; often more if your treatment is changing.'],
+        ],
+    ],
+    'bloods' => [
+        'title' => 'Blood tests', 'short' => 'Bloods', 'icon' => '&#x1F9EA;', 'default' => false, 'appointment' => 'blood_test',
+        'intro' => 'Some medicines need regular blood tests to stay safe. Keep track of when they are due, and what the results were.',
+        'help'  => 'Your prescriber decides how often you need each test. If you are unsure whether a test is still needed, ask before stopping it.',
+        'presets' => [],
+        // Grouped as on the Care page. One-off and hospital tests have no interval: they are for logging results.
+        'checks' => [
+            'fbc'          => ['group' => 'General', 'label' => 'Full blood count (FBC)', 'interval' => 365, 'results' => true,
+                'tip' => 'Red and white cells, haemoglobin and platelets: checks for anaemia, infection and clotting problems.'],
+            'kidney'       => ['group' => 'General', 'label' => 'Kidney function (U&Es)', 'interval' => 365, 'results' => true,
+                'tip' => 'Urea and electrolytes: sodium, potassium, urea, creatinine and eGFR. Often yearly on ACE inhibitors, diuretics or metformin.'],
+            'lfts'         => ['group' => 'General', 'label' => 'Liver function tests (LFTs)', 'interval' => 365, 'results' => true,
+                'tip' => 'ALT, ALP, bilirubin and albumin. Monitored on some medicines, such as statins at first, methotrexate and sodium valproate.'],
+            'crp'          => ['group' => 'General', 'label' => 'CRP (C-reactive protein)', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'A general marker of inflammation or infection. Also used to follow conditions like rheumatoid arthritis or IBD.'],
+            'esr'          => ['group' => 'General', 'label' => 'ESR (sedimentation rate)', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'Another marker of inflammation, often done with CRP (e.g. for polymyalgia rheumatica).'],
+            'hba1c'        => ['group' => 'Sugar, heart and bones', 'label' => 'HbA1c (average blood sugar)', 'interval' => 365, 'results' => true,
+                'tip' => 'Your average blood sugar over about 3 months: used to diagnose and monitor diabetes. No need to fast.'],
+            'glucose'      => ['group' => 'Sugar, heart and bones', 'label' => 'Blood glucose (fasting or random)', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'For a fasting test, have nothing but water for 8 to 10 hours before (usually overnight).'],
+            'lipids'       => ['group' => 'Sugar, heart and bones', 'label' => 'Cholesterol (lipid profile)', 'interval' => 365, 'results' => true,
+                'tip' => 'Total cholesterol, HDL, LDL and triglycerides. On statins, usually checked 3 months after starting and then yearly.'],
+            'bone'         => ['group' => 'Sugar, heart and bones', 'label' => 'Bone profile', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'Calcium, phosphate and ALP: e.g. with high-dose vitamin D, or kidney or parathyroid problems.'],
+            'thyroid'      => ['group' => 'Hormones', 'label' => 'Thyroid function (TFTs)', 'interval' => 365, 'results' => true,
+                'tip' => 'TSH, plus free T4 and sometimes T3. Usually yearly on levothyroxine, and 6 to 8 weeks after a dose change.'],
+            'sex_hormones' => ['group' => 'Hormones', 'label' => 'Sex hormones', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'FSH, LH, oestradiol, testosterone and prolactin. Timing matters: often days 2 to 5 of a cycle, and testosterone in the morning. Also for monitoring hormone treatment.'],
+            'cortisol'     => ['group' => 'Hormones', 'label' => 'Cortisol', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'Usually taken at about 9am, when cortisol is highest. Ask whether to take steroid medicines beforehand.'],
+            'iron'         => ['group' => 'Vitamins and iron', 'label' => 'Ferritin and iron studies', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'How much iron your body has stored. Often rechecked a few months into iron tablets.'],
+            'b12'          => ['group' => 'Vitamins and iron', 'label' => 'B12 and folate', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'Checked for tiredness or anaemia, and sometimes on long-term metformin.'],
+            'vitamin_d'    => ['group' => 'Vitamins and iron', 'label' => 'Vitamin D', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'Usually only tested when there is a clinical reason, such as bone problems or symptoms of deficiency.'],
+            'clotting'     => ['group' => 'Clotting', 'label' => 'Clotting screen', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'PT, APTT and fibrinogen: e.g. before an operation, or for unexplained bruising or bleeding.'],
+            'inr'          => ['group' => 'Clotting', 'label' => 'INR (warfarin)', 'interval' => 42, 'results' => true,
+                'tip' => 'Your anticoagulation clinic sets how often: anything from weekly to every 12 weeks. Note your dose with each result.'],
+            'lithium'      => ['group' => 'Medicine levels', 'label' => 'Lithium level', 'interval' => 91, 'results' => true,
+                'tip' => 'Usually every 3 months once settled (more often at first), with kidney and thyroid tests every 6 months. Taken about 12 hours after your last dose.'],
+            'digoxin'      => ['group' => 'Medicine levels', 'label' => 'Digoxin level', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'Taken at least 6 hours after a dose. Usually checked if side effects or kidney changes are suspected.'],
+            'drug_level'   => ['group' => 'Medicine levels', 'label' => 'Medicine level (other)', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'e.g. phenytoin, carbamazepine, valproate, ciclosporin or tacrolimus. Rename it and choose the medicine; ask when to take your dose.'],
+            'methotrexate' => ['group' => 'Medicine levels', 'label' => 'Methotrexate blood tests', 'interval' => 91, 'results' => true,
+                'tip' => 'Full blood count, liver and kidney function: often every 2 to 3 months once stable.'],
+            'psa'          => ['group' => 'Specific tests', 'label' => 'PSA (prostate)', 'hint' => 'when needed', 'results' => true,
+                'tip' => 'Avoid ejaculation and vigorous exercise (such as cycling) for 48 hours before, as they can raise PSA. Often repeated regularly once being monitored.'],
+            'troponin'     => ['group' => 'Specific tests', 'label' => 'Troponin', 'hint' => 'hospital test', 'results' => true,
+                'tip' => 'Done in A&E for a suspected heart attack, to keep a note of results. For chest pain now, call 999.'],
+            'd_dimer'      => ['group' => 'Specific tests', 'label' => 'D-dimer', 'hint' => 'hospital test', 'results' => true,
+                'tip' => 'Checks for a suspected clot (DVT or pulmonary embolism). A raised result usually leads to a scan.'],
+            'cultures'     => ['group' => 'Specific tests', 'label' => 'Blood cultures', 'hint' => 'hospital test', 'results' => true,
+                'tip' => 'Taken for suspected sepsis, to find which infection it is. Results can take 2 to 5 days.'],
+            'health_check' => ['group' => 'NHS Health Check', 'label' => 'NHS Health Check', 'interval' => 1826, 'results' => true,
+                'tip' => 'Offered every 5 years from 40 to 74 (if you do not already have heart disease, diabetes or kidney disease). Includes cholesterol, blood pressure and sometimes HbA1c.'],
+        ],
+    ],
+    'prescriptions' => [
+        'title' => 'Prescriptions and payments', 'short' => 'Payments', 'icon' => '&#x1F4B7;', 'default' => false, 'appointment' => null,
+        'intro' => 'Prepayment and exemption certificates, and what you pay for prescriptions. (Prescriptions are free in Scotland, Wales and Northern Ireland.)',
+        'help'  => 'In England prescriptions are free if you are 60 or over, under 16, 16 to 18 and in full-time education, or have a valid exemption certificate. '
+                 . 'The eligibility checker on nhs.uk tells you if you qualify.',
+        'presets' => [],
+        'checks' => [
+            'ppc'     => ['label' => 'Prescription Prepayment Certificate (PPC)', 'track' => 'expiry', 'lengths' => [3, 12],
+                'tip' => 'Covers all your NHS prescriptions. Renew before it runs out (it can renew itself by Direct Debit).'],
+            'hrt_ppc' => ['label' => 'HRT Prepayment Certificate', 'track' => 'expiry', 'lengths' => [12],
+                'tip' => 'Covers HRT medicines on the HRT list only, for 12 months.'],
+            'medex'   => ['label' => 'Medical exemption certificate (MedEx)', 'track' => 'expiry',
+                'tip' => 'Usually lasts 5 years, or until you turn 60. You should be sent a renewal form; if not, ask your GP surgery.'],
+            'matex'   => ['label' => 'Maternity exemption certificate (MatEx)', 'track' => 'expiry',
+                'tip' => "Lasts until 12 months after your due date (or your baby's birth, if you applied after)."],
+            'hc2'     => ['label' => 'HC2 certificate (NHS Low Income Scheme)', 'track' => 'expiry',
+                'tip' => 'Valid for the dates printed on it. Reapply about 4 weeks before it ends.'],
         ],
     ],
     'feet' => [
@@ -190,7 +272,7 @@ const CARE_AREAS = [
         'checks' => [
             'skin_check' => ['label' => 'Skin check (GP or dermatologist)', 'interval' => 365, 'tip' => 'Yearly if you are at higher risk, or as your doctor advises.'],
             'dressings'  => ['label' => 'Dressings', 'track' => 'stock', 'unit' => 'dressings', 'low' => 5, 'tip' => 'Restock before you run out: ask your GP surgery or nurse for a repeat if they are prescribed.'],
-            'sunscreen'  => ['label' => 'Sunscreen (once opened)', 'track' => 'expiry', 'tip' => 'Most last about 12 months once opened: look for the open-jar symbol, e.g. 12M.'],
+            'sunscreen'  => ['label' => 'Sunscreen (once opened)', 'track' => 'expiry', 'interval' => 365, 'tip' => 'Most last about 12 months once opened: look for the open-jar symbol, e.g. 12M.'],
             'emollient'  => ['label' => 'Emollient', 'track' => 'stock', 'unit' => 'tubs or tubes', 'low' => 1, 'tip' => 'Keep a spare. Check the use-by after opening on pump dispensers.'],
         ],
     ],
@@ -290,10 +372,10 @@ function care_area(string $area): array
 function user_care_areas(array $user): array
 {
     if ($user['care_areas'] === null) {
-        return array_keys(array_filter(CARE_AREAS, fn ($a) => $a['default']));
+        return array_values(array_filter(array_keys(array_filter(CARE_AREAS, fn ($a) => $a['default'])), fn ($k) => share_area_allowed($k, $user)));
     }
     $chosen = explode(',', (string) $user['care_areas']);
-    return array_values(array_filter(array_keys(CARE_AREAS), fn ($k) => empty(CARE_AREAS[$k]['hidden']) && in_array($k, $chosen, true)));
+    return array_values(array_filter(array_keys(CARE_AREAS), fn ($k) => empty(CARE_AREAS[$k]['hidden']) && in_array($k, $chosen, true) && share_area_allowed($k, $user)));
 }
 
 /** Areas whose routines and checks go on Today and in the calendar feed: Care categories, plus Mind's habits. */

@@ -32,10 +32,16 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
   - **Routines** ticked off on the Today page: one-tap presets (brushing, screen breaks, physio exercises with reps,
     stretching, foot checks, monthly mole checks, CPAP cleaning...) or your own, at set times on chosen days or every
     few days or weeks, with a streak and a 7-day view for catching up on missed ticks.
+  - **Blood tests** that medicines need (lithium, methotrexate, INR, thyroid, kidney...), linked to the medicine,
+    with a results log; and **Prescriptions and payments**: PPC and HRT PPC (start date and length), MedEx,
+    MatEx and HC2 certificates with renewal reminders, a cost log, and a calculator showing whether a PPC would
+    save money (prices in `config/config.php`). Medicines can be marked as a private prescription or bought
+    without one, with their price: these are logged when a new supply is recorded and kept out of the PPC sums.
   - **Checks and renewals**, each tracked the way that suits it:
     - *due every so often*: eye and hearing tests, night guard checks, spacer and CPAP part replacements, pill reviews,
       flu (every autumn), tetanus, smoke alarm tests...
-    - *expiry dates*: adrenaline auto-injectors, test strips, sunscreen once opened ("Replaced" asks for the new date);
+    - *expiry dates*: adrenaline auto-injectors, test strips ("Replaced" asks for the new date), or a time after
+      opening: eye drops (28 days), sunscreen (12 months) ("Opened a new one");
     - *stock*: test strips, lancets, CGM sensors, dressings, with "restock by" worked out from how many you use a week;
     - *fill level*: the sharps bin, flagged for collection at three-quarters full;
     - *kits*: first aid kit and emergency meds bag, with contents and an expiry date per item.
@@ -168,7 +174,12 @@ The server needs PHP's `xmlreader` extension (standard) and, to read `export.zip
 4. **Make `storage/` writable** by the web server (it caches Microsoft's signing keys):
    `chown www-data storage` (or set it to 775 in your file manager).
 
-5. **Open the site**. On a new install you'll be asked to create the first administrator account.
+5. **Open the site**. On a new install you'll be asked to create the first administrator account. Everyone's
+   first sign-in then goes through a short setup (about you, what to use, reminders), and administrators get a
+   **Site settings** step too: site name and address, default time zone, email, scheduled tasks, demo mode.
+   Those are saved in `config/settings.php` (git-ignored), which overrides `config/config.php`, so config.php
+   itself, with its comments and database details, is never rewritten; they can be changed later on the Admin
+   page. If the `config/` folder isn't writable, Pillbox shows what to paste into config.php instead.
 
 6. **Set up the scheduled tasks** (optional, but needed for emails): run them every 5 to 15 minutes, either
    with cron, `*/10 * * * * php /var/www/pillbox/bin/cron.php`, or, if your host has no cron, set a long
@@ -362,12 +373,18 @@ check for updates but never install them. **Send me a test email** on the Accoun
 
 ## Sharing with a carer or partner
 
-Under **Sharing** (the people icon), you can let someone with an account on the same Pillbox see your
-Pillbox (**view only**) or help keep it up to date (**can help**: log doses, tick tasks, add readings).
-Mind is only included if you tick it. They open it from their own Sharing page, with a banner showing
-whose Pillbox it is and **Back to mine**. They can never see or change your account settings, sign-in
-details, sync and calendar links, data export or Mind PIN, can't permanently delete medicines, and can't
-share your Pillbox further. You can see when they last looked, and stop sharing at any time.
+Under **Sharing** (the people icon), you can give someone with an account on the same Pillbox access to parts
+of yours. For each part (medicines and doses, readings, appointments, Care, Mind, reports) you choose
+**no access**, **see**, or a level of change: for medicines, **log doses** (take, skip, collected
+prescriptions) or **change medicines**. You can keep chosen Care categories private (e.g. Women's health),
+include or leave out the Mind journal, and set an end date. Quick choices: "See everything except Mind",
+"Help with medicines", "Full help".
+
+They open it from their own Sharing page, with a banner showing whose Pillbox it is and **Back to mine**;
+only the tabs and parts they've been given appear. Pages are checked centrally, and anything not shared is
+refused. They can never see or change your account settings, sign-in details, sync and calendar links,
+data export or Mind PIN, can't permanently delete medicines, and can't share your Pillbox further. Every
+change they make is listed under their name (**Recent activity**), and you can stop sharing at any time.
 
 ## Demo mode
 
@@ -375,8 +392,60 @@ Set `'demo' => ['enabled' => true]` in `config/config.php` to add **Try the demo
 Each visitor gets their own copy of a sample account for Nell Whitcombe, a made-up person (the same one as
 the ICE demo), with a few weeks of doses, readings, appointments, Care and Mind data. Everything they change
 is deleted when they end the demo or sign out, or after `'hours'` if they just leave. Sign-in details,
-email, sharing, Apple Health sync, calendar links and fingerprint unlock are switched off in the demo, and
+email, sharing, Apple Health sync, calendar links and passkeys are switched off in the demo, and
 demo accounts don't appear in the admin's user list.
+
+## Connecting apps and devices
+
+**Readings → Connect apps and devices** brings readings in from other places, labelled with where they came from
+and never duplicated:
+
+- **Apple Health** (export file, or automatic sync from an iPhone app), see above.
+- **Android Health Connect** (Samsung Health, Google Fit, Fitbit and most Android apps): Health Connect only
+  works on the phone, so an Android app that can send its data to a web address posts it to your private sync
+  link, in the same format as the iPhone sync.
+- **WHOOP, Fitbit, Withings and Oura**: direct connections. An admin registers a free app with each service
+  (WHOOP: developer.whoop.com, Fitbit: dev.fitbit.com, Withings: developer.withings.com, Oura:
+  cloud.ouraring.com), using the return address shown on the Admin page (`.../connect.php`), and enters its
+  client ID and secret under **Admin → Site settings → Connected services**. Each person then presses
+  **Connect**. Readings sync about once an hour via the scheduled tasks; sign-in tokens are stored encrypted
+  (key in `storage/app.key`). They bring in resting heart rate, heart rate variability, oxygen level, sleep,
+  breathing rate, steps, weight, and (Withings) blood pressure and temperature, depending on the service.
+- **MyFitnessPal** has no public API: import its **Export data** file (weight, and calories eaten per day), or
+  let it write to Apple Health or Health Connect.
+- **Google Fit** is being retired: import **Daily activity metrics.csv** (or the whole zip) from Google Takeout.
+- **Garmin** only shares data with approved businesses, so connect it through Apple Health or Health Connect.
+
+## Push notifications
+
+Each person can turn on notifications in each browser or device they use (**Account → Notifications**):
+dose reminders at dose time (if not logged), Care reminders and a daily "coming up", appointment reminders,
+and the Mind check-in. **Hide details on the lock screen** shows just "Pillbox: you have a reminder". They use
+the standard Web Push protocol (VAPID keys are created automatically in `storage/`; messages are encrypted
+for the device), so no third-party service or account is needed. They're sent by the scheduled tasks, so run
+those every 5 minutes. On iPhone and iPad, notifications work once Pillbox has been added to the Home Screen
+(iOS 16.4 or later).
+
+## Updating
+
+Admins can update from the Admin page: **Install version X now** downloads the release from GitHub, checks
+it, saves a backup of the current files in `storage/backups/`, then replaces them. `config/config.php` and
+`storage/` are never touched, and the database updates itself on the next page load. Any backup can be put
+back with **Restore**. It needs PHP's zip and curl extensions and write access to the Pillbox folder; copies
+that are git checkouts should use `git pull`. Uploading the files by hand works too.
+
+## Tidy addresses
+
+With Apache's `mod_rewrite`, pages have addresses without ".php" (e.g. `/medications`); `public/.htaccess`
+turns this on and tells Pillbox, which then makes its links that way and redirects old ".php" addresses.
+Calendar feed and Apple Health sync addresses keep working as they are. Without `mod_rewrite` (or with
+`'pretty_urls' => false`), everything uses ".php" as before.
+
+## Moving your data
+
+**Account → Your data → Download all my data** gives one file with everything (readable sections, plus a
+complete backup). **Import data** restores that backup into an account, replacing what's there: useful for
+moving to another Pillbox. Sign-in details, sharing, passkeys and sync links aren't included.
 
 ## Security notes
 
@@ -387,7 +456,8 @@ demo accounts don't appear in the admin's user list.
   audience, issuer, expiry, nonce and tenant are all checked.
 - Every query is scoped to the signed-in user, so people can only see their own data, or data that has
   been shared with them (see Sharing above).
-- Mind can have its own PIN, plus fingerprint or face unlock (WebAuthn, platform authenticators only;
+- Mind can have its own PIN, plus a passkey (WebAuthn, platform authenticators only: the device asks for
+  a fingerprint, face or its own PIN;
   needs HTTPS). The device signs a one-time challenge; the origin, site, user verification and signature
   are all checked, and the PIN still works. Crisis contacts are never locked.
 - Health data is sensitive. Use HTTPS, keep the server patched, back up the database, and check what

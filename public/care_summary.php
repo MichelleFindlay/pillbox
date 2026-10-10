@@ -104,7 +104,7 @@ render_header('Care summary', 'care');
 
 <article class="report">
     <header class="report-head">
-        <img src="<?= h(asset('assets/logo.svg')) ?>" alt="" width="56" height="56">
+        <?= logo_svg(56) ?>
         <div>
             <h1>Care summary<?= $only ? ': ' . h(CARE_AREAS[$only]['title']) : '' ?></h1>
             <p><strong><?= h($user['display_name']) ?></strong><?= $user['date_of_birth'] ? ' · born ' . h((new DateTimeImmutable($user['date_of_birth']))->format('j M Y')) . " (age $age)" : '' ?></p>

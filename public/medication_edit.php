@@ -13,8 +13,8 @@ if ($id && !$med) {
 }
 
 $fields = ['name', 'dmd_code', 'strength', 'form', 'dose_unit', 'colour', 'reason', 'instructions', 'prescriber', 'notes',
-    'as_needed', 'prn_dose_amount', 'prn_max_daily', 'stock_count', 'low_stock_days', 'expiry_date', 'mental_health', 'start_date', 'end_date'];
-$form = $med ?? ['form' => 'tablet', 'dose_unit' => 'tablet', 'colour' => MED_COLOURS[0], 'as_needed' => 0,
+    'as_needed', 'prn_dose_amount', 'prn_max_daily', 'stock_count', 'low_stock_days', 'expiry_date', 'mental_health', 'start_date', 'end_date', 'supply_type', 'supply_price'];
+$form = $med ?? ['form' => 'tablet', 'dose_unit' => 'tablet', 'colour' => MED_COLOURS[0], 'as_needed' => 0, 'supply_type' => 'nhs',
     'low_stock_days' => 7, 'start_date' => $todayYmd];
 $rows = $med
     ? schedules_for_editing(editing_schedules((int) $med['id'], $todayYmd))
@@ -54,6 +54,14 @@ if (is_post()) {
         if ($form[$f] !== '' && (!is_numeric($form[$f]) || (float) $form[$f] < 0 || (float) $form[$f] > 99999)) {
             $errors[] = "$label must be a positive number.";
         }
+    }
+    if (!isset(SUPPLY_TYPES[$form['supply_type']])) {
+        $form['supply_type'] = 'nhs';
+    }
+    if ($form['supply_type'] === 'nhs') {
+        $form['supply_price'] = '';
+    } elseif ($form['supply_price'] !== '' && (!is_numeric($form['supply_price']) || (float) $form['supply_price'] < 0 || (float) $form['supply_price'] > 99999)) {
+        $errors[] = 'Enter the price as an amount in pounds, or leave it empty.';
     }
     if (!ctype_digit((string) $form['low_stock_days']) || (int) $form['low_stock_days'] > 365) {
         $form['low_stock_days'] = 7;
@@ -145,6 +153,7 @@ if (is_post()) {
             $nullable($form['reason']), $nullable($form['instructions']), $nullable($form['prescriber']), $nullable($form['notes']),
             $form['as_needed'], $nullable($form['prn_dose_amount']), $nullable($form['prn_max_daily']),
             $nullable($form['stock_count']), (int) $form['low_stock_days'], $nullable($form['expiry_date']), (int) $form['mental_health'], $form['start_date'], $nullable($form['end_date']),
+            $form['supply_type'], $form['supply_price'] === '' ? null : round((float) $form['supply_price'], 2),
         ];
 
         $oldSchedules = $med ? editing_schedules((int) $med['id'], $todayYmd) : [];
@@ -152,13 +161,13 @@ if (is_post()) {
             if ($med) {
                 q('UPDATE medications SET name = ?, dmd_code = ?, strength = ?, form = ?, dose_unit = ?, colour = ?, reason = ?, instructions = ?,
                      prescriber = ?, notes = ?, as_needed = ?, prn_dose_amount = ?, prn_max_daily = ?, stock_count = ?,
-                     low_stock_days = ?, expiry_date = ?, mental_health = ?, start_date = ?, end_date = ? WHERE id = ? AND user_id = ?',
+                     low_stock_days = ?, expiry_date = ?, mental_health = ?, start_date = ?, end_date = ?, supply_type = ?, supply_price = ? WHERE id = ? AND user_id = ?',
                     [...$values, $med['id'], $uid]);
                 $medId = (int) $med['id'];
             } else {
                 q('INSERT INTO medications (name, dmd_code, strength, form, dose_unit, colour, reason, instructions, prescriber, notes,
-                     as_needed, prn_dose_amount, prn_max_daily, stock_count, low_stock_days, expiry_date, mental_health, start_date, end_date, user_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
+                     as_needed, prn_dose_amount, prn_max_daily, stock_count, low_stock_days, expiry_date, mental_health, start_date, end_date, supply_type, supply_price, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
                 $medId = (int) db()->lastInsertId();
             }
 
@@ -361,6 +370,19 @@ render_header($med ? 'Edit ' . $med['name'] : 'Add medication', 'meds');
             <label>Prescribed by <input name="prescriber" maxlength="150" value="<?= h($form['prescriber'] ?? '') ?>" placeholder="e.g. Dr Patel"></label>
         </div>
         <label>Instructions <input name="instructions" maxlength="255" value="<?= h($form['instructions'] ?? '') ?>" placeholder="e.g. Take with food"></label>
+        <fieldset>
+            <legend>How you get it</legend>
+            <div class="repeat-choice">
+                <?php foreach (SUPPLY_TYPES as $key => $label): ?>
+                <label class="check"><input type="radio" name="supply_type" value="<?= h($key) ?>" id="supply-<?= h($key) ?>"<?= checked(($form['supply_type'] ?? 'nhs') === $key) ?>> <?= h($label) ?></label>
+                <?php endforeach; ?>
+            </div>
+            <div data-show-when="supply-private supply-otc">
+                <label class="narrow"><span>Price for a supply (&pound;) <span class="muted small">(optional)</span></span>
+                    <input type="number" name="supply_price" min="0" max="99999" step="0.01" inputmode="decimal" value="<?= h((string) ($form['supply_price'] ?? '')) ?>" placeholder="e.g. 24.99"></label>
+                <p class="muted small">Not an NHS charge, so a prepayment certificate or exemption doesn't cover it. Pillbox offers to log the price when you record a new supply, and keeps it apart from NHS charges in Care.</p>
+            </div>
+        </fieldset>
         <?php if (mind_enabled($user)): ?>
         <label class="check"><input type="checkbox" name="mental_health" value="1"<?= checked(!empty($form['mental_health'])) ?>>
             <span>Mental health medicine <span class="muted small">(shown in Mind, with side-effect and "how I'm feeling" notes for reviews)</span></span></label>

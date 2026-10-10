@@ -252,7 +252,7 @@ final class HealthImporter
  * Save imported rows for a user.
  * @return array{added: int, updated: int, unchanged: int, metrics: array<string, int>}
  */
-function save_health_rows(int $userId, array $rows): array
+function save_health_rows(int $userId, array $rows, string $source = HEALTH_SOURCE): array
 {
     $result = ['added' => 0, 'updated' => 0, 'unchanged' => 0, 'metrics' => []];
     if (!$rows) {
@@ -266,10 +266,10 @@ function save_health_rows(int $userId, array $rows): array
     // Daily totals (steps, sleep) only grow during a day, so a sync that sends just the
     // latest part of a day must not shrink the total.
     $grow = db()->prepare($insert . ' ON DUPLICATE KEY UPDATE value1 = GREATEST(value1, VALUES(value1))');
-    transaction(function () use ($userId, $rows, $ignore, $replace, $grow, &$result) {
+    transaction(function () use ($userId, $rows, $source, $ignore, $replace, $grow, &$result) {
         foreach ($rows as $r) {
             $stmt = !$r['replace'] ? $ignore : (in_array($r['metric'], ['steps', 'sleep'], true) ? $grow : $replace);
-            $stmt->execute([$userId, $r['metric'], ...$r['values'], $r['context'], $r['recorded_at'], HEALTH_SOURCE, $r['external_id']]);
+            $stmt->execute([$userId, $r['metric'], ...$r['values'], $r['context'], $r['recorded_at'], $source, $r['external_id']]);
             $n = $stmt->rowCount(); // 1 = inserted, 2 = updated, 0 = already there
             $result[$n === 1 ? 'added' : ($n === 2 ? 'updated' : 'unchanged')]++;
             if ($n > 0) {
