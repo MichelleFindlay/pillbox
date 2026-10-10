@@ -474,4 +474,11 @@ database/    schema.sql
 storage/     cache (must be writable)
 ```
 
+## License
+
+Pillbox is free software, released under the [GNU General Public License v3.0](LICENSE). You can use, study,
+change and share it. If you share it (changed or not), you must share the source code under the same licence.
+
+Copyright (C) 2026 Michelle Findlay
+
 *Pillbox is a record-keeping aid. It is not medical advice; always follow your prescriber's instructions.*
