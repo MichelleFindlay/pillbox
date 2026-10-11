@@ -129,7 +129,7 @@ render_header('Mind', 'mind');
 ?>
 <div class="page-head">
     <div>
-        <h1>Mind</h1>
+        <h1>Mind <?= help_link('mind', '', 'Mind') ?></h1>
         <p class="muted">Check in whenever you like. There's no right or wrong way to use this.</p>
     </div>
     <span class="inline-actions">

@@ -1490,3 +1490,16 @@ html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-mo
 .bp-day.today { border-color: var(--primary); }
 .bp-day.first { opacity: .7; }
 .bp-entry fieldset { margin-bottom: .25rem; }
+
+/* Help: the "?" next to headings, and the documentation pages */
+.help-q { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border-radius: 50%; border: 1.5px solid currentColor;
+  font-size: .8rem; font-weight: 700; line-height: 1; text-decoration: none; color: var(--text-2); vertical-align: middle; margin-left: .3rem; }
+.help-q:hover, .help-q:focus-visible { color: var(--primary); }
+h1 .help-q { width: 1.5rem; height: 1.5rem; font-size: .9rem; }
+.docs { max-width: 48rem; margin: 0 auto; }
+.docs h2 { font-size: 1.2rem; margin: 1.6rem 0 .4rem; scroll-margin-top: 5rem; }
+.docs h3 { font-size: 1.05rem; margin: 1.2rem 0 .3rem; scroll-margin-top: 5rem; }
+.docs ul, .docs ol { padding-left: 1.3rem; }
+.docs li { margin-bottom: .25rem; }
+.docs code { background: var(--surface-2); padding: .05rem .3rem; border-radius: 4px; font-size: .9em; }
+.docs pre.code code { background: none; padding: 0; }

@@ -154,7 +154,7 @@ render_header('Private', 'care');
 <div class="page-head">
     <div>
         <p class="muted small"><a href="<?= h(url('care.php')) ?>">Care</a> &rsaquo;</p>
-        <h1>&#x1F98B; Gender-affirming care</h1>
+        <h1>&#x1F98B; Gender-affirming care <?= help_link('gender-affirming-care', '', 'this page') ?></h1>
     </div>
     <?php if ($record && $record['pin_hash'] && private_unlocked($record)): ?>
     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="lock"><button class="btn btn-small" type="submit">Lock now</button></form>

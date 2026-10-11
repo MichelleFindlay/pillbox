@@ -154,7 +154,7 @@ function nd_sections(array $user, DateTimeImmutable $today): void
 
 <section class="card" id="nd-passport">
     <div class="card-head">
-        <h2>Communication passport</h2>
+        <h2>Communication passport <?= help_link('adhd-autism', 'communication-passport', 'the communication passport') ?></h2>
         <?php if (array_filter($p['passport'])): ?><a class="btn btn-small btn-primary" href="<?= h(url('passport.php')) ?>">Show it</a><?php endif; ?>
     </div>
     <p class="small">How to talk to you: show it to a clinician or receptionist, print it, or add it to your ICE / medical ID, so it's there if you can't speak.</p>

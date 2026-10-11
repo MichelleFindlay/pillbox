@@ -402,7 +402,7 @@ $noun = !empty($form['is_supplement']) ? 'supplement' : 'medication';
 render_header($med ? 'Edit ' . $med['name'] : "Add $noun", 'meds');
 ?>
 <div class="page-head">
-    <h1><?= $med ? 'Edit ' . h($med['name']) : 'Add ' . $noun ?></h1>
+    <h1><?= $med ? 'Edit ' . h($med['name']) : 'Add ' . $noun ?> <?= help_link('medicines', 'adding-a-medicine', 'adding a medicine') ?></h1>
     <a class="btn" href="<?= h(url('medications.php')) ?>">Cancel</a>
 </div>
 

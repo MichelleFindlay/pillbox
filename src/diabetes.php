@@ -296,7 +296,7 @@ function diabetes_sections(array $user, DateTimeImmutable $today): void
 
 <section class="card" id="dm-glucose">
     <div class="card-head">
-        <h2>Glucose</h2>
+        <h2>Glucose <?= help_link('diabetes', 'glucose', 'glucose and time in range') ?></h2>
         <span class="inline-actions"><a class="btn btn-small btn-danger" href="<?= h(url('hypo.php')) ?>">Hypo guide</a><a class="btn btn-small" href="<?= h(url('diabetes_summary.php')) ?>">Clinician summary</a></span>
     </div>
     <div class="tiles">
@@ -398,7 +398,7 @@ function diabetes_sections(array $user, DateTimeImmutable $today): void
 <?php endif; ?>
 
 <section class="card" id="dm-drive">
-    <h2>Before driving</h2>
+    <h2>Before driving <?= help_link('diabetes', 'before-driving', 'driving') ?></h2>
     <?php if ($drive !== null): ?>
     <p class="flash <?= $drive > 5 ? 'flash-success' : 'flash-error' ?>"><?= $drive > 5 ? h(number_format($drive, 1)) . ' mmol/L: above 5, so OK to drive. Check again every 2 hours on a long journey.'
         : h(number_format($drive, 1)) . " mmol/L: don't drive. Have a snack (and treat a hypo if under 4), then check again: you need to be above 5." ?></p>

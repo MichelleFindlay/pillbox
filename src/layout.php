@@ -189,6 +189,7 @@ function render_footer(): void
 <footer class="site-footer">
     <p><?= h(config('app.name')) ?> helps you keep a record. It is not medical advice &mdash; always follow your prescriber's instructions.</p>
     <p class="footer-meta">
+        <a href="<?= h(url('docs.php')) ?>">Docs</a>
         <a href="<?= h(url('terms.php')) ?>">Terms</a>
         <a href="<?= h(url('privacy.php')) ?>">Privacy</a>
         <span>Version <?= h(pillbox_version()) ?></span>

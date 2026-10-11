@@ -263,7 +263,7 @@ function migraine_sections(array $user, DateTimeImmutable $today): void
 
 <section class="card" id="mg-diary">
     <div class="card-head">
-        <h2>Headache diary</h2>
+        <h2>Headache diary <?= help_link('migraine', 'headache-diary', 'the headache diary') ?></h2>
         <a class="btn btn-small" href="<?= h(url('migraine_summary.php')) ?>">Clinician summary</a>
     </div>
     <div class="tiles">

@@ -304,7 +304,7 @@ if (!$areaKey) {
     ?>
 <div class="page-head">
     <div>
-        <h1>Care</h1>
+        <h1>Care <?= help_link('care', '', 'Care') ?></h1>
         <p class="muted">Routines to tick off each day, and checks, screening and vaccinations to keep on top of.</p>
     </div>
     <span class="inline-actions">
@@ -560,7 +560,7 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
 ?>
 <div class="page-head">
     <div>
-        <h1><?= $area['icon'] ?> <?= h($area['title']) ?></h1>
+        <h1><?= $area['icon'] ?> <?= h($area['title']) ?> <?= help_link(CARE_DOC_PAGES[$areaKey] ?? 'care-categories', isset(CARE_DOC_PAGES[$areaKey]) ? '' : docs_slug($area['title']), $area['title']) ?></h1>
         <?php if ($tasks): ?><p class="muted"><?= $streak && !$user['hide_streaks'] ? "$streak day" . ($streak === 1 ? '' : 's') . ' in a row with your whole routine done' : 'Tick tasks off on the Today page' ?></p><?php endif; ?>
     </div>
     <span class="inline-actions">

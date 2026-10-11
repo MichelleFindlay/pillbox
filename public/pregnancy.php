@@ -225,7 +225,7 @@ render_header('Pregnancy', 'care');
 <div class="page-head">
     <div>
         <p class="muted small"><a href="<?= h(url('care.php')) ?>">Care</a> &rsaquo;</p>
-        <h1>&#x1F930; Pregnancy</h1>
+        <h1>&#x1F930; Pregnancy <?= help_link('pregnancy', '', 'Pregnancy') ?></h1>
     </div>
 </div>
 <?= form_errors($errors) ?>

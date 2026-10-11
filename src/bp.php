@@ -246,7 +246,7 @@ function bp_sections(array $user, DateTimeImmutable $today): void
 <p class="flash flash-info">You started or increased <?= h($c['name']) ?> on <?= h(date('j M', strtotime($c['effective_date']))) ?>: a blood test for kidney function and potassium is usually done 1 to 2 weeks after. Check one's booked.</p>
 <?php endforeach; ?>
 <section class="card" id="bp-session">
-    <h2>Home monitoring</h2>
+    <h2>Home monitoring <?= help_link('blood-pressure', 'home-monitoring', 'home monitoring') ?></h2>
     <p class="small">Your target at home is <strong>below <?= $tSys ?>/<?= $tDia ?></strong> (<?= h($tWhy) ?>). The usual way to check it, from NICE: sit quietly for 5 minutes, then take 2 readings a minute apart, morning and evening, for 4 to 7 days. The first day is left out, and the rest averaged.</p>
     <?php if ($session): ?>
     <div class="bp-days">
