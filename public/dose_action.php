@@ -25,26 +25,34 @@ switch (post('action')) {
         }
         $slotUtc = $slot->format('Y-m-d H:i:s');
         $takenAt = post('at') === 'scheduled' ? $slotUtc : utc_now();
-        $amount = $status === 'taken' ? (float) $schedule['dose_amount'] : 0.0;
-
-        transaction(function () use ($schedule, $slotUtc, $status, $amount, $takenAt, $uid) {
-            $existing = q('SELECT * FROM dose_logs WHERE schedule_id = ? AND scheduled_for = ? FOR UPDATE', [$schedule['id'], $slotUtc])->fetch();
-            if ($existing) {
-                if ($existing['status'] === 'taken') {
-                    adjust_stock((int) $schedule['med_id'], (float) $existing['amount']);
-                }
-                q('UPDATE dose_logs SET status = ?, amount = ?, taken_at = ? WHERE id = ?', [$status, $amount, $takenAt, $existing['id']]);
-            } else {
-                q(
-                    'INSERT INTO dose_logs (user_id, medication_id, schedule_id, scheduled_for, status, amount, taken_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [$uid, $schedule['med_id'], $schedule['id'], $slotUtc, $status, $amount, $takenAt]
-                );
-            }
-            if ($status === 'taken') {
-                adjust_stock((int) $schedule['med_id'], -$amount);
-            }
-        });
+        // "Took it at 9:00, logging now": that time on the dose's own day (never in the future).
+        if (preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', post('taken_time'))) {
+            $at = local_to_utc(local_time($slotUtc, 'Y-m-d') . ' ' . post('taken_time'));
+            $takenAt = $at && $at <= utc_now() ? $at : utc_now();
+        }
+        record_dose($uid, $schedule, $slotUtc, $status, $takenAt, post('site') ?: null);
         flash('success', $schedule['name'] . ($status === 'taken' ? ' marked as taken.' : ' marked as skipped.'));
+        break;
+
+    case 'take_block':
+        // "Take all" for a part of the day: every dose in it not already recorded. Ones well past
+        // their time (missed) are recorded at their scheduled time, like their own Take buttons.
+        $missedAfter = (int) config('doses.missed_after_minutes', 120);
+        $count = 0;
+        foreach (array_slice((array) ($_POST['slots'] ?? []), 0, 50) as $item) {
+            [$scheduleId, $slotStr] = array_pad(explode('|', (string) $item, 2), 2, '');
+            $schedule = q('SELECT s.*, m.id AS med_id, m.form FROM medication_schedules s JOIN medications m ON m.id = s.medication_id
+                           WHERE s.id = ? AND m.user_id = ? AND m.as_needed = 0', [(int) $scheduleId, $uid])->fetch();
+            $slot = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $slotStr, new DateTimeZone('UTC'));
+            if (!$schedule || $slot === false
+                || q('SELECT 1 FROM dose_logs WHERE schedule_id = ? AND scheduled_for = ?', [$schedule['id'], $slotStr])->fetch()) {
+                continue;
+            }
+            $late = time() - $slot->getTimestamp() > $missedAfter * 60;
+            record_dose($uid, $schedule, $slotStr, 'taken', $late ? $slotStr : utc_now(), $schedule['form'] === 'injection' ? injection_site_suggestion((int) $schedule['med_id']) : null);
+            $count++;
+        }
+        flash('success', $count ? ($count === 1 ? '1 dose' : "$count doses") . ' marked as taken.' : 'Those doses were already recorded.');
         break;
 
     case 'prn':

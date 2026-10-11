@@ -13,7 +13,7 @@ const BACKUP_FORMAT = 1;
 
 // Settings (columns of users) that are backed up and restored.
 const BACKUP_SETTINGS = ['timezone', 'enabled_metrics', 'theme', 'color_mode', 'care_areas', 'date_of_birth', 'sex', 'screening_programmes',
-    'mind_enabled', 'mind_lock_plan', 'mind_reminder', 'mind_selfcare', 'meds_show_changes', 'email_digest', 'email_digest_hour', 'email_appointments'];
+    'mind_enabled', 'mind_lock_plan', 'mind_reminder', 'mind_selfcare', 'meds_show_changes', 'pmdd_mode', 'pmdd_headsup', 'text_size', 'wide_spacing', 'easy_font', 'reduce_motion', 'hide_streaks', 'dose_followup', 'pronouns', 'gender_identity', 'body_inventory', 'privacy_blur', 'disguise', 'email_digest', 'email_digest_hour', 'email_appointments'];
 
 /*
  * Tables in restore order (parents before children). 'owner': how rows belong to the user
@@ -37,6 +37,29 @@ const BACKUP_TABLES = [
     'health_checks'         => ['owner' => 'user_id', 'links' => ['medication_id' => 'medications']],
     'check_results'         => ['owner' => ['check_id', 'health_checks'], 'links' => ['check_id' => 'health_checks']],
     'cycle_periods'         => ['owner' => 'user_id', 'links' => []],
+    'pregnancies'           => ['owner' => 'user_id', 'links' => []],
+    'menopause_profiles'    => ['owner' => 'user_id', 'links' => [], 'keyed' => false],
+    'menopause_logs'        => ['owner' => 'user_id', 'links' => []],
+    'menopause_scores'      => ['owner' => 'user_id', 'links' => []],
+    'dose_effects'          => ['owner' => 'user_id', 'links' => ['medication_id' => 'medications']],
+    'nd_profiles'           => ['owner' => 'user_id', 'links' => [], 'keyed' => false],
+    'nd_waitlist'           => ['owner' => 'user_id', 'links' => []],
+    'nd_prep'               => ['owner' => 'user_id', 'links' => []],
+    'nd_logs'               => ['owner' => 'user_id', 'links' => []],
+    'thyroid_weeks'         => ['owner' => 'user_id', 'links' => []],
+    'diabetes_profiles'     => ['owner' => 'user_id', 'links' => [], 'keyed' => false],
+    'insulin_logs'          => ['owner' => 'user_id', 'links' => ['medication_id' => 'medications']],
+    'hypo_events'           => ['owner' => 'user_id', 'links' => []],
+    'headache_episodes'     => ['owner' => 'user_id', 'links' => []],
+    'bp_profiles'           => ['owner' => 'user_id', 'links' => [], 'keyed' => false],
+    'episode_meds'          => ['owner' => ['episode_id', 'headache_episodes'], 'links' => ['episode_id' => 'headache_episodes', 'medication_id' => 'medications']],
+    'pmdd_logs'             => ['owner' => 'user_id', 'links' => []],
+    'pmdd_markers'          => ['owner' => 'user_id', 'links' => []],
+    'lab_results'           => ['owner' => 'user_id', 'links' => ['medication_id' => 'medications']],
+    'lab_targets'           => ['owner' => 'user_id', 'links' => [], 'keyed' => false],
+    'pregnancy_items'       => ['owner' => ['pregnancy_id', 'pregnancies'], 'links' => ['pregnancy_id' => 'pregnancies']],
+    'antenatal_checks'      => ['owner' => 'user_id', 'links' => ['pregnancy_id' => 'pregnancies']],
+    'pregnancy_log'         => ['owner' => 'user_id', 'links' => ['pregnancy_id' => 'pregnancies']],
     'prescription_payments' => ['owner' => 'user_id', 'links' => ['medication_id' => 'medications']],
     'mind_checkins'         => ['owner' => 'user_id', 'links' => []],
     'mind_symptoms'         => ['owner' => 'user_id', 'links' => []],
@@ -68,7 +91,8 @@ function export_backup(array $user): array
     return [
         'format'   => BACKUP_FORMAT,
         'version'  => pillbox_version(),
-        'settings' => array_intersect_key($user, array_flip(BACKUP_SETTINGS)),
+        'settings' => ['care_areas' => $user['care_areas'] === null ? null // without the private pathway (it's never in backups)
+            : implode(',', array_filter(explode(',', $user['care_areas']), fn ($k) => empty(CARE_AREAS[$k]['private'])))] + array_intersect_key($user, array_flip(BACKUP_SETTINGS)),
         'tables'   => $tables,
     ];
 }

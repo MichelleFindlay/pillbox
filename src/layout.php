@@ -34,6 +34,18 @@ function logo_svg(int $size, string $class = ''): string
         . '</g></svg>';
 }
 
+// Disguised home screen name and icon (Account > Privacy), so the installed app doesn't say what it's for.
+const DISGUISES = [
+    'planner' => ['name' => 'Planner', 'icon' => 'disguise-planner', 'color' => '#2f5d8a'],
+    'notes'   => ['name' => 'Notes', 'icon' => 'disguise-notes', 'color' => '#b8860b'],
+];
+
+function user_disguise(): ?array
+{
+    $real = real_user();
+    return $real ? (DISGUISES[$real['disguise'] ?? ''] ?? null) : null;
+}
+
 function icon(string $name): string
 {
     $paths = [
@@ -81,7 +93,9 @@ function render_header(string $title, string $active = ''): void
     [$theme, $mode] = user_theme($user);
     [$barLight, $barDark] = THEMES[$theme]['bar'];
     ?><!doctype html>
-<html lang="en" data-palette="<?= h($theme) ?>"<?= $mode !== 'auto' ? ' data-theme="' . h($mode) . '"' : '' ?>>
+<?php $prefs = real_user() ?? []; ?>
+<html lang="en" data-palette="<?= h($theme) ?>"<?= $mode !== 'auto' ? ' data-theme="' . h($mode) . '"' : '' ?><?= !empty($prefs['text_size']) ? ' data-text="' . h($prefs['text_size']) . '"' : ''
+    ?><?= !empty($prefs['wide_spacing']) ? ' data-spacing="wide"' : '' ?><?= !empty($prefs['easy_font']) ? ' data-font="easy"' : '' ?><?= !empty($prefs['reduce_motion']) ? ' data-motion="reduce"' : '' ?>>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -92,20 +106,27 @@ function render_header(string $title, string $active = ''): void
 <meta name="theme-color" content="<?= h($mode === 'dark' ? $barDark : $barLight) ?>">
 <?php endif; ?>
 <meta name="pillbox-base" content="<?= h(url('')) ?>">
-<title><?= h($title) ?> · <?= h(config('app.name')) ?></title>
+<?php $disguise = user_disguise(); ?>
+<title><?= h($title) ?> · <?= h($disguise['name'] ?? config('app.name')) ?></title>
+<?php if ($disguise): ?>
+<link rel="icon" href="<?= h(asset('assets/icons/' . $disguise['icon'] . '-192.png')) ?>" type="image/png" sizes="192x192">
+<link rel="manifest" href="<?= h(url('manifest.php')) ?>">
+<link rel="apple-touch-icon" href="<?= h(asset('assets/icons/' . $disguise['icon'] . '-180.png')) ?>">
+<?php else: ?>
 <link rel="icon" href="<?= h(asset('assets/logo.svg')) ?>" type="image/svg+xml">
 <link rel="icon" href="<?= h(asset('assets/icons/icon-192.png')) ?>" type="image/png" sizes="192x192">
 <link rel="manifest" href="<?= h(url('manifest.webmanifest')) ?>">
 <!-- Installed app ("Add to Home Screen") on iPhone / iPad -->
 <link rel="apple-touch-icon" href="<?= h(asset('assets/icons/apple-touch-icon.png')) ?>">
+<?php endif; ?>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="<?= h(config('app.name')) ?>">
+<meta name="apple-mobile-web-app-title" content="<?= h($disguise['name'] ?? config('app.name')) ?>">
 <link rel="stylesheet" href="<?= h(asset('assets/style.css')) ?>">
 <script src="<?= h(asset('assets/app.js')) ?>" defer></script>
 </head>
-<body class="<?= $user ? 'signed-in' : 'signed-out' ?>" data-base="<?= h(config('app.base_path', '')) ?>">
+<body class="<?= $user ? 'signed-in' : 'signed-out' ?>" data-base="<?= h(config('app.base_path', '')) ?>"<?= !empty(real_user()['privacy_blur']) ? ' data-privacy-blur' : '' ?>>
 <a class="skip" href="#main">Skip to content</a>
 <header class="topbar">
     <a class="brand" href="<?= h(url('index.php')) ?>">
@@ -168,6 +189,8 @@ function render_footer(): void
 <footer class="site-footer">
     <p><?= h(config('app.name')) ?> helps you keep a record. It is not medical advice &mdash; always follow your prescriber's instructions.</p>
     <p class="footer-meta">
+        <a href="<?= h(url('terms.php')) ?>">Terms</a>
+        <a href="<?= h(url('privacy.php')) ?>">Privacy</a>
         <span>Version <?= h(pillbox_version()) ?></span>
         <?php if ($repoUrl): ?>
         <a href="<?= h($repoUrl) ?>" target="_blank" rel="noopener"><?= icon('github') ?>GitHub</a>
@@ -234,7 +257,8 @@ function render_dose_item(array $slot, string $return): void
                 <strong><?= h($s['name']) ?></strong> <?= h($s['strength']) ?>
                 <div class="muted small">
                     <?= h(dose_label($s['dose_amount'], $s['dose_unit'])) ?>
-                    <?php if ($return !== 'index.php' || $slot['local']->format('Y-m-d') !== local_today()->format('Y-m-d')): ?>
+                    <?= ($course = course_progress($s, $slot['local'])) ? ' · ' . h($course) : '' ?>
+                    <?php if (strtok($return, '#') !== 'index.php' || $slot['local']->format('Y-m-d') !== local_today()->format('Y-m-d')): ?>
                         · <?= h($slot['local']->format('D j M, H:i')) ?>
                     <?php endif; ?>
                     <?= $s['instructions'] ? ' · ' . h($s['instructions']) : '' ?>
@@ -242,8 +266,11 @@ function render_dose_item(array $slot, string $return): void
                 <?php if (!empty($slot['home_time']) && $slot['home_time'] !== $slot['local']->format('H:i')): ?>
                     <div class="muted small">&#9992; <?= h($slot['home_time']) ?> home time</div>
                 <?php endif; ?>
+                <?php if (!$slot['log'] && $status === 'missed' && preg_match(THYROID_PATTERN, $s['name'])): ?>
+                    <div class="small">Take it when you remember, unless your next dose is nearly due. Never take two together.</div>
+                <?php endif; ?>
                 <?php if ($slot['log'] && $status === 'taken'): ?>
-                    <div class="muted small">Taken at <?= h(local_time($slot['log']['taken_at'], 'H:i')) ?></div>
+                    <div class="muted small">Taken at <?= h(local_time($slot['log']['taken_at'], 'H:i')) ?><?= !empty($slot['log']['site']) ? ' · ' . h(mb_strtolower(INJECTION_SITES[$slot['log']['site']] ?? '')) : '' ?></div>
                 <?php endif; ?>
             </div>
         </div>
@@ -259,6 +286,15 @@ function render_dose_item(array $slot, string $return): void
                     <button class="btn btn-small" type="submit">Undo</button>
                 </form>
             <?php else: ?>
+                <details class="took-earlier">
+                    <summary class="btn btn-small" title="Log it with the time you took it">At&hellip;</summary>
+                    <form method="post" action="<?= h(url('dose_action.php')) ?>" class="inline-form">
+                        <?= csrf_field() ?><input type="hidden" name="action" value="take"><input type="hidden" name="schedule_id" value="<?= (int) $s['id'] ?>">
+                        <input type="hidden" name="slot" value="<?= h($slot['utc']) ?>"><input type="hidden" name="return" value="<?= h($return) ?>">
+                        <label>Took it at <input type="time" name="taken_time" required value="<?= h($slot['local']->format('H:i')) ?>"></label>
+                        <button class="btn btn-small btn-primary" type="submit">Log</button>
+                    </form>
+                </details>
                 <?php foreach (['take' => 'Take', 'skip' => 'Skip'] as $action => $label): ?>
                 <form method="post" action="<?= h(url('dose_action.php')) ?>">
                     <?= csrf_field() ?>
@@ -267,6 +303,13 @@ function render_dose_item(array $slot, string $return): void
                     <input type="hidden" name="slot" value="<?= h($slot['utc']) ?>">
                     <input type="hidden" name="return" value="<?= h($return) ?>">
                     <?php if ($status === 'missed'): ?><input type="hidden" name="at" value="scheduled"><?php endif; ?>
+                    <?php if ($action === 'take' && ($s['form'] ?? '') === 'injection'): $suggest = injection_site_suggestion((int) $s['medication_id']); ?>
+                    <label class="sr" for="site-<?= (int) $s['id'] ?>-<?= h(substr(md5($slot['utc']), 0, 6)) ?>">Injection site</label>
+                    <select name="site" id="site-<?= (int) $s['id'] ?>-<?= h(substr(md5($slot['utc']), 0, 6)) ?>" class="site-select" title="Injection site<?= $suggest ? ': suggested ' . h(INJECTION_SITES[$suggest]) : '' ?>">
+                        <option value="">Site&hellip;</option>
+                        <?php foreach (INJECTION_SITES as $k => $l): ?><option value="<?= $k ?>"<?= selected($k === $suggest) ?>><?= h($l) ?><?= $k === $suggest ? ' (next)' : '' ?></option><?php endforeach; ?>
+                    </select>
+                    <?php endif; ?>
                     <button class="btn <?= $action === 'take' ? 'btn-primary' : '' ?> btn-small" type="submit"><?= h($label) ?></button>
                 </form>
                 <?php endforeach; ?>
@@ -274,4 +317,25 @@ function render_dose_item(array $slot, string $return): void
         </div>
     </li>
     <?php
+}
+
+/** Today's doses on a 24-hour line, coloured by status, with a marker for now (SVG, classes for colour). */
+function render_day_timeline(array $slots, DateTimeImmutable $now): string
+{
+    $w = 640;
+    $pad = 12;
+    $x = fn (DateTimeImmutable $t) => $pad + ((int) $t->format('G') * 60 + (int) $t->format('i')) / 1440 * ($w - 2 * $pad);
+    $svg = sprintf('<svg viewBox="0 0 %d 46" class="day-timeline" role="img" aria-label="Today\'s doses through the day">', $w);
+    $svg .= sprintf('<line class="tl-axis" x1="%d" x2="%d" y1="20" y2="20"/>', $pad, $w - $pad);
+    foreach ([0, 6, 12, 18, 24] as $hr) {
+        $hx = $pad + $hr / 24 * ($w - 2 * $pad);
+        $svg .= sprintf('<text class="axis" x="%s" y="42" text-anchor="middle">%02d:00</text>', round($hx, 1), $hr % 24 === 0 && $hr ? 0 : $hr);
+    }
+    foreach ($slots as $slot) {
+        $svg .= sprintf('<circle class="tl-dose tl-%s" cx="%s" cy="20" r="7"><title>%s %s: %s</title></circle>', h($slot['status']), round($x($slot['local']), 1),
+            h($slot['local']->format('H:i')), h(public_med_name($slot['schedule'])), h(status_label($slot['status'])));
+    }
+    $nx = round($x($now), 1);
+    $svg .= sprintf('<line class="tl-now" x1="%s" x2="%s" y1="6" y2="34"/><text class="axis tl-now-label" x="%s" y="5" text-anchor="middle">now</text>', $nx, $nx, $nx);
+    return '<div class="chart">' . $svg . '</svg></div>';
 }

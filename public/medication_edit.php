@@ -13,12 +13,22 @@ if ($id && !$med) {
 }
 
 $fields = ['name', 'dmd_code', 'strength', 'form', 'dose_unit', 'colour', 'reason', 'instructions', 'prescriber', 'notes',
-    'as_needed', 'prn_dose_amount', 'prn_max_daily', 'stock_count', 'low_stock_days', 'expiry_date', 'mental_health', 'start_date', 'end_date', 'supply_type', 'supply_price'];
-$form = $med ?? ['form' => 'tablet', 'dose_unit' => 'tablet', 'colour' => MED_COLOURS[0], 'as_needed' => 0, 'supply_type' => 'nhs',
+    'as_needed', 'prn_dose_amount', 'prn_max_daily', 'stock_count', 'low_stock_days', 'expiry_date', 'mental_health', 'start_date', 'end_date', 'supply_type', 'supply_price', 'course', 'course_days', 'is_supplement', 'is_private', 'controlled', 'rx_days', 'brand'];
+$form = $med ?? ['form' => 'tablet', 'dose_unit' => 'tablet', 'colour' => MED_COLOURS[0], 'as_needed' => 0, 'course' => 'ongoing',
+    // "Add supplement": bought without a prescription, and listed under Supplements.
+    'is_supplement' => get('supplement') === '1' ? 1 : 0, 'supply_type' => get('supplement') === '1' ? 'otc' : 'nhs',
     'low_stock_days' => 7, 'start_date' => $todayYmd];
 $rows = $med
     ? schedules_for_editing(editing_schedules((int) $med['id'], $todayYmd))
     : [editor_row(['dose_time' => '08:00', 'dose_amount' => 1, 'days_mask' => EVERY_DAY, 'valid_from' => null, 'valid_to' => null], [], 'same', [])];
+// One-tap hormone set-ups (Menopause, Gender-affirming care): the form filled in, to adjust to the prescription before saving.
+if (!$med && ($preset = hormone_preset(get('preset')))) {
+    $form = array_merge($form, ['name' => $preset['name'], 'form' => $preset['form'], 'dose_unit' => $preset['unit'],
+        'reason' => $preset['reason'], 'instructions' => $preset['instructions'] ?? '', 'is_private' => $preset['private'] ?? 0]);
+    $rows = [editor_row(['dose_time' => $preset['time'], 'dose_amount' => $preset['amount'] ?? 1, 'days_mask' => $preset['days'] ?? EVERY_DAY,
+        'every_days' => $preset['every'] ?? null, 'anchor_date' => isset($preset['every']) ? $todayYmd : null, 'cycle_phase' => $preset['phase'] ?? null,
+        'valid_from' => null, 'valid_to' => null], [], 'same', [])];
+}
 $errors = [];
 
 if (is_post()) {
@@ -28,6 +38,10 @@ if (is_post()) {
     }
     $form['as_needed'] = isset($_POST['as_needed']) ? 1 : 0;
     $form['mental_health'] = isset($_POST['mental_health']) ? 1 : 0;
+    $form['is_supplement'] = isset($_POST['is_supplement']) ? 1 : 0;
+    $form['is_private'] = isset($_POST['is_private']) ? 1 : 0;
+    $form['controlled'] = isset($_POST['controlled']) ? 1 : 0;
+    $form['rx_days'] = ctype_digit((string) $form['rx_days']) && (int) $form['rx_days'] >= 1 && (int) $form['rx_days'] <= 366 ? (int) $form['rx_days'] : null;
 
     // ---- Validate medication fields ----
     if ($form['name'] === '' || mb_strlen($form['name']) > 150) {
@@ -69,6 +83,19 @@ if (is_post()) {
     if ($form['expiry_date'] !== '' && !parse_date($form['expiry_date'])) {
         $errors[] = 'Enter the expiry date as a date, or leave it empty.';
     }
+    // Short course: the end date follows from the number of days. One-off: a single day.
+    if (!isset(MED_COURSES[$form['course']])) {
+        $form['course'] = 'ongoing';
+    }
+    if ($form['course'] === 'short') {
+        if (!ctype_digit($form['course_days']) || (int) $form['course_days'] < 1 || (int) $form['course_days'] > 365) {
+            $errors[] = 'Enter how many days the course lasts (1 to 365).';
+        } elseif (parse_date($form['start_date'])) {
+            $form['end_date'] = parse_date($form['start_date'])->modify('+' . ((int) $form['course_days'] - 1) . ' days')->format('Y-m-d');
+        }
+    } elseif ($form['course'] === 'once') {
+        $form['end_date'] = $form['start_date'];
+    }
     if (!parse_date($form['start_date'])) {
         $errors[] = 'Enter a valid start date.';
     }
@@ -101,6 +128,22 @@ if (is_post()) {
         foreach ((array) ($r['days'] ?? []) as $bit) {
             $mask |= ((int) $bit) & EVERY_DAY;
         }
+        if ($form['course'] === 'once') {
+            $mask = EVERY_DAY; // a single date: whichever weekday it is
+        }
+        // Every N days or weeks (e.g. an injection every 3 weeks), from the first dose.
+        $everyDays = null;
+        $anchor = null;
+        $phase = ($r['repeat'] ?? '') === 'luteal' && $mode === 'same' && $form['course'] !== 'once' ? 'luteal' : null;
+        if ($phase) {
+            $mask = EVERY_DAY;
+        }
+        if (($r['repeat'] ?? '') === 'every' && $mode === 'same' && $form['course'] !== 'once') {
+            $n = (int) ($r['every_n'] ?? 0);
+            $everyDays = ($r['every_unit'] ?? '') === 'days' ? $n : $n * 7;
+            $anchor = parse_date((string) ($r['anchor'] ?? ''))?->format('Y-m-d') ?: (string) $form['start_date'];
+            $mask = EVERY_DAY;
+        }
         $row = [
             'ids' => array_values(array_filter(array_map('intval', explode(',', (string) ($r['ids'] ?? ''))))),
             'dose_time' => $time,
@@ -110,8 +153,14 @@ if (is_post()) {
             'day_amounts' => $dayAmounts,
             'valid_from' => trim((string) ($r['valid_from'] ?? '')) ?: null,
             'valid_to' => trim((string) ($r['valid_to'] ?? '')) ?: null,
+            'every_days' => $everyDays,
+            'anchor_date' => $anchor,
+            'cycle_phase' => $phase,
         ];
         $n = count($rows) + 1;
+        if ($everyDays !== null && ($everyDays < 1 || $everyDays > 730)) {
+            $errors[] = "Dose $n: enter how often, from every 1 day to every 104 weeks.";
+        }
         if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $time)) {
             $errors[] = "Dose $n: enter a time.";
         }
@@ -153,7 +202,7 @@ if (is_post()) {
             $nullable($form['reason']), $nullable($form['instructions']), $nullable($form['prescriber']), $nullable($form['notes']),
             $form['as_needed'], $nullable($form['prn_dose_amount']), $nullable($form['prn_max_daily']),
             $nullable($form['stock_count']), (int) $form['low_stock_days'], $nullable($form['expiry_date']), (int) $form['mental_health'], $form['start_date'], $nullable($form['end_date']),
-            $form['supply_type'], $form['supply_price'] === '' ? null : round((float) $form['supply_price'], 2),
+            $form['supply_type'], $form['supply_price'] === '' ? null : round((float) $form['supply_price'], 2), $form['course'], (int) $form['is_supplement'], (int) $form['is_private'], (int) $form['controlled'], $form['rx_days'], trim(mb_substr((string) $form['brand'], 0, 100)) ?: null,
         ];
 
         $oldSchedules = $med ? editing_schedules((int) $med['id'], $todayYmd) : [];
@@ -161,13 +210,13 @@ if (is_post()) {
             if ($med) {
                 q('UPDATE medications SET name = ?, dmd_code = ?, strength = ?, form = ?, dose_unit = ?, colour = ?, reason = ?, instructions = ?,
                      prescriber = ?, notes = ?, as_needed = ?, prn_dose_amount = ?, prn_max_daily = ?, stock_count = ?,
-                     low_stock_days = ?, expiry_date = ?, mental_health = ?, start_date = ?, end_date = ?, supply_type = ?, supply_price = ? WHERE id = ? AND user_id = ?',
+                     low_stock_days = ?, expiry_date = ?, mental_health = ?, start_date = ?, end_date = ?, supply_type = ?, supply_price = ?, course = ?, is_supplement = ?, is_private = ?, controlled = ?, rx_days = ?, brand = ? WHERE id = ? AND user_id = ?',
                     [...$values, $med['id'], $uid]);
                 $medId = (int) $med['id'];
             } else {
                 q('INSERT INTO medications (name, dmd_code, strength, form, dose_unit, colour, reason, instructions, prescriber, notes,
-                     as_needed, prn_dose_amount, prn_max_daily, stock_count, low_stock_days, expiry_date, mental_health, start_date, end_date, supply_type, supply_price, user_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
+                     as_needed, prn_dose_amount, prn_max_daily, stock_count, low_stock_days, expiry_date, mental_health, start_date, end_date, supply_type, supply_price, course, is_supplement, is_private, controlled, rx_days, brand, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
                 $medId = (int) db()->lastInsertId();
             }
 
@@ -205,7 +254,7 @@ if (is_post()) {
                 // stays attached; prefer the one that already has the same amount.
                 $pool = array_values(array_intersect($r['ids'], $existing));
                 foreach (editor_row_doses($r) as [$amount, $mask]) {
-                    $params = [$r['dose_time'] . ':00', $amount, $mask, $r['valid_from'], $r['valid_to']];
+                    $params = [$r['dose_time'] . ':00', $amount, $mask, $r['every_days'], $r['anchor_date'], $r['cycle_phase'], $r['valid_from'], $r['valid_to']];
                     $match = null;
                     foreach ($pool as $i => $sid) {
                         if ((float) $current[$sid]['dose_amount'] === $amount) {
@@ -217,23 +266,24 @@ if (is_post()) {
                     if ($match === null) {
                         // A new dose time: from the split day if the medicine was already being taken.
                         $validFrom = $startDate < $newFrom->format('Y-m-d') ? max((string) $r['valid_from'], $newFrom->format('Y-m-d')) : $r['valid_from'];
-                        q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?)',
-                            [$r['dose_time'] . ':00', $amount, $mask, $validFrom, $r['valid_to'], $medId]);
+                        q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, every_days, anchor_date, cycle_phase, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                            [$r['dose_time'] . ':00', $amount, $mask, $r['every_days'], $r['anchor_date'], $r['cycle_phase'], $validFrom, $r['valid_to'], $medId]);
                         continue;
                     }
                     $sid = $pool[$match];
                     unset($pool[$match]);
                     $old = $current[$sid];
                     $kept[] = $sid;
-                    $sameDose = substr($old['dose_time'], 0, 5) === $r['dose_time'] && (float) $old['dose_amount'] === $amount && (int) $old['days_mask'] === $mask;
+                    $sameDose = substr($old['dose_time'], 0, 5) === $r['dose_time'] && (float) $old['dose_amount'] === $amount && (int) $old['days_mask'] === $mask
+                        && (int) $old['every_days'] === (int) $r['every_days'] && (string) $old['anchor_date'] === (string) $r['anchor_date'] && (string) $old['cycle_phase'] === (string) $r['cycle_phase'];
                     $split = $splitDay($sid);
                     if ($sameDose || !$hasHistory($old, $split)) {
-                        q('UPDATE medication_schedules SET dose_time = ?, dose_amount = ?, days_mask = ?, valid_from = ?, valid_to = ? WHERE id = ?', [...$params, $sid]);
+                        q('UPDATE medication_schedules SET dose_time = ?, dose_amount = ?, days_mask = ?, every_days = ?, anchor_date = ?, cycle_phase = ?, valid_from = ?, valid_to = ? WHERE id = ?', [...$params, $sid]);
                         continue;
                     }
                     q('UPDATE medication_schedules SET valid_to = ? WHERE id = ?', [$split->modify('-1 day')->format('Y-m-d'), $sid]);
-                    q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?)',
-                        [$r['dose_time'] . ':00', $amount, $mask, max((string) $r['valid_from'], $split->format('Y-m-d')), $r['valid_to'], $medId]);
+                    q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, every_days, anchor_date, cycle_phase, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [$r['dose_time'] . ':00', $amount, $mask, $r['every_days'], $r['anchor_date'], $r['cycle_phase'], max((string) $r['valid_from'], $split->format('Y-m-d')), $r['valid_to'], $medId]);
                 }
             }
             // Removed dose times: end them (keeping their history), or delete them if they were never in use.
@@ -270,7 +320,9 @@ if (is_post()) {
             }
         }
 
-        flash('success', $form['name'] . ($med ? ' updated.' : ' added.') . ($changes ? ' Change recorded: ' . lcfirst($changes[0][1]) . '.' : ''));
+        $thyroidNote = (!$med || $changes) && preg_match('/oestr|estrad|estrogen|HRT|combined/i', $form['name'] . ' ' . $form['reason']) && thyroid_meds(user_medications($uid))
+            ? ' Oestrogen can change how much thyroid medicine you need: ask your GP whether to check your TSH in 6 to 8 weeks.' : '';
+        flash('success', $form['name'] . ($med ? ' updated.' : ' added.') . ($changes ? ' Change recorded: ' . lcfirst($changes[0][1]) . '.' : '') . $thyroidNote);
         redirect('medications.php');
     }
 }
@@ -287,7 +339,15 @@ function render_schedule_row(string $index, array $row): void
         <legend class="sr">Dose time</legend>
         <input type="hidden" name="<?= $name('ids') ?>" value="<?= h(implode(',', $row['ids'] ?? [])) ?>">
         <div class="row-fields">
-            <label>Time <input type="time" name="<?= $name('time') ?>" value="<?= h(substr((string) ($row['dose_time'] ?? ''), 0, 5)) ?>"></label>
+            <div>
+                <label>Time <input type="time" name="<?= $name('time') ?>" value="<?= h(substr((string) ($row['dose_time'] ?? ''), 0, 5)) ?>"></label>
+                <div class="time-presets" role="group" aria-label="Quick times">
+                    <?php foreach (DOSE_BLOCKS as $block): ?>
+                    <button type="button" class="btn btn-small" data-set-time="<?= h($block['time']) ?>"
+                        aria-pressed="<?= substr((string) ($row['dose_time'] ?? ''), 0, 5) === $block['time'] ? 'true' : 'false' ?>"><?= h($block['label']) ?> <span class="muted small"><?= h($block['time']) ?></span></button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
             <button type="button" class="btn btn-small btn-danger remove-row" aria-label="Remove this dose time">Remove</button>
         </div>
 
@@ -298,7 +358,18 @@ function render_schedule_row(string $index, array $row): void
 
         <div class="mode-same">
             <label class="amount-field">Amount <input type="number" min="0.01" step="any" inputmode="decimal" name="<?= $name('amount') ?>" value="<?= h(num($row['dose_amount'] ?? '')) ?>"></label>
-            <div class="days" role="group" aria-label="Days">
+            <?php $every = (int) ($row['every_days'] ?? 0); $luteal = ($row['cycle_phase'] ?? null) === 'luteal'; $id = fn (string $f) => 'row-' . h($index) . '-' . $f; ?>
+            <div class="repeat-choice" role="radiogroup" aria-label="Repeats">
+                <label class="check"><input type="radio" name="<?= $name('repeat') ?>" value="days" id="<?= $id('days') ?>"<?= checked(!$every && !$luteal) ?>> On these days</label>
+                <label class="check"><input type="radio" name="<?= $name('repeat') ?>" value="luteal" id="<?= $id('luteal') ?>"<?= checked($luteal) ?>> Only in the 2 weeks before a period <span class="muted small">(from your cycle in Care)</span></label>
+                <label class="check"><input type="radio" name="<?= $name('repeat') ?>" value="every" id="<?= $id('every') ?>"<?= checked((bool) $every) ?>> Every few days or weeks <span class="muted small">(e.g. injections)</span></label>
+            </div>
+            <div class="row-fields every-fields" data-show-when="<?= $id('every') ?>"<?= $every ? '' : ' hidden' ?>>
+                <label>Every <input type="number" name="<?= $name('every_n') ?>" min="1" max="104" class="count-input" value="<?= $every ? ($every % 7 === 0 ? $every / 7 : $every) : '' ?>"></label>
+                <label><span class="sr">Unit</span><select name="<?= $name('every_unit') ?>"><option value="weeks"<?= selected(!$every || $every % 7 === 0) ?>>weeks</option><option value="days"<?= selected($every && $every % 7 !== 0) ?>>days</option></select></label>
+                <label>First (or next) dose <input type="date" name="<?= $name('anchor') ?>" value="<?= h((string) ($row['anchor_date'] ?? '')) ?>"></label>
+            </div>
+            <div class="days" role="group" aria-label="Days" data-show-when="<?= $id('days') ?>"<?= $every || $luteal ? ' hidden' : '' ?>>
                 <?php foreach (WEEKDAYS as $bit => $label): ?>
                 <label class="day"><input type="checkbox" name="<?= $name('days') ?>[]" value="<?= $bit ?>"<?= checked(($mask & $bit) !== 0) ?>><span><?= $label ?></span></label>
                 <?php endforeach; ?>
@@ -327,10 +398,11 @@ function render_schedule_row(string $index, array $row): void
     <?php
 }
 
-render_header($med ? 'Edit ' . $med['name'] : 'Add medication', 'meds');
+$noun = !empty($form['is_supplement']) ? 'supplement' : 'medication';
+render_header($med ? 'Edit ' . $med['name'] : "Add $noun", 'meds');
 ?>
 <div class="page-head">
-    <h1><?= $med ? 'Edit ' . h($med['name']) : 'Add medication' ?></h1>
+    <h1><?= $med ? 'Edit ' . h($med['name']) : 'Add ' . $noun ?></h1>
     <a class="btn" href="<?= h(url('medications.php')) ?>">Cancel</a>
 </div>
 
@@ -339,7 +411,15 @@ render_header($med ? 'Edit ' . $med['name'] : 'Add medication', 'meds');
 <form method="post" class="med-form">
     <?= csrf_field() ?>
     <section class="card">
-        <h2>Medication</h2>
+        <h2><?= ucfirst($noun) ?></h2>
+        <?php if (!$med && !empty($form['is_supplement'])): ?>
+        <div class="supplement-presets" role="group" aria-label="Common supplements">
+            <p class="muted small">Tap one to fill in the details, or type your own below.</p>
+            <?php foreach (SUPPLEMENT_PRESETS as [$sName, $sStrength, $sForm, $sUnit]): ?>
+            <button type="button" class="btn btn-small" data-fill-med data-name="<?= h($sName) ?>" data-strength="<?= h($sStrength) ?>" data-form="<?= h($sForm) ?>" data-unit="<?= h($sUnit) ?>"><?= h($sName) ?></button>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
         <?php if (dmd_enabled()): ?>
         <div class="dmd-search" data-endpoint="<?= h(url('dmd_search.php')) ?>">
             <label for="dmd-q"><span>Find it in the NHS medicines dictionary <span class="muted small">(dm+d)</span></span></label>
@@ -368,8 +448,20 @@ render_header($med ? 'Edit ' . $med['name'] : 'Add medication', 'meds');
             </label>
             <label>What it's for <input name="reason" maxlength="150" value="<?= h($form['reason'] ?? '') ?>" placeholder="e.g. Type 2 diabetes"></label>
             <label>Prescribed by <input name="prescriber" maxlength="150" value="<?= h($form['prescriber'] ?? '') ?>" placeholder="e.g. Dr Patel"></label>
+            <label><span>Brand or manufacturer <span class="muted small">(optional)</span></span><input name="brand" maxlength="100" value="<?= h((string) ($form['brand'] ?? '')) ?>" placeholder="e.g. Accord, Teva, Mercury"></label>
         </div>
         <label>Instructions <input name="instructions" maxlength="255" value="<?= h($form['instructions'] ?? '') ?>" placeholder="e.g. Take with food"></label>
+        <label class="check"><input type="checkbox" name="controlled" value="1" id="controlled"<?= checked(!empty($form['controlled'])) ?>>
+            <span>Controlled drug <span class="muted small">(e.g. ADHD stimulants: prescriptions usually cover 30 days and must be collected within 28 days of being written)</span></span></label>
+        <label class="narrow" data-show-when="controlled"><span>Days of supply per prescription</span>
+            <input type="number" name="rx_days" min="1" max="366" class="count-input" value="<?= h((string) ($form['rx_days'] ?? '30')) ?>"></label>
+        <label class="check"><input type="checkbox" name="is_private" value="1"<?= checked(!empty($form['is_private'])) ?>>
+            <span>Private <span class="muted small">(reminders and emails just say "Reminder", and it's hidden from anyone you share Pillbox with)</span></span></label>
+        <label class="check"><input type="checkbox" name="is_supplement" value="1"<?= checked(!empty($form['is_supplement'])) ?>>
+            <span>Supplement <span class="muted small">(a vitamin, mineral or other supplement: listed separately on the Meds page)</span></span></label>
+        <?php if (!empty($form['is_supplement'])): ?>
+        <p class="muted small">Some supplements don't mix well with medicines (for example iron, calcium or St John's wort). A pharmacist can check yours.</p>
+        <?php endif; ?>
         <fieldset>
             <legend>How you get it</legend>
             <div class="repeat-choice">
@@ -424,10 +516,24 @@ render_header($med ? 'Edit ' . $med['name'] : 'Add medication', 'meds');
             <?php endif; ?>
         </div>
 
+        <?php $course = $form['course'] ?? 'ongoing';
+        $courseDays = $form['course_days'] ?? (($course === 'short' && !empty($form['end_date']) && !empty($form['start_date']))
+            ? (string) ((new DateTimeImmutable($form['start_date']))->diff(new DateTimeImmutable($form['end_date']))->days + 1) : ''); ?>
+        <fieldset>
+            <legend>How long</legend>
+            <div class="repeat-choice">
+                <?php foreach (['ongoing' => 'Ongoing', 'short' => 'Short course (e.g. antibiotics)', 'once' => 'One-off dose'] as $key => $label): ?>
+                <label class="check"><input type="radio" name="course" value="<?= $key ?>" id="course-<?= $key ?>"<?= checked($course === $key) ?>> <?= h($label) ?></label>
+                <?php endforeach; ?>
+            </div>
+        </fieldset>
         <div class="grid-2">
-            <label>Start date <input type="date" name="start_date" required value="<?= h($form['start_date'] ?? $todayYmd) ?>"></label>
-            <label><span>End date <span class="muted small">(optional, for a set course)</span></span> <input type="date" name="end_date" value="<?= h($form['end_date'] ?? '') ?>"></label>
+            <label><span data-hide-when="course-once">Start date</span><span data-show-when="course-once">Date</span>
+                <input type="date" name="start_date" required value="<?= h($form['start_date'] ?? $todayYmd) ?>"></label>
+            <label data-show-when="course-short">For how many days <input type="number" name="course_days" min="1" max="365" inputmode="numeric" value="<?= h((string) $courseDays) ?>" placeholder="e.g. 7"></label>
+            <label data-show-when="course-ongoing"><span>End date <span class="muted small">(optional)</span></span> <input type="date" name="end_date" value="<?= h($course === 'ongoing' ? ($form['end_date'] ?? '') : '') ?>"></label>
         </div>
+        <p class="muted small" data-hide-when="course-ongoing">Tracked like any other medicine. When it's finished it moves to stopped medicines by itself, with its history kept.</p>
     </section>
 
     <section class="card">

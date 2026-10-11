@@ -97,6 +97,18 @@ if (is_post()) {
         }
         $self = (int) $target['id'] === (int) $admin['id'];
         switch ($action) {
+            case 'approve_signup':
+                if ($target['pending_approval']) {
+                    approve_signup($target);
+                    flash('success', $target['display_name'] . ' approved' . ($target['email'] && mail_enabled() ? ' and emailed.' : '. They can sign in now.'));
+                }
+                redirect('admin.php#signups');
+            case 'decline_signup':
+                if ($target['pending_approval']) {
+                    decline_signup($target);
+                    flash('success', $target['display_name'] . "'s sign-up was declined and removed.");
+                }
+                redirect('admin.php#signups');
             case 'toggle_active':
                 if ($self) {
                     flash('error', "You can't disable your own account.");
@@ -165,15 +177,41 @@ foreach (q('SELECT * FROM user_identities ORDER BY provider') as $ident) {
     $userIdentities[$ident['user_id']][] = $ident;
 }
 
+$pending = pending_signups();
+
 render_header('Admin', 'admin');
 ?>
 <div class="page-head"><h1>Users</h1></div>
 <?= form_errors($errors) ?>
 
+<?php if ($pending): ?>
+<section class="card" id="signups">
+    <h2>Waiting for approval (<?= count($pending) ?>)</h2>
+    <p class="muted small">These people created their own accounts. They can't sign in until you approve them; declining removes the account.</p>
+    <ul class="plain">
+        <?php foreach ($pending as $u): ?>
+        <li class="logline"><span><strong><?= h($u['display_name']) ?></strong>
+            <span class="muted small"><?= h($u['email'] ?? $u['username'] ?? '') ?> · <?= h(signup_method_label($u['signup_method'])) ?> · <?= h(local_time($u['created_at'], 'j M Y H:i')) ?></span></span>
+            <span class="inline-actions">
+                <form method="post"><?= csrf_field() ?><input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
+                    <button class="btn btn-small btn-primary" name="action" value="approve_signup">Approve</button></form>
+                <form method="post" data-confirm="Decline <?= h($u['display_name']) ?>'s sign-up and remove the account?"><?= csrf_field() ?><input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
+                    <button class="btn btn-small" name="action" value="decline_signup">Decline</button></form>
+            </span></li>
+        <?php endforeach; ?>
+    </ul>
+</section>
+<?php endif; ?>
+
 <section class="card">
     <?php if (!local_login_enabled()): ?>
     <p class="flash flash-warning">Password sign-in is switched off in <code>config/config.php</code>, so local users can't sign in. Add users for a single sign-on provider instead.</p>
     <?php endif; ?>
+    <p class="muted small"><?= signups_open()
+        ? 'Sign-ups are open: people can create their own accounts' . (signup_needs_approval() ? ', which wait for an admin to approve them' : '')
+            . (config('signup.notify_admins', true) ? (mail_enabled() ? '. Admins with an email address are told about each one.' : '. Admin emails are on, but email isn\'t set up.') : '.')
+        : 'Sign-ups are closed: only admins add people (plus any single sign-on set to create accounts automatically).' ?>
+        Change this under Site settings below.</p>
     <?php if (!entra_enabled()): ?>
     <p class="muted small">Microsoft Entra ID sign-in is not configured. See the README to switch it on.</p>
     <?php elseif (config('entra.auto_provision')): ?>
@@ -199,7 +237,7 @@ render_header('Admin', 'admin');
                     echo h(implode(' + ', $ways) ?: '—'); ?></td>
                 <td class="num"><?= (int) $u['med_count'] ?></td>
                 <td><?= $u['last_login_at'] ? h(local_time($u['last_login_at'], 'j M Y H:i')) : '—' ?></td>
-                <td><?= $u['is_active'] ? 'Active' : 'Disabled' ?></td>
+                <td><?= $u['pending_approval'] ? '<a href="#signups">Waiting for approval</a>' : ($u['is_active'] ? 'Active' : 'Disabled') ?></td>
                 <td>
                     <?php if ((int) $u['id'] !== (int) $admin['id']): ?>
                     <details class="actions-menu">

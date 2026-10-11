@@ -6,8 +6,10 @@ declare(strict_types=1);
  * Colours come from CSS (.series-N) so light/dark mode is handled in style.css.
  *
  * @param array $series list of ['label' => string, 'unit' => string, 'points' => [[unixTs, float], ...]]
+ * @param array $bands  optional shaded ranges: ['low' => ?float, 'high' => ?float, 'class' => 'band-target'|'band-lab', 'label' => string]
+ * @param array $markers optional events as vertical lines: [[unixTs, label], ...] (e.g. dose changes)
  */
-function svg_line_chart(array $series, int $fromTs, int $toTs, string $title): string
+function svg_line_chart(array $series, int $fromTs, int $toTs, string $title, array $bands = [], array $markers = []): string
 {
     $series = array_values(array_filter($series, fn ($s) => $s['points']));
     if (!$series) {
@@ -25,6 +27,13 @@ function svg_line_chart(array $series, int $fromTs, int $toTs, string $title): s
     foreach ($series as $s) {
         foreach ($s['points'] as [, $v]) {
             $all[] = $v;
+        }
+    }
+    foreach ($bands as $b) {
+        foreach (['low', 'high'] as $k) {
+            if ($b[$k] !== null) {
+                $all[] = (float) $b[$k];
+            }
         }
     }
     [$yMin, $yMax, $ticks] = nice_scale(min($all), max($all));
@@ -50,6 +59,22 @@ function svg_line_chart(array $series, int $fromTs, int $toTs, string $title): s
         $ty = round($y($t), 1);
         $out .= sprintf('<line class="grid" x1="%d" x2="%d" y1="%s" y2="%s"/>', $padL, $w - $padR, $ty, $ty);
         $out .= sprintf('<text class="axis" x="%d" y="%s" text-anchor="end" dominant-baseline="middle">%s</text>', $padL - 6, $ty, h(num($t)));
+    }
+    // Shaded ranges (e.g. a target range and the lab's range), behind the lines.
+    foreach ($bands as $b) {
+        $top = $y(min($yMax, (float) ($b['high'] ?? $yMax)));
+        $bottom = $y(max($yMin, (float) ($b['low'] ?? $yMin)));
+        $out .= sprintf('<rect class="band %s" x="%d" y="%s" width="%d" height="%s"><title>%s</title></rect>', h($b['class']), $padL, round($top, 1),
+            $w - $padL - $padR, max(0, round($bottom - $top, 1)), h($b['label']));
+    }
+    // Events (e.g. dose changes), as dashed vertical lines with a short label.
+    foreach ($markers as [$ts, $label]) {
+        if ($ts < $fromTs || $ts > $toTs) {
+            continue;
+        }
+        $mx = round($x($ts), 1);
+        $out .= sprintf('<g class="marker"><line x1="%s" x2="%s" y1="%d" y2="%d"/><text class="axis" x="%s" y="%d" text-anchor="middle">%s</text><title>%s</title></g>',
+            $mx, $mx, $padT, $h - $padB, $mx, $padT - 3 + 10, h(mb_strimwidth($label, 0, 18, '…')), h($label));
     }
     // X-axis date labels: start, middle, end.
     foreach ([$fromTs, intdiv($fromTs + $toTs, 2), $toTs] as $i => $ts) {

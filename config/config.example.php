@@ -52,6 +52,29 @@ return [
         'password' => 'CHANGE-ME',
     ],
 
+    // Nightscout (CGM data, Diabetes): addresses on private networks are blocked so people can't make
+    // this server reach into its own network. Set true only if everyone using this Pillbox is trusted.
+    'nightscout' => ['allow_private' => false],
+
+    // Terms of use and privacy policy (terms.php, privacy.php). Generated from what Pillbox does and these
+    // details; 'terms' / 'privacy' replace the generated text ("## " headings, "- " bullets, **bold**).
+    'legal' => [
+        'operator'     => '',   // who runs this Pillbox (the data controller), e.g. 'Jane Smith' or 'Example Ltd'
+        'contact'      => '',   // e.g. 'privacy@example.com'
+        'jurisdiction' => '',   // governing law; empty = 'England and Wales'
+        'terms'        => '',
+        'privacy'      => '',
+    ],
+
+    // People creating their own accounts: "Create an account" on the sign-in page, with a
+    // username and password (if password sign-in is on) or any single sign-on button below.
+    // Providers with 'auto_provision' => true still create accounts on first sign-in whatever this says.
+    'signup' => [
+        'enabled'          => false,  // false = only admins add people
+        'require_approval' => true,   // new accounts can't sign in until an admin approves them (Admin page)
+        'notify_admins'    => true,   // email admins about each new sign-up (needs the 'mail' settings)
+    ],
+
     // Microsoft Entra ID single sign-on. See README.md for the app registration steps.
     'entra' => [
         'enabled'         => false,

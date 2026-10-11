@@ -19,7 +19,7 @@ function current_user(): ?array
     if (!$loaded) {
         $loaded = true;
         if (!empty($_SESSION['uid'])) {
-            $user = q('SELECT * FROM users WHERE id = ? AND is_active = 1', [$_SESSION['uid']])->fetch() ?: null;
+            $user = q('SELECT * FROM users WHERE id = ? AND is_active = 1 AND pending_approval = 0', [$_SESSION['uid']])->fetch() ?: null;
             // Signed out remotely ("sign out everywhere else", password change or reset)?
             if ($user !== null && (int) $user['session_version'] !== (int) ($_SESSION['sv'] ?? 0)) {
                 $user = null;
@@ -120,6 +120,12 @@ function require_admin(): array
 
 function login_user(array $user, ?string $method = null): void
 {
+    // A sign-up waiting for an admin: no session until it's approved.
+    if (!empty($user['pending_approval'])) {
+        flash('success', 'Thanks, ' . $user['display_name'] . '. Your account is waiting for an administrator to approve it.'
+            . ($user['email'] && mail_enabled() ? ' You will get an email at ' . $user['email'] . ' when it is ready.' : ' Try signing in again later.'));
+        redirect('login.php');
+    }
     session_regenerate_id(true);
     $_SESSION['uid'] = (int) $user['id'];
     $_SESSION['provider'] = $method ?? $user['auth_provider'];

@@ -29,10 +29,11 @@ const SHARE_PRESETS = [
  * change (or [action => level, '*' => level])]. null = always (their own or harmless pages).
  */
 const SHARE_PAGES = [
-    'index.php' => null, 'sharing.php' => null, 'logout.php' => null, 'help.php' => null, 'breathe.php' => null,
-    'medications.php'        => ['doses', 'view', ['restock' => 'log', '*' => 'edit']],
+    'index.php' => null, 'timer.php' => null, 'terms.php' => null, 'privacy.php' => null, 'sharing.php' => null, 'logout.php' => null, 'help.php' => null, 'breathe.php' => null,
+    'medications.php'        => ['doses', 'view', ['restock' => 'log', 'ordered' => 'log', 'unorder' => 'log', 'rx_written' => 'log', 'supply_note' => 'log', '*' => 'edit']],
     'medication_edit.php'    => ['doses', 'edit', 'edit'],
     'medication_history.php' => ['doses', 'view', 'edit'],
+    'med_effects.php'        => ['doses', 'view', 'log'],
     'dmd_search.php'         => ['doses', 'edit', 'edit'],
     'dose_action.php'        => ['doses', 'log', 'log'],
     'history.php'            => ['doses', 'view', 'edit'],
@@ -43,6 +44,15 @@ const SHARE_PAGES = [
     'appointment_edit.php'   => ['appointments', 'edit', 'edit'],
     'care.php'               => ['care', 'view', 'edit'],
     'care_summary.php'       => ['care', 'view', 'view'],
+    'pregnancy.php'          => ['care', 'view', 'edit'],
+    'menopause_summary.php'  => ['care', 'view', 'view'],
+    'pmdd_summary.php'       => ['care', 'view', 'view'],
+    'passport.php'           => ['care', 'view', 'view'],
+    'thyroid_summary.php'    => ['care', 'view', 'view'],
+    'diabetes_summary.php'   => ['care', 'view', 'view'],
+    'migraine_summary.php'   => ['care', 'view', 'view'],
+    'bp_summary.php'         => ['care', 'view', 'view'],
+    'hypo.php'               => ['care', 'view', 'edit'],
     'report.php'             => ['reports', 'view', 'view'],
     'export.php'             => ['reports', 'view', 'view'],
     'mind.php' => ['mind', 'view', 'edit'], 'mind_care.php' => ['mind', 'view', 'edit'], 'mind_meds.php' => ['mind', 'view', 'edit'],
@@ -54,8 +64,8 @@ const SHARE_PAGES = [
 
 // For the activity log: "page:action" (or "page") => what it means.
 const SHARE_ACTIVITY_LABELS = [
-    'dose_action.php:take' => 'Logged a dose as taken', 'dose_action.php:skip' => 'Logged a dose as skipped', 'dose_action.php:undo' => 'Undid a dose',
-    'dose_action.php:prn' => 'Logged an as-needed dose', 'medications.php:restock' => 'Updated medicine stock', 'medications.php:archive' => 'Stopped a medicine',
+    'dose_action.php:take' => 'Logged a dose as taken', 'dose_action.php:take_block' => 'Logged several doses as taken', 'dose_action.php:skip' => 'Logged a dose as skipped', 'dose_action.php:undo' => 'Undid a dose',
+    'dose_action.php:prn' => 'Logged an as-needed dose', 'medications.php:restock' => 'Updated medicine stock', 'medications.php:ordered' => 'Marked a repeat as ordered', 'medications.php:unorder' => 'Undid a repeat order', 'medications.php:archive' => 'Stopped a medicine',
     'medications.php:restore' => 'Restarted a medicine', 'medication_edit.php' => 'Added or changed a medicine', 'readings.php' => 'Added or changed a reading',
     'appointment_edit.php' => 'Added or changed an appointment', 'appointment.php' => 'Updated an appointment', 'appointments.php' => 'Changed an appointment',
     'care.php:toggle' => 'Ticked off a Care task', 'care.php:check_done' => 'Marked a Care check as done', 'care.php' => 'Changed Care',
@@ -112,6 +122,9 @@ function share_area_allowed(string $area, ?array $user = null): bool
     $user ??= current_user();
     if (!isset($user['_acting'])) {
         return true;
+    }
+    if (!empty(CARE_AREAS[$area]['private'])) {
+        return false; // the private pathway is never shared
     }
     return $area === 'mind' ? share_can('mind', 'view', $user)
         : share_can('care', 'view', $user) && !in_array($area, $user['_acting']['perms']['care_hidden'], true);

@@ -161,13 +161,40 @@ function send_push_notifications(DateTimeImmutable $now): array
         if ($user['push_doses']) {
             foreach (dose_slots($user, $today, $today, true) as $slot) {
                 $at = $slot['local'];
+                // An optional gentle follow-up if it still isn't logged a while later (Account > Display and reminders).
+                $followAt = $user['dose_followup'] ? $at->modify('+' . (int) $user['dose_followup'] . ' minutes') : null;
+                if (!$slot['log'] && $followAt && $followAt <= $now && $followAt >= $window
+                    && push_once($uid, 'dose2|' . $slot['schedule']['id'] . '|' . $slot['utc'])) {
+                    $s = $slot['schedule'];
+                    $sent += push_user($user, ['title' => 'Pillbox', 'body' => $s['is_private'] ? 'Reminder' : 'Did you take your ' . $at->format('H:i') . ' ' . $s['name'] . '? Tap to log it (or skip it).',
+                        'url' => url('index.php'), 'tag' => 'dose-' . $s['id']]);
+                }
                 if ($slot['log'] || $at > $now || $at < $window) {
                     continue;
                 }
                 if (push_once($uid, 'dose|' . $slot['schedule']['id'] . '|' . $slot['utc'])) {
                     $s = $slot['schedule'];
-                    $sent += push_user($user, ['title' => 'Time for ' . $s['name'], 'body' => dose_label($s['dose_amount'], $s['dose_unit']) . ' ' . $s['strength'] . ' at ' . $at->format('H:i'),
+                    $sent += push_user($user, $s['is_private']
+                        ? ['title' => 'Pillbox', 'body' => 'Reminder', 'url' => url('index.php'), 'tag' => 'dose-' . $s['id']]
+                        : ['title' => 'Time for ' . $s['name'], 'body' => dose_label($s['dose_amount'], $s['dose_unit']) . ' ' . $s['strength'] . ' at ' . $at->format('H:i'),
                         'url' => url('index.php'), 'tag' => 'dose-' . $s['id']]);
+                }
+            }
+        }
+        // Prescriptions: time to ask for the next one, and controlled drug prescriptions about to expire uncollected.
+        if ($user['push_doses'] && (int) $local->format('G') >= 9) {
+            $meds = user_medications($uid);
+            $medSchedules = schedules_by_medication(array_column($meds, 'id'), $today->format('Y-m-d'));
+            foreach ($meds as $m) {
+                $rx = prescription_dates($m, $medSchedules[$m['id']] ?? [], $today);
+                $name = $m['is_private'] ? null : $m['name'];
+                if ($rx['collect_by'] && $today->diff($rx['collect_by'])->days <= 3 && $today <= $rx['collect_by'] && push_once($uid, 'rxcollect|' . $m['id'] . '|' . $m['rx_written'])) {
+                    $sent += push_user($user, ['title' => 'Pillbox', 'body' => $name ? "Collect your $name prescription by " . $rx['collect_by']->format('D j M') . '.' : 'Reminder',
+                        'url' => url('medications.php#med-' . $m['id']), 'tag' => 'rx-' . $m['id']]);
+                } elseif (!$m['ordered_on'] && !$m['rx_written'] && $rx['request'] && $rx['request']->format('Y-m-d') === $today->format('Y-m-d')
+                    && push_once($uid, 'rxrequest|' . $m['id'] . '|' . $today->format('Y-m-d'))) {
+                    $sent += push_user($user, ['title' => 'Pillbox', 'body' => $name ? "Time to ask for your next $name prescription." : 'Reminder',
+                        'url' => url('medications.php#med-' . $m['id']), 'tag' => 'rx-' . $m['id']]);
                 }
             }
         }
@@ -208,6 +235,10 @@ function send_push_notifications(DateTimeImmutable $now): array
         if ($sent) {
             $log[] = "Sent $sent notification" . ($sent === 1 ? '' : 's') . " to user $uid.";
         }
+    }
+    $log = [...$log, ...send_private_reminders($now)];
+    if ($n = send_pmdd_headsups($now)) {
+        $log[] = "Sent $n cycle heads-up" . ($n === 1 ? '' : 's') . '.';
     }
     q('DELETE FROM push_sent WHERE sent_at < ?', [$now->modify('-14 days')->format('Y-m-d H:i:s')]);
     return $log;

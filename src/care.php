@@ -113,8 +113,8 @@ const CARE_AREAS = [
         ],
     ],
     'diabetes' => [
-        'title' => 'Diabetes and monitoring', 'short' => 'Monitoring', 'icon' => '&#x1FA78;', 'default' => false, 'appointment' => 'nurse',
-        'intro' => 'Keep your meters accurate and your supplies stocked: test strips, lancets, sensors and batteries.',
+        'title' => 'Diabetes and monitoring', 'short' => 'Diabetes', 'icon' => '&#x1FA78;', 'default' => false, 'appointment' => 'nurse',
+        'intro' => 'Glucose and time in range (with CGM via Nightscout), insulin and carbs, the hypo guide, sick-day rules, "five to drive", your annual care checks, and supplies.',
         'help'  => 'If your readings are very high or low and you feel unwell, follow your sick-day rules or hypo plan and contact your diabetes team or NHS 111.',
         'presets' => [
             'cgm'    => ['label' => 'Change CGM sensor', 'times' => ['09:00'], 'every' => 14, 'tip' => 'Set how often to match your sensor: often every 10 to 15 days.'],
@@ -131,6 +131,19 @@ const CARE_AREAS = [
                 'tip' => 'Use a validated monitor. Once a year, change the batteries and compare it with a reading at your GP surgery or pharmacy.'],
             'thermometer' => ['label' => 'Thermometer batteries', 'interval' => 365],
             'hba1c'     => ['label' => 'Diabetes review (HbA1c)', 'interval' => 365, 'results' => true, 'tip' => 'At least yearly; often more if your treatment is changing.'],
+            'pens'      => ['label' => 'Insulin pens or cartridges', 'track' => 'stock', 'unit' => 'pens', 'low' => 3, 'tip' => 'Spares in the fridge (2 to 8°C, never frozen). Order more before you run low.'],
+            'pen_open'  => ['label' => 'Insulin pen in use', 'track' => 'expiry', 'interval' => 28, 'tip' => 'At room temperature, usually for up to 4 weeks once opened: check your insulin\'s leaflet.'],
+            'glucagon'  => ['label' => 'Glucagon kit expiry', 'track' => 'expiry', 'tip' => 'Check the date, and that the people around you know where it is and how to use it.'],
+            'hypo_kit'  => ['label' => 'Hypo kit', 'track' => 'kit', 'items' => "Glucose tablets or gel\nA non-diet drink or juice\nA longer-acting snack", 'interval' => 30, 'tip' => 'Keep one in your bag and one in the car.'],
+            'dm_hba1c'       => ['label' => 'HbA1c', 'interval' => 365, 'results' => true, 'tip' => 'Part of your annual care checks; often more often if treatment is changing.'],
+            'dm_bp'          => ['label' => 'Blood pressure', 'interval' => 365, 'tip' => 'Annual care check.'],
+            'dm_cholesterol' => ['label' => 'Cholesterol', 'interval' => 365, 'results' => true, 'tip' => 'Annual care check.'],
+            'dm_kidney'      => ['label' => 'Kidney function (blood test)', 'interval' => 365, 'results' => true, 'tip' => 'Annual care check (eGFR).'],
+            'dm_acr'         => ['label' => 'Urine albumin (ACR)', 'interval' => 365, 'results' => true, 'tip' => 'Annual care check: a urine sample for early kidney changes.'],
+            'dm_feet'        => ['label' => 'Foot check', 'interval' => 365, 'tip' => 'Annual care check of feeling and circulation. Check your own feet every day too.'],
+            'dm_weight'      => ['label' => 'Weight and BMI', 'interval' => 365, 'tip' => 'Annual care check.'],
+            'dm_smoking'     => ['label' => 'Smoking status', 'interval' => 365, 'tip' => 'Annual care check: ask about support to stop, if you smoke.'],
+            'dm_eyes'        => ['label' => 'Diabetic eye screening', 'interval' => 365, 'tip' => 'A separate invitation, every 1 or 2 years depending on your last results.'],
         ],
     ],
     'bloods' => [
@@ -230,8 +243,8 @@ const CARE_AREAS = [
         ],
     ],
     'womens' => [
-        'title' => "Women's health", 'short' => "Women's", 'icon' => '&#x2640;&#xFE0F;', 'default' => false, 'appointment' => null,
-        'intro' => 'Track your periods and keep contraception renewals and reviews on time.',
+        'title' => 'Periods and contraception', 'short' => 'Periods', 'icon' => '&#x1F319;', 'default' => false, 'appointment' => null,
+        'intro' => 'Track periods or any bleeding (including occasional bleeding on testosterone), and keep contraception renewals and reviews on time.',
         'help'  => 'See a GP about very heavy or painful periods, bleeding between periods or after sex, or any bleeding after the menopause.',
         'presets' => [],
         'checks' => [
@@ -239,7 +252,91 @@ const CARE_AREAS = [
             'implant'     => ['label' => 'Implant replacement', 'interval' => 1095, 'tip' => 'The implant lasts 3 years. Book the replacement before the date.'],
             'coil'        => ['label' => 'Coil replacement', 'interval' => 1826, 'tip' => 'Hormonal coils (IUS) last 3 to 8 years and copper coils 5 to 10, depending on type. Set it to what you were told.'],
             'injection'   => ['label' => 'Contraceptive injection', 'interval' => 91, 'tip' => 'Every 13 weeks. Get it in time to stay protected.'],
+            'pms_referral' => ['label' => 'Referral to gynaecology or a PMS clinic', 'tip' => 'For premenstrual symptoms that treatment from your GP has not helped. Take your GP summary.'],
+            'pms_review'   => ['label' => 'Premenstrual treatment review', 'interval' => 91, 'tip' => 'Usually 2 to 3 months after starting or changing treatment, with your daily ratings.'],
         ],
+    ],
+    'menopause' => [
+        'title' => 'Menopause', 'short' => 'Menopause', 'icon' => '&#x1F338;', 'default' => false, 'appointment' => 'gp',
+        'intro' => 'Track symptoms, periods and HRT, and take a one-page summary to your GP.',
+        'help'  => 'See a GP about any bleeding 12 months or more after your last period, or unexpected bleeding after the first 3 to 6 months of HRT.',
+        'presets' => [
+            'weight_bearing' => ['label' => 'Weight-bearing exercise', 'times' => ['18:00'], 'days' => 21, 'amount' => '30 minutes',
+                'tip' => 'Walking, dancing, stair climbing or strength training help keep your bones strong after menopause.'],
+            'pelvic_floor'   => ['label' => 'Pelvic floor exercises', 'times' => ['08:00', '13:00', '21:00'],
+                'tip' => 'Squeeze and hold for up to 10 seconds, then relax; repeat 10 times. Helps urinary symptoms.'],
+        ],
+        'checks' => [
+            'hrt_review'  => ['label' => 'HRT review', 'interval' => 365, 'tip' => 'About 3 months after starting or changing HRT, then once a year.'],
+            'bp'          => ['label' => 'Blood pressure check', 'interval' => 365, 'tip' => 'Usually at your HRT review, or at a pharmacy.'],
+            'dexa'        => ['label' => 'Bone density (DEXA) scan', 'tip' => 'Only if your doctor recommends one, for example after early menopause.'],
+            'mirena'      => ['label' => 'Mirena coil replacement', 'interval' => 1826, 'tip' => 'As the progestogen part of HRT, a Mirena is usually replaced every 5 years. Set it to what you were told.'],
+        ],
+    ],
+    'pregnancy' => [
+        'title' => 'Pregnancy', 'short' => 'Pregnancy', 'icon' => '&#x1F930;', 'default' => false, 'appointment' => 'antenatal',
+        'page' => 'pregnancy.php', 'needs' => 'uterus', // has its own page; only offered if the body inventory has a uterus (or isn't filled in)
+        'intro' => 'Your due date and how far along you are, the NHS antenatal appointments and scans, vaccines, forms, and what was checked each time.',
+        'help'  => 'Call your maternity unit straight away if your baby is moving less than usual, you have any bleeding, a severe headache or vision problems, or your waters break.',
+        'presets' => [],
+        'checks' => [],
+    ],
+    'pathway' => [
+        'title' => 'Pregnancy options and aftercare', 'short' => 'Private', 'tile' => 'Private', 'icon' => '&#x1F512;', 'default' => false, 'appointment' => null,
+        'page' => 'pathway.php', 'private' => true, 'needs' => 'uterus', // its own page; never shared or shown anywhere else
+        'intro' => 'Private and encrypted: your options, abortion care, or aftercare after a miscarriage or pregnancy loss.',
+        'help'  => 'Call your provider or 999 if you have very heavy bleeding, a fever, severe pain or smelly discharge.',
+        'presets' => [],
+        'checks' => [],
+    ],
+    'bp' => [
+        'title' => 'Blood pressure', 'short' => 'Blood pressure', 'icon' => '&#x1FAC0;', 'default' => false, 'appointment' => 'nurse',
+        'intro' => 'Guided home monitoring the NICE way, readings with medicine changes marked, side effects, safety advice, and a summary for your GP.',
+        'help'  => 'Call 999 if your blood pressure is 180/120 or more with chest pain, a severe headache, vision changes, confusion or weakness.',
+        'presets' => [],
+        'checks' => [
+            'bp_review' => ['label' => 'Blood pressure review', 'interval' => 365, 'tip' => 'Yearly, usually with blood tests for kidney function and potassium, and a urine test (ACR).'],
+            'bp_bloods' => ['label' => 'Kidney and potassium blood test', 'interval' => 365, 'results' => true, 'tip' => 'Yearly, and 1 to 2 weeks after starting or increasing an ACE inhibitor or ARB.'],
+            'bp_monitor' => ['label' => 'Home monitor check', 'interval' => 730, 'tip' => 'Compare it with a reading at your GP surgery or pharmacy every couple of years, and change the batteries.'],
+        ],
+    ],
+    'migraine' => [
+        'title' => 'Migraine and headaches', 'short' => 'Migraine', 'icon' => '&#x1F915;', 'default' => false, 'appointment' => 'gp',
+        'intro' => 'A headache diary with monthly counts, painkiller overuse warnings, triggers, preventive treatment reviews, and a summary for your GP.',
+        'help'  => 'Call 999 for a sudden severe headache, one with a fever and stiff neck, after a head injury, or with new weakness or confusion.',
+        'presets' => [],
+        'checks' => [
+            'migraine_review' => ['label' => 'Migraine review', 'interval' => 365, 'tip' => 'With your GP: take the clinician summary, especially if you have headaches on several days a month.'],
+        ],
+    ],
+    'thyroid' => [
+        'title' => 'Thyroid', 'short' => 'Thyroid', 'icon' => '&#x1F9EC;', 'default' => false, 'appointment' => 'blood_test',
+        'intro' => 'Levothyroxine timing and spacing, TSH tests with dose changes marked, a weekly symptom check, and a summary for your GP.',
+        'help'  => 'See your GP if you get symptoms of too much or too little thyroid hormone, especially palpitations, or if you become pregnant.',
+        'presets' => [],
+        'checks' => [
+            'thyroid_review' => ['label' => 'Thyroid review', 'interval' => 365, 'tip' => 'Usually once a year with a TSH blood test, once your dose is steady.'],
+        ],
+    ],
+    'neuro' => [
+        'title' => 'ADHD and autism', 'short' => 'ADHD and autism', 'icon' => '&#x1F9E9;', 'default' => false, 'appointment' => 'mental_health',
+        'intro' => 'No diagnosis needed. Waiting lists, assessment prep, a communication passport, medication reviews, and energy and sensory notes if you want them.',
+        'help'  => 'If you are struggling, your GP can help, and you can ask for reasonable adjustments to how services contact and see you.',
+        'presets' => [],
+        'checks' => [
+            'stim_bp'     => ['label' => 'Blood pressure and pulse check', 'interval' => 182, 'tip' => 'NICE recommends checking these regularly on ADHD stimulants (about every 6 months, and after a dose change). Log them in Readings.'],
+            'stim_weight' => ['label' => 'Weight check', 'interval' => 182, 'tip' => 'Stimulants can reduce appetite: weight is usually checked every 6 months.'],
+            'adhd_review' => ['label' => 'ADHD medication review', 'interval' => 365, 'tip' => 'At least once a year, with your specialist or GP. Take your effects log.'],
+            'shared_care' => ['label' => 'Shared care agreement renewal', 'track' => 'expiry', 'tip' => 'If your GP prescribes under shared care with a specialist service.'],
+        ],
+    ],
+    'gender' => [
+        'title' => 'Gender-affirming care', 'short' => 'Affirming care', 'icon' => '&#x1F98B;', 'default' => false, 'appointment' => null,
+        'page' => 'gender.php', 'private' => true, // its own page: encrypted, with its own PIN, never shared
+        'intro' => 'Your care pathway (GIC waiting list, shared care, prescriber), fertility, a changes journal and progress photos. Private and encrypted.',
+        'help'  => 'Your gender identity clinic or GP can help with any worries about your treatment.',
+        'presets' => [],
+        'checks' => [],
     ],
     'hearing' => [
         'title' => 'Hearing', 'short' => 'Hearing', 'icon' => '&#x1F442;', 'default' => true, 'appointment' => 'hearing',
@@ -375,7 +472,21 @@ function user_care_areas(array $user): array
         return array_values(array_filter(array_keys(array_filter(CARE_AREAS, fn ($a) => $a['default'])), fn ($k) => share_area_allowed($k, $user)));
     }
     $chosen = explode(',', (string) $user['care_areas']);
-    return array_values(array_filter(array_keys(CARE_AREAS), fn ($k) => empty(CARE_AREAS[$k]['hidden']) && in_array($k, $chosen, true) && share_area_allowed($k, $user)));
+    return array_values(array_filter(array_keys(CARE_AREAS), fn ($k) => empty(CARE_AREAS[$k]['hidden']) && in_array($k, $chosen, true) && share_area_allowed($k, $user)
+        && care_area_fits($user, $k)));
+}
+
+/** Areas that depend on anatomy (Pregnancy needs a uterus) only fit if the body inventory allows them (or isn't filled in). */
+function care_area_fits(array $user, string $key): bool
+{
+    $needs = CARE_AREAS[$key]['needs'] ?? null;
+    return $needs === null || body_has($user, $needs) !== false;
+}
+
+/** The Care categories this person can switch on. */
+function care_categories_for(array $user): array
+{
+    return array_filter(care_categories(), fn ($k) => care_area_fits($user, $k), ARRAY_FILTER_USE_KEY);
 }
 
 /** Areas whose routines and checks go on Today and in the calendar feed: Care categories, plus Mind's habits. */

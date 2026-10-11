@@ -79,12 +79,12 @@ function build_digest(array $user, DateTimeImmutable $today): ?array
 
     $slots = dose_slots($user, $today, $today, true);
     if ($slots) {
-        $sections['Doses today'] = array_map(fn ($s) => $s['local']->format('H:i') . '  ' . $s['schedule']['name'] . ' ' . $s['schedule']['strength']
+        $sections['Doses today'] = array_map(fn ($s) => $s['local']->format('H:i') . '  ' . public_med_name($s['schedule'])
             . ' (' . dose_label($s['schedule']['dose_amount'], $s['schedule']['dose_unit']) . ')', $slots);
     }
     $missed = array_filter(dose_slots($user, $today->modify('-1 day'), $today->modify('-1 day'), true), fn ($s) => $s['status'] === 'missed');
     if ($missed) {
-        $sections['Not logged yesterday'] = array_map(fn ($s) => $s['local']->format('H:i') . '  ' . $s['schedule']['name'], array_values($missed));
+        $sections['Not logged yesterday'] = array_map(fn ($s) => $s['local']->format('H:i') . '  ' . public_med_name($s['schedule']), array_values($missed));
     }
     $meds = user_medications($uid);
     $schedules = schedules_by_medication(array_column($meds, 'id'), $today->format('Y-m-d'));
@@ -92,11 +92,12 @@ function build_digest(array $user, DateTimeImmutable $today): ?array
     foreach ($meds as $m) {
         $days = stock_days_left($m, $schedules[$m['id']] ?? []);
         if ($days !== null && $days <= (int) $m['low_stock_days']) {
-            $medNotes[] = $m['name'] . ': running low, about ' . (int) floor($days) . ' days left';
+            $medNotes[] = public_med_name($m) . ($m['ordered_on'] ? ': ordered ' . date('j M', strtotime($m['ordered_on'])) . ', waiting to collect' : ': running low')
+                . ', about ' . (int) floor($days) . ' days left';
         }
         [$state, $text] = expiry_status($m['expiry_date'], $today);
         if ($state) {
-            $medNotes[] = $m['name'] . ': ' . lcfirst($text);
+            $medNotes[] = public_med_name($m) . ': ' . lcfirst($text);
         }
     }
     if ($medNotes) {

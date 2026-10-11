@@ -208,6 +208,96 @@
     });
   });
 
+  // "Start a 15-minute timer" (hypo guide): show the timer, set it and start it.
+  document.querySelectorAll('[data-timer-quick]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var t = document.querySelector('[data-timer]');
+      if (!t) { return; }
+      t.hidden = false;
+      var secs = btn.getAttribute('data-timer-quick');
+      var set = t.querySelector('[data-timer-set="' + secs + '"]');
+      if (set) { set.click(); }
+      t.querySelector('[data-timer-start]').click();
+      t.scrollIntoView({ block: 'center' });
+    });
+  });
+
+  // Read-only text to copy: select it all when focused.
+  document.querySelectorAll('[data-select-on-focus]').forEach(function (el) { el.addEventListener('focus', function () { el.select(); }); });
+
+  // Visual timer (timer.php).
+  var timer = document.querySelector('[data-timer]');
+  if (timer) {
+    var total = 300, left = 300, tick = null, endAt = 0;
+    var ring = timer.querySelector('[data-timer-ring]'), label = timer.querySelector('[data-timer-time]'), status = timer.querySelector('[data-timer-status]');
+    var startBtn = timer.querySelector('[data-timer-start]'), pauseBtn = timer.querySelector('[data-timer-pause]');
+    var show = function () {
+      var s = Math.max(0, Math.ceil(left));
+      label.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+      ring.setAttribute('stroke-dasharray', (total ? (left / total) * 100 : 0) + ' 100');
+    };
+    var stop = function () { clearInterval(tick); tick = null; startBtn.hidden = false; pauseBtn.hidden = true; };
+    var set = function (secs) { stop(); total = left = secs; timer.classList.remove('done'); show(); };
+    timer.querySelectorAll('[data-timer-set]').forEach(function (b) { b.addEventListener('click', function () { set(parseInt(b.getAttribute('data-timer-set'), 10)); }); });
+    timer.querySelector('[data-timer-custom]').addEventListener('change', function (e) { var m = parseInt(e.target.value, 10); if (m > 0) { set(m * 60); } });
+    startBtn.addEventListener('click', function () {
+      if (left <= 0) { left = total; }
+      endAt = Date.now() + left * 1000;
+      startBtn.hidden = true; pauseBtn.hidden = false; timer.classList.remove('done');
+      tick = setInterval(function () {
+        left = (endAt - Date.now()) / 1000;
+        if (left <= 0) {
+          left = 0; stop(); timer.classList.add('done'); status.textContent = 'Time is up.';
+          if (navigator.vibrate) { navigator.vibrate([300, 150, 300, 150, 300]); }
+        }
+        show();
+      }, 250);
+    });
+    pauseBtn.addEventListener('click', stop);
+    timer.querySelector('[data-timer-reset]').addEventListener('click', function () { set(total); });
+    show();
+  }
+
+  // Privacy (Account > Privacy): cover the page while the app is in the background, so the app
+  // switcher and anyone glancing at the screen don't see it.
+  if (document.body.hasAttribute('data-privacy-blur')) {
+    var cover = function (on) { document.documentElement.classList.toggle('privacy-cover', on); };
+    document.addEventListener('visibilitychange', function () { cover(document.visibilityState === 'hidden'); });
+    window.addEventListener('pagehide', function () { cover(true); });
+    window.addEventListener('pageshow', function () { cover(false); });
+    window.addEventListener('blur', function () { cover(true); });
+    window.addEventListener('focus', function () { cover(false); });
+  }
+
+  // "Add supplement": common supplements fill in the name, strength, form and dose unit.
+  document.querySelectorAll('[data-fill-med]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      [['med-name', 'name'], ['med-strength', 'strength'], ['med-form', 'form'], ['med-unit', 'unit']].forEach(function (pair) {
+        var field = document.getElementById(pair[0]);
+        if (field) { field.value = btn.getAttribute('data-' + pair[1]); field.dispatchEvent(new Event('change', { bubbles: true })); }
+      });
+      document.querySelectorAll('[data-fill-med]').forEach(function (b) { b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
+    });
+  });
+
+  // Schedule editor: Morning / Afternoon / Evening buttons fill in that dose row's time.
+  function markTimePresets(row) {
+    var input = row.querySelector('input[type=time]');
+    row.querySelectorAll('[data-set-time]').forEach(function (b) {
+      b.setAttribute('aria-pressed', input && input.value === b.getAttribute('data-set-time') ? 'true' : 'false');
+    });
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-set-time]');
+    if (!btn) { return; }
+    var row = btn.closest('.schedule-row');
+    var input = row && row.querySelector('input[type=time]');
+    if (input) { input.value = btn.getAttribute('data-set-time'); markTimePresets(row); }
+  });
+  document.addEventListener('input', function (e) {
+    if (e.target.matches && e.target.matches('.schedule-row input[type=time]')) { markTimePresets(e.target.closest('.schedule-row')); }
+  });
+
   // Prescription payments: for NHS charges the amount follows the number of items until it's
   // changed by hand; private and bought medicines have their own prices, so it's left alone.
   document.querySelectorAll('input[data-charge]').forEach(function (items) {

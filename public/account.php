@@ -31,8 +31,8 @@ if (is_post()) {
                 $errors[] = $e;
             }
             if (!$errors) {
-                q('UPDATE users SET display_name = ?, email = ?, timezone = ?, username = ? WHERE id = ?',
-                    [$name, $email ?: null, $tz, $username, $uid]);
+                q('UPDATE users SET display_name = ?, email = ?, timezone = ?, username = ?, pronouns = ?, gender_identity = ? WHERE id = ?',
+                    [$name, $email ?: null, $tz, $username, trim(mb_substr(post('pronouns'), 0, 40)) ?: null, trim(mb_substr(post('gender_identity'), 0, 100)) ?: null, $uid]);
                 flash('success', 'Profile saved.' . ($isLocal && $username !== $user['username'] ? " Sign in as \"$username\" from now on." : ''));
                 redirect('account.php');
             }
@@ -46,11 +46,24 @@ if (is_post()) {
             $sex = isset(SEXES[post('sex')]) ? post('sex') : null;
             $programmes = $sex === 'other' ? implode(',', array_intersect(array_keys(SCREENING_PROGRAMMES), (array) ($_POST['screening'] ?? []))) : null;
             $areas = array_values(array_intersect(array_keys(care_categories()), (array) ($_POST['care_areas'] ?? [])));
+            // Body inventory: organ => state (and surgery date), or NULL when not used.
+            $inventory = null;
+            if (post('inventory_on') === '1') {
+                $inventory = [];
+                foreach (BODY_PARTS as $part => $_) {
+                    $state = $_POST['inv'][$part]['state'] ?? '';
+                    if (isset(BODY_STATES[$state])) {
+                        $date = parse_date((string) ($_POST['inv'][$part]['date'] ?? ''));
+                        $inventory[$part] = ['state' => $state, 'date' => $state === 'removed' && $date ? $date->format('Y-m-d') : null];
+                    }
+                }
+            }
+            $inventoryJson = $inventory === null ? null : json_encode($inventory);
             if (!$errors) {
-                q('UPDATE users SET date_of_birth = ?, sex = ?, screening_programmes = ?, care_areas = ?, mind_enabled = ? WHERE id = ?',
-                    [$dob?->format('Y-m-d'), $sex, $programmes, implode(',', $areas), post('mind_enabled') === '1' ? 1 : 0, $uid]);
-                if ($sex && ($sex !== $user['sex'] || $programmes !== $user['screening_programmes'])) {
-                    apply_screening_profile(['sex' => $sex, 'screening_programmes' => $programmes] + $user);
+                q('UPDATE users SET date_of_birth = ?, sex = ?, screening_programmes = ?, care_areas = ?, mind_enabled = ?, body_inventory = ? WHERE id = ?',
+                    [$dob?->format('Y-m-d'), $sex, $programmes, implode(',', $areas), post('mind_enabled') === '1' ? 1 : 0, $inventoryJson, $uid]);
+                if (($sex || $inventory !== null) && ($sex !== $user['sex'] || $programmes !== $user['screening_programmes'] || $inventoryJson !== $user['body_inventory'])) {
+                    apply_screening_profile(['sex' => $sex, 'screening_programmes' => $programmes, 'body_inventory' => $inventoryJson] + $user);
                 }
                 flash('success', 'Health profile saved.' . (!$areas ? ' All Care categories are switched off, so the Care tab is empty.' : ''));
                 redirect('account.php#health-profile');
@@ -100,6 +113,20 @@ if (is_post()) {
                 }
             }
             redirect('account.php#data');
+        case 'accessibility':
+            q('UPDATE users SET text_size = ?, wide_spacing = ?, easy_font = ?, reduce_motion = ?, hide_streaks = ?, dose_followup = ? WHERE id = ?', [
+                in_array(post('text_size'), ['l', 'xl'], true) ? post('text_size') : null, post('wide_spacing') === '1' ? 1 : 0, post('easy_font') === '1' ? 1 : 0,
+                post('reduce_motion') === '1' ? 1 : 0, post('hide_streaks') === '1' ? 1 : 0, in_array((int) post('dose_followup'), [0, 15, 30, 60], true) ? (int) post('dose_followup') : 0, $uid,
+            ]);
+            flash('success', 'Saved.');
+            redirect('account.php#accessibility');
+
+        case 'privacy':
+            q('UPDATE users SET privacy_blur = ?, disguise = ? WHERE id = ?',
+                [post('privacy_blur') === '1' ? 1 : 0, isset(DISGUISES[post('disguise')]) ? post('disguise') : null, $uid]);
+            flash('success', 'Privacy settings saved.' . (post('disguise') !== (string) $user['disguise'] ? ' To change the home screen icon, remove Pillbox from your home screen and add it again.' : ''));
+            redirect('account.php#privacy');
+
         case 'appearance':
             $theme = post('theme');
             $mode = post('color_mode');
@@ -272,6 +299,11 @@ render_header('Account', 'account');
                     <?php foreach (DateTimeZone::listIdentifiers() as $tz): ?><option<?= selected($tz === ($posted['timezone'] ?? $user['timezone'])) ?>><?= h($tz) ?></option><?php endforeach; ?>
                 </select>
             </label>
+            <label><span>Pronouns <span class="muted small">(optional, shown on your reports)</span></span>
+                <input name="pronouns" maxlength="40" list="pronoun-list" value="<?= h($posted['pronouns'] ?? (string) $user['pronouns']) ?>" placeholder="e.g. she/her, he/him, they/them">
+                <datalist id="pronoun-list"><option value="she/her"><option value="he/him"><option value="they/them"><option value="she/they"><option value="he/they"></datalist></label>
+            <label><span>Gender identity <span class="muted small">(optional, in your own words)</span></span>
+                <input name="gender_identity" maxlength="100" value="<?= h($posted['gender_identity'] ?? (string) $user['gender_identity']) ?>"></label>
         </div>
         <button class="btn btn-primary" type="submit">Save profile</button>
     </form>
@@ -290,7 +322,7 @@ render_header('Account', 'account');
                 <input type="date" name="date_of_birth" max="<?= h(local_today()->format('Y-m-d')) ?>" value="<?= h($user['date_of_birth'] ?? '') ?>"></label>
         </div>
         <fieldset>
-            <legend>Sex <span class="muted small">(which screening invitations apply)</span></legend>
+            <legend>Sex on your GP record <span class="muted small">(optional: NHS screening invitations are sent by this)</span></legend>
             <div class="repeat-choice">
                 <?php foreach (SEXES + ['' => 'Not set'] as $key => $label): ?>
                 <label class="check"><input type="radio" name="sex" value="<?= h($key) ?>" id="sex-<?= h($key ?: 'none') ?>"<?= checked((string) $user['sex'] === $key) ?>> <?= h($label) ?></label>
@@ -306,11 +338,29 @@ render_header('Account', 'account');
                 </div>
             </div>
         </fieldset>
+        <?php $inv = body_inventory($user); ?>
+        <fieldset>
+            <legend>Body inventory <span class="muted small">(optional and private)</span></legend>
+            <label class="check"><input type="checkbox" name="inventory_on" value="1" id="inv-on"<?= checked($inv !== null) ?>>
+                <span>Use my body, not a gender, for screening reminders and which pages appear (e.g. Pregnancy needs a uterus)</span></label>
+            <div class="inventory" data-show-when="inv-on">
+                <?php foreach (BODY_PARTS as $part => $label): $state = $inv[$part]['state'] ?? ''; ?>
+                <div class="inventory-row">
+                    <span><?= h($label) ?></span>
+                    <select name="inv[<?= $part ?>][state]" aria-label="<?= h($label) ?>"><option value="">&ndash;</option>
+                        <?php foreach (BODY_STATES as $k => $l): ?><option value="<?= $k ?>"<?= selected($state === $k) ?>><?= h($l) ?></option><?php endforeach; ?></select>
+                    <label><span class="sr">Surgery date</span><input type="date" name="inv[<?= $part ?>][date]" value="<?= h((string) ($inv[$part]['date'] ?? '')) ?>" title="Date of surgery, if removed"></label>
+                </div>
+                <?php endforeach; ?>
+                <p class="muted small">Cervical screening follows a cervix, breast screening breast or chest tissue, and AAA screening a prostate or testes (now or before surgery).
+                    Bowel screening is for everyone from 50 to 74. You can change any of this at any time.</p>
+            </div>
+        </fieldset>
         <fieldset>
             <legend>Care categories</legend>
             <p class="muted small">Only the ones you switch on appear in the Care tab, on Today and in your calendar feed. Switching one off keeps its history.</p>
             <div class="checks">
-                <?php $myAreas = user_care_areas($user); foreach (care_categories() as $key => $area): ?>
+                <?php $myAreas = user_care_areas($user); foreach (care_categories_for($user) as $key => $area): ?>
                 <label class="check"><input type="checkbox" name="care_areas[]" value="<?= h($key) ?>"<?= checked(in_array($key, $myAreas, true)) ?>> <?= $area['icon'] ?> <?= h($area['title']) ?></label>
                 <?php endforeach; ?>
             </div>
@@ -321,6 +371,42 @@ render_header('Account', 'account');
                 <span>Show the Mind tab <span class="muted small">(mood check-ins, coping toolkit, safety plan, journal; and the Help button with crisis contacts)</span></span></label>
         </fieldset>
         <button class="btn btn-primary" type="submit">Save health profile</button>
+    </form>
+</section>
+
+<section class="card" id="accessibility">
+    <h2>Display and reminders</h2>
+    <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="accessibility">
+        <div class="grid-2">
+            <label>Text size <select name="text_size"><?php foreach (['' => 'Normal', 'l' => 'Larger', 'xl' => 'Largest'] as $k => $l): ?><option value="<?= $k ?>"<?= selected((string) $user['text_size'] === $k) ?>><?= h($l) ?></option><?php endforeach; ?></select></label>
+            <label><span>"Did you take it?" follow-up <span class="muted small">(notifications)</span></span>
+                <select name="dose_followup"><?php foreach ([0 => 'Off', 15 => '15 minutes after a dose reminder', 30 => '30 minutes after', 60 => '1 hour after'] as $k => $l): ?><option value="<?= $k ?>"<?= selected((int) $user['dose_followup'] === $k) ?>><?= h($l) ?></option><?php endforeach; ?></select></label>
+        </div>
+        <label class="check"><input type="checkbox" name="wide_spacing" value="1"<?= checked((bool) $user['wide_spacing']) ?>> <span>More space between lines and letters</span></label>
+        <label class="check"><input type="checkbox" name="easy_font" value="1"<?= checked((bool) $user['easy_font']) ?>> <span>Easy-read font <span class="muted small">(a rounder, more open font, often easier with dyslexia)</span></span></label>
+        <label class="check"><input type="checkbox" name="reduce_motion" value="1"<?= checked((bool) $user['reduce_motion']) ?>> <span>Turn off animations</span></label>
+        <label class="check"><input type="checkbox" name="hide_streaks" value="1"<?= checked((bool) $user['hide_streaks']) ?>> <span>Hide streaks <span class="muted small">(no "days in a row" counts)</span></span></label>
+        <span class="inline-actions"><button class="btn btn-primary" type="submit">Save</button></span>
+    </form>
+</section>
+
+<section class="card" id="privacy">
+    <h2>Privacy</h2>
+    <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="privacy">
+        <label class="check"><input type="checkbox" name="privacy_blur" value="1"<?= checked((bool) $user['privacy_blur']) ?>>
+            <span>Hide the screen when I switch to another app <span class="muted small">(so it doesn't show in the app switcher)</span></span></label>
+        <fieldset><legend>Name and icon on my home screen</legend>
+            <div class="repeat-choice">
+                <label class="check"><input type="radio" name="disguise" value=""<?= checked(!$user['disguise']) ?>> <?= h(config('app.name')) ?></label>
+                <?php foreach (DISGUISES as $k => $d): ?>
+                <label class="check"><input type="radio" name="disguise" value="<?= $k ?>"<?= checked($user['disguise'] === $k) ?>>
+                    <img src="<?= h(asset('assets/icons/' . $d['icon'] . '-192.png')) ?>" alt="" width="24" height="24" class="disguise-icon"> <?= h($d['name']) ?></label>
+                <?php endforeach; ?>
+            </div>
+            <p class="muted small">Also used for the browser tab. To change an app that's already on your home screen, remove it and add it again.</p>
+        </fieldset>
+        <p class="muted small">For neutral reminders, tick <strong>Private</strong> on a medicine, or turn on "Hide details on the lock screen" under Notifications.</p>
+        <span class="inline-actions"><button class="btn btn-primary" type="submit">Save</button></span>
     </form>
 </section>
 
