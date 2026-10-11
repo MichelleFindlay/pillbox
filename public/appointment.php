@@ -93,6 +93,27 @@ render_header(appointment_title($a), 'appointments');
     <h2>Before the appointment</h2>
     <p class="appt-notes"><?= nl2br(h($a['notes'])) ?></p>
     <?php endif; ?>
+    <?php $passport = share_area_allowed('neuro') ? array_filter(nd_profile((int) $user['id'])['passport']) : []; ?>
+    <details class="q-edit no-print"><summary>Before you go</summary>
+        <ul class="plain checklist">
+            <li><label class="check"><input type="checkbox"> How to get there, and how long it takes<?= $a['location'] ? ': <a href="https://www.google.com/maps/search/?api=1&amp;query=' . h(rawurlencode((string) $a['location'])) . '" target="_blank" rel="noopener">map</a>' : '' ?></label></li>
+            <li><label class="check"><input type="checkbox"> Your medicines list (<a href="<?= h(url('report.php')) ?>">print or show the report</a>)</label></li>
+            <li><label class="check"><input type="checkbox"> Your questions, below</label></li>
+            <li><label class="check"><input type="checkbox"> Letters, test results, glasses or hearing aids, anything they asked you to bring</label></li>
+            <li><label class="check"><input type="checkbox"> Someone to come with you, if that helps</label></li>
+            <?php if ($a['kind'] === 'blood_test' && thyroid_meds(user_medications((int) $user['id']))): ?>
+            <li><label class="check"><input type="checkbox"> Stopped biotin (in some hair and nail vitamins) 2 days before: it can upset thyroid results</label></li>
+            <?php endif; ?>
+            <?php if ($passport): ?><li><label class="check"><input type="checkbox"> Your <a href="<?= h(url('passport.php')) ?>">communication passport</a>, to show when you arrive</label></li><?php endif; ?>
+        </ul>
+        <p class="muted small">Write down what was said afterwards, below, while you remember.</p>
+    </details>
+    <?php if ($passport): ?>
+    <div class="print-only">
+        <h2>How to communicate with me</h2>
+        <?php foreach (ND_PASSPORT_FIELDS as $key => [$label]): if (!empty($passport[$key])): ?><p><strong><?= h($label) ?>:</strong> <?= h($passport[$key]) ?></p><?php endif; endforeach; ?>
+    </div>
+    <?php endif; ?>
 </section>
 
 <section class="card" id="questions">

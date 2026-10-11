@@ -18,7 +18,7 @@ function builtin_metrics(): array
         'blood_pressure' => [
             'label' => 'Blood pressure',
             'fields' => [$f('Systolic', 'mmHg', 50, 260), $f('Diastolic', 'mmHg', 30, 160), $f('Pulse', 'bpm', 20, 250, 1, false)],
-            'contexts' => ['Sitting', 'Standing', 'Lying down', 'After exercise', 'Left arm', 'Right arm'],
+            'contexts' => ['Sitting', 'Standing', 'Lying down', 'After exercise', 'Left arm', 'Right arm', 'Home monitoring'],
             'help' => 'Rest for 5 minutes before measuring. Record each reading if your doctor asked for more than one.',
         ],
         'heart_rate' => ['label' => 'Heart rate', 'fields' => [$f('Heart rate', 'bpm', 20, 250)], 'contexts' => ['Resting', 'After exercise', 'On waking']],

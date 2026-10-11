@@ -65,7 +65,7 @@ render_header('Report', 'report');
         <?= logo_svg(56) ?>
         <div>
             <h1>Medication &amp; health report</h1>
-            <p><strong><?= h($user['display_name']) ?></strong><?= $user['email'] ? ' · ' . h($user['email']) : '' ?></p>
+            <p><strong><?= h($user['display_name']) ?></strong><?= $user['pronouns'] ? ' (' . h($user['pronouns']) . ')' : '' ?><?= $user['email'] ? ' · ' . h($user['email']) : '' ?></p>
             <p class="muted"><?= h($from->format('j M Y')) ?> to <?= h($to->format('j M Y')) ?> · generated <?= h((new DateTimeImmutable('now', user_tz()))->format('j M Y H:i')) ?></p>
         </div>
     </header>
@@ -79,7 +79,7 @@ render_header('Report', 'report');
             <tbody>
             <?php foreach ($meds as $m): ?>
                 <tr>
-                    <td><strong><?= h($m['name']) ?></strong> <?= h($m['strength']) ?><br><span class="muted small"><?= h(ucfirst($m['form'])) ?><?= $m['dmd_code'] ? ' · dm+d ' . h($m['dmd_code']) : '' ?></span></td>
+                    <td><strong><?= h($m['name']) ?></strong> <?= h($m['strength']) ?><br><span class="muted small"><?= h(ucfirst($m['form'])) ?><?= $m['is_supplement'] ? ' · supplement' : '' ?><?= $m['dmd_code'] ? ' · dm+d ' . h($m['dmd_code']) : '' ?></span></td>
                     <td>
                         <?php if ($m['as_needed']): ?>
                             As needed<?= $m['prn_dose_amount'] ? ', ' . h(dose_label($m['prn_dose_amount'], $m['dose_unit'])) : '' ?><?= $m['prn_max_daily'] ? ' (max ' . h(dose_label($m['prn_max_daily'], $m['dose_unit'])) . '/day)' : '' ?>

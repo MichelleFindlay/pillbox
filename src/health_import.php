@@ -258,8 +258,8 @@ function save_health_rows(int $userId, array $rows, string $source = HEALTH_SOUR
     if (!$rows) {
         return $result;
     }
-    $insert = 'INSERT INTO health_readings (user_id, metric, value1, value2, value3, context, recorded_at, source, external_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    $insert = 'INSERT INTO health_readings (user_id, metric, value1, value2, value3, context, notes, recorded_at, source, external_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
     $ignore = db()->prepare($insert . ' ON DUPLICATE KEY UPDATE id = id');
     // Daily averages: the newest figure wins.
     $replace = db()->prepare($insert . ' ON DUPLICATE KEY UPDATE value1 = VALUES(value1), value2 = VALUES(value2), value3 = VALUES(value3)');
@@ -269,7 +269,7 @@ function save_health_rows(int $userId, array $rows, string $source = HEALTH_SOUR
     transaction(function () use ($userId, $rows, $source, $ignore, $replace, $grow, &$result) {
         foreach ($rows as $r) {
             $stmt = !$r['replace'] ? $ignore : (in_array($r['metric'], ['steps', 'sleep'], true) ? $grow : $replace);
-            $stmt->execute([$userId, $r['metric'], ...$r['values'], $r['context'], $r['recorded_at'], $source, $r['external_id']]);
+            $stmt->execute([$userId, $r['metric'], ...$r['values'], $r['context'], $r['notes'] ?? null, $r['recorded_at'], $source, $r['external_id']]);
             $n = $stmt->rowCount(); // 1 = inserted, 2 = updated, 0 = already there
             $result[$n === 1 ? 'added' : ($n === 2 ? 'updated' : 'unchanged')]++;
             if ($n > 0) {

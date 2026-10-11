@@ -34,7 +34,7 @@ const CONNECTORS = [
     ],
 ];
 const SOURCE_LABELS = ['apple_health' => 'Apple Health', 'whoop' => 'WHOOP', 'fitbit' => 'Fitbit', 'withings' => 'Withings', 'oura' => 'Oura',
-    'myfitnesspal' => 'MyFitnessPal', 'google_fit' => 'Google Fit'];
+    'myfitnesspal' => 'MyFitnessPal', 'google_fit' => 'Google Fit', 'antenatal' => 'Antenatal check', 'nightscout' => 'Nightscout', 'bp_csv' => 'Monitor file'];
 
 function reading_source_label(string $source): string
 {
@@ -216,6 +216,18 @@ function sync_connections(DateTimeImmutable $now): array
     $log = [];
     foreach (q("SELECT c.* FROM connections c JOIN users u ON u.id = c.user_id WHERE u.is_active = 1
                 AND (c.last_sync_at IS NULL OR c.last_sync_at < ?)", [$now->modify('-55 minutes')->format('Y-m-d H:i:s')]) as $conn) {
+        if ($conn['provider'] === 'nightscout') {
+            try {
+                $r = nightscout_sync($conn, ($conn['last_sync_at'] ? strtotime($conn['last_sync_at'] . ' UTC') : time() - 14 * 86400) - 3 * 3600);
+                if ($r['added']) {
+                    $log[] = "Nightscout for user {$conn['user_id']}: {$r['added']} new readings.";
+                }
+            } catch (Throwable $e) {
+                q('UPDATE connections SET last_sync_at = UTC_TIMESTAMP(), last_error = ? WHERE id = ?', [mb_substr($e->getMessage(), 0, 500), $conn['id']]);
+                $log[] = "Nightscout for user {$conn['user_id']} failed: " . $e->getMessage();
+            }
+            continue;
+        }
         if (!connector_configured($conn['provider'])) {
             continue;
         }

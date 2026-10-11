@@ -77,7 +77,7 @@ function trip_preview(array $user, array $plan, DateTimeZone $home): array
         $where = $ymd >= $plan['start_date'] && $ymd <= $plan['end_date'] ? $dest : $home;
         $doses = [];
         foreach ($schedules as $s) {
-            if (((int) $s['days_mask'] & weekday_bit($d)) === 0 || ($s['valid_from'] && $s['valid_from'] > $ymd) || ($s['valid_to'] && $s['valid_to'] < $ymd)) {
+            if (!schedule_on_day($s, $ymd) || ($s['valid_from'] && $s['valid_from'] > $ymd) || ($s['valid_to'] && $s['valid_to'] < $ymd)) {
                 continue;
             }
             [$hh, $mm] = array_map('intval', explode(':', $s['dose_time']));

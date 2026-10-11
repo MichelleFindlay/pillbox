@@ -19,8 +19,8 @@ if ($from > $to) {
 if ($from < $to->modify('-366 days')) {
     $from = $to->modify('-366 days');
 }
-$enabled = user_care_areas($user);
-$only = isset(CARE_AREAS[get('area')]) ? get('area') : '';
+$enabled = array_values(array_filter(user_care_areas($user), fn ($k) => empty(CARE_AREAS[$k]['private']))); // never the private pathway
+$only = in_array(get('area'), $enabled, true) ? get('area') : '';
 $areas = $only ? [$only] : $enabled;
 
 if (in_array('screening', $areas, true)) {

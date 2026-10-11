@@ -87,6 +87,20 @@ function site_settings_from_post(): array
         'cron' => ['token' => $token],
         'demo' => ['enabled' => post('demo_enabled') === '1', 'hours' => max(1, min(48, (int) post('demo_hours') ?: 2))],
         'connectors' => $connectors,
+        'legal' => [
+            'operator' => trim(mb_substr(post('legal_operator'), 0, 150)),
+            'contact' => trim(mb_substr(post('legal_contact'), 0, 150)),
+            'jurisdiction' => trim(mb_substr(post('legal_jurisdiction'), 0, 60)),
+            'terms' => trim(mb_substr((string) ($_POST['legal_terms'] ?? ''), 0, 60000)),
+            'privacy' => trim(mb_substr((string) ($_POST['legal_privacy'] ?? ''), 0, 60000)),
+            'terms_updated' => trim((string) ($_POST['legal_terms'] ?? '')) !== trim((string) config('legal.terms', '')) ? date('j F Y') : (string) config('legal.terms_updated', ''),
+            'privacy_updated' => trim((string) ($_POST['legal_privacy'] ?? '')) !== trim((string) config('legal.privacy', '')) ? date('j F Y') : (string) config('legal.privacy_updated', ''),
+        ],
+        'signup' => [
+            'enabled' => post('signup_enabled') === '1',
+            'require_approval' => post('signup_approval') === '1',
+            'notify_admins' => post('signup_notify') === '1',
+        ],
     ], $errors];
 }
 
@@ -152,6 +166,31 @@ function site_settings_fields(): void
                 <label><span>Password <span class="muted small"><?= (string) config('mail.smtp.password', '') !== '' ? '(saved: leave empty to keep it)' : '' ?></span></span>
                     <input type="password" name="smtp_password" autocomplete="new-password"></label>
             </div>
+        </div>
+    </fieldset>
+    <fieldset>
+        <legend>Terms and privacy</legend>
+        <p class="muted small">Shown at <a href="<?= h(url('terms.php')) ?>" target="_blank" rel="noopener">Terms</a> and <a href="<?= h(url('privacy.php')) ?>" target="_blank" rel="noopener">Privacy</a>
+            (linked in the footer, and agreed to when signing up). The generated text describes what Pillbox does; check it fits how you run it. It's a starting point, not legal advice.</p>
+        <div class="grid-2">
+            <label><span>Run by <span class="muted small">(you or your organisation: the data controller)</span></span><input name="legal_operator" maxlength="150" value="<?= h((string) config('legal.operator', '')) ?>"></label>
+            <label>Contact for privacy questions <input name="legal_contact" maxlength="150" value="<?= h((string) config('legal.contact', '')) ?>" placeholder="e.g. privacy@example.com"></label>
+            <label>Governing law <input name="legal_jurisdiction" maxlength="60" value="<?= h((string) config('legal.jurisdiction', '')) ?>" placeholder="England and Wales"></label>
+        </div>
+        <details class="q-edit"><summary>Use your own wording</summary>
+            <p class="muted small">Leave empty to use the generated text. Formatting: "## " for a heading, "- " for a bullet, **bold**, and a blank line between paragraphs.</p>
+            <label>Terms of use <textarea name="legal_terms" rows="8"><?= h((string) config('legal.terms', '')) ?></textarea></label>
+            <label>Privacy policy <textarea name="legal_privacy" rows="8"><?= h((string) config('legal.privacy', '')) ?></textarea></label>
+        </details>
+    </fieldset>
+    <fieldset>
+        <legend>Sign-ups</legend>
+        <label class="check"><input type="checkbox" name="signup_enabled" value="1" id="signup-on"<?= checked(signups_open()) ?>>
+            <span>Let people create their own accounts <span class="muted small">(with a password<?= sso_enabled() ? ' or single sign-on' : '' ?>)</span></span></label>
+        <div class="stack" data-show-when="signup-on">
+            <label class="check"><input type="checkbox" name="signup_approval" value="1"<?= checked(signup_needs_approval()) ?>> <span>An admin approves each new account before it can be used</span></label>
+            <label class="check"><input type="checkbox" name="signup_notify" value="1"<?= checked((bool) config('signup.notify_admins', true)) ?>>
+                <span>Email admins about each new sign-up<?= mail_enabled() ? '' : ' <span class="muted small">(once email is set up)</span>' ?></span></label>
         </div>
     </fieldset>
     <fieldset>

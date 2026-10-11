@@ -37,6 +37,63 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
     MatEx and HC2 certificates with renewal reminders, a cost log, and a calculator showing whether a PPC would
     save money (prices in `config/config.php`). Medicines can be marked as a private prescription or bought
     without one, with their price: these are logged when a new supply is recorded and kept out of the PPC sums.
+  - **Blood pressure**: guided home monitoring the NICE way (2 readings a minute apart with a 1-minute timer, morning
+    and evening for up to 7 days, day 1 left out of the average) against the home target (under 135/85, or 145/85 from
+    80, or what your clinician sets); pulse and irregular heartbeat flags; a 90-day chart with blood pressure medicine
+    changes marked, and morning and evening averages; medicines recognised by type (ACE inhibitors, ARBs, calcium
+    channel blockers, diuretics, beta blockers) with one-tap side effects; sick-day rules only if your clinician gave
+    them; advice for readings of 180/120 or more and low readings (also in Readings); blood tests after starting an ACE
+    inhibitor or ARB; a monitor CSV import (such as Omron); prompts for pregnancy and combined contraception; and a
+    clinician summary.
+  - **Migraine and headaches**: a diary (start and end or ongoing, severity, where, migraine, aura, symptoms, triggers,
+    and medicines taken with how well they helped, optionally logged as a dose); headache, migraine and acute-medicine
+    days each month (including as-needed doses logged on Today); medication overuse warnings at the NHS thresholds
+    (15+ days of simple painkillers, 10+ of triptans, opioids, combination painkillers or a mix) with an early nudge
+    from 8 days; common triggers; menstrual migraine (days -2 to +3); preventive treatment with a before-and-after
+    review; the evidence NICE uses for CGRP medicines; warnings for topiramate (pregnancy prevention) and for combined
+    hormonal contraception with migraine with aura (also on Meds); red flags; and a clinician summary.
+  - **Diabetes** (type 1, type 2 and others): glucose time in range (very low, low, in range, high, very high) with a
+    chart, patterns by time of day and before a period; CGM readings, insulin and carbs from **Nightscout**; HbA1c from
+    Blood tests; ketone guidance when you log one (under 0.6, 0.6 to 1.4, 1.5 to 2.9, 3 or more); an insulin and
+    carbs log with daily totals; pens, glucagon and hypo kits as checks; "can cause hypos" and SGLT2 sick-day notes on
+    medicines; a one-tap **hypo guide** with a 15-minute timer (opened automatically when a reading is under 4);
+    **sick-day mode** (on Today too); the DVLA **"five to drive"** check; the annual care checks as a done / due list
+    with eye screening; pregnancy planning and the gestational diabetes test; a medical ID text; and a clinician
+    summary. Nightscout addresses on private networks are blocked unless `'nightscout' => ['allow_private' => true]`.
+  - **Thyroid** (underactive thyroid): levothyroxine set-ups (morning on an empty stomach, or bedtime) and liothyronine,
+    missed-dose guidance, the brand recorded with each collection (changes go in the medicine's history), and an
+    automatic check across all medicines for calcium, iron, antacids or minerals taken within 4 hours (also warned on
+    Meds); TSH, free T4, free T3 and antibodies in Blood tests with dose changes marked on the chart; when the next TSH
+    test is due (about 3 months after a dose change until settled, then yearly, as NICE advises); a biotin reminder
+    before blood tests; a weekly check of under- and overtreatment symptoms charted against dose changes; MedEx
+    renewal; prompts when pregnant or starting oestrogen; a medical ID line; and a one-page clinician summary.
+  - **Premenstrual symptoms (PMS, PMDD, PME)**, in Periods and contraception for anyone with ovaries: daily ratings with
+    the DRSP (24 items, 1 to 6) or a quick check-in, cycle phases from logged bleeds or "day 1" markers when there's no
+    bleed, a chart of severity by cycle day with cycles stacked and the luteal phase shaded, the week before each bleed
+    compared with days 4 to 10 (telling a premenstrual pattern apart from premenstrual worsening of something ongoing),
+    predicted harder days with an optional heads-up, medicines that run **only in the 2 weeks before a period**, one-tap
+    treatments (SSRIs, continuous pill, GnRH with add-back HRT) compared before and after starting, lifestyle patterns,
+    gentle links to the safety plan and Samaritans on very hard days, and a printable GP summary.
+  - **Menopause**: stage (and whether it followed surgery or treatment), months since the last period (from the
+    period log), a daily symptom diary (hot flush count, 12 symptoms, triggers, with patterns such as "more flushes on
+    caffeine days"), the Greene Climacteric Scale over time, one-tap HRT set-ups in Meds (patch, gel, spray, tablets,
+    progestogen, vaginal oestrogen, testosterone), notes on contraception, early or premature menopause and bleeding
+    that needs a GP, HRT review, blood pressure, DEXA and Mirena checks, bone-health routines, work notes, and a
+    printable one-page GP summary.
+  - **Pregnancy** has its own page: the due date (from the last period, then the dating scan) and a weeks + days
+    counter; the NHS antenatal timeline (booking, scans, midwife checks, extra checks for first babies, whooping
+    cough, RSV and flu vaccines, MatEx, MATB1, maternity leave notice, birth plan, hospital bag) with Book and Done
+    buttons and space for screening results; a log of each check-up (blood pressure, urine, bump measurement,
+    heartbeat, position, questions for next time); folic acid and vitamin D added to Meds in one tap; and a
+    "Something not right?" panel with the maternity unit's number. It never interprets results: a blood pressure of
+    140/90 or more, or a change in movements, points to the midwife or maternity unit.
+  - **Pregnancy options and aftercare** is a private page for deciding about a pregnancy, abortion care, or aftercare
+    after a miscarriage or pregnancy loss. It sets out continuing the pregnancy, adoption and abortion without
+    recommending any of them, and what's usually available at each stage. You can track steps (referral, consultation,
+    counselling, treatment, follow-up test), medicine times, bleeding and symptoms, with red-flag advice and the
+    provider's aftercare number. Everything is in one encrypted record (key in `storage/app.key`) with an optional
+    PIN. It's never shared, and never appears on Today, in the calendar, emails, reports, backups or data downloads.
+    Reminders only say "You have a reminder", and **Delete everything** removes it completely.
   - **Checks and renewals**, each tracked the way that suits it:
     - *due every so often*: eye and hearing tests, night guard checks, spacer and CPAP part replacements, pill reviews,
       flu (every autumn), tetanus, smoke alarm tests...
@@ -79,7 +136,7 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
 - **Appointments**: GP, specialist, hospital, dentist, optician, blood tests and more, with a private
   calendar link per person that Apple Calendar, Google Calendar and Outlook can subscribe to.
 - **Doctor's report**: a printable summary (or save as PDF), plus CSV export.
-- **Accounts**: local username/password and **Microsoft Entra ID single sign-on**. Supports multiple users,
+- **Accounts**: local username/password and **Microsoft Entra ID single sign-on**, with optional self sign-up and admin approval. Supports multiple users,
   each with private data, plus an admin page.
 
 ## Appointments and the calendar link
@@ -306,6 +363,88 @@ against the provider's published keys, plus the issuer, audience, expiry and non
 
 `'disable_local_login_when_sso' => true` (in the `app` section) turns off password sign-in whenever
 Microsoft or any OIDC provider is enabled.
+
+## Inclusive care and privacy
+
+Everything clinical follows a person's body and medicines, never a gender field:
+
+- **Profile**: pronouns (shown on reports) and an optional gender identity in your own words.
+- **Body inventory** (Account → Health profile, optional): cervix, uterus, ovaries, breasts or chest tissue, prostate
+  and testes, each "have", "removed (surgery)" with a date, or "don't have". When it's filled in, screening follows
+  it (cervical: a cervix; breast: breast or chest tissue; AAA: a prostate or testes, now or before surgery; bowel:
+  everyone), and Pregnancy and Pregnancy options only appear with a uterus. NHS invitations follow the sex on the GP
+  record, so the Screening page points out any that may not arrive automatically, and suggests asking the GP practice.
+  "Women's health" is now **Periods and contraception**, and can be switched off.
+- **Hormones** are ordinary medicines with one-tap set-ups (Menopause and Gender-affirming care): testosterone gel,
+  short- and long-acting injections, oestradiol patches, gel, spray, tablets and injections, progesterone, blockers and
+  anti-androgens, with any dose (including micro-dosing). Doses can repeat **every N days or weeks** (e.g. every 3 or
+  12 weeks), and injections get a **site rotation**: Take suggests the next site, and the medicine shows when each was
+  last used.
+- **Blood tests → Results and trends**: results in UK units with trend charts, the lab's range from the report, and a
+  target range set by you or your clinic (lab ranges follow the sex on your record, which often doesn't fit on
+  hormones). Each result can note its timing (e.g. trough, just before an injection) and works out the time since your
+  last dose.
+- **Gender-affirming care** (a private page, like Pregnancy options): GIC waiting-list tracker, prescriber, shared care
+  agreement with a renewal reminder, fertility preservation, a changes journal with your own fields, and progress
+  photos, all encrypted (photos as encrypted files in `storage/private/`), with its own PIN, never shared, and
+  deleted in one go.
+- **Privacy**: tick **Private** on a medicine so reminders and emails just say "Reminder" and it's hidden from anyone
+  you share Pillbox with; **hide the screen** when switching apps; and a **disguised name and icon** ("Planner" or
+  "Notes") for the home screen and browser tab.
+
+## ADHD, autism and accessibility
+
+- **ADHD and autism** (Care, no diagnosis needed): self-identified, waiting or diagnosed per condition; waiting lists
+  for assessments (NHS, Right to Choose, private) with time waited; assessment prep notes by topic (printable); a
+  **communication passport** shown full screen or printed, added to appointment sheets, and as text to copy into an
+  ICE / medical ID; a Reasonable Adjustment Flag reminder; optional energy (spoons), sensory load, meltdowns or
+  shutdowns, sleep and burnout signs, with a gentle note when a week looks hard and a cycle link; and checks for
+  blood pressure and pulse, weight, the yearly medication review and shared care.
+- **Controlled drugs** (any medicine): prescriptions are often 30 days and expire 28 days after writing, so Meds shows
+  when to ask for the next one and a "collect by" date, with notifications, and a pharmacy and shortage log.
+- **How it's working** (any medicine): when each dose was taken, kicked in and wore off (and any crash), a rating and
+  side effects; a timeline, each dose compared (titration), and, with cycle tracking, how it works before a period.
+- **For everyone** (Account → Display and reminders): larger text, more spacing, an easy-read font, no animations,
+  hidden streaks, and an optional "did you take it?" follow-up notification. Doses can be logged with the time they
+  were taken ("At…"), Today has a **Now / Next** view with a timeline of the day, there's a visual **timer**, running-low
+  notices show the steps (order, collect, log stock), and unlogged doses say "Not logged" rather than "Missed".
+
+## Terms and privacy
+
+**Terms** and **Privacy** pages are linked in every page's footer, and people agree to them when they sign up (the
+date is saved with the account). The text is generated from what Pillbox actually does: what it stores, encryption,
+sharing, the optional services you've switched on (email, push, connected apps, dm+d, single sign-on), its one
+cookie, and people's rights under UK GDPR. Fill in who runs it, a contact and the governing law under **Admin → Site
+settings → Terms and privacy** (or `'legal'` in `config/config.php`), or replace either text with your own. It's a
+starting point, not legal advice.
+
+## Letting people sign up
+
+By default only admins add people. To let people create their own accounts, turn on **Admin → Site settings →
+Sign-ups** (or set it in `config/config.php`):
+
+```php
+'signup' => [
+    'enabled'          => true,   // "Create an account" on the sign-in page
+    'require_approval' => true,   // new accounts wait for an admin to approve them
+    'notify_admins'    => true,   // email admins about each new sign-up
+],
+```
+
+- **How people sign up:** the sign-in page gets a **Create an account** link. The sign-up page has a button for
+  Microsoft and each OpenID Connect provider that's switched on ("Sign up with Google", ...), plus a username
+  and password form if password sign-in is allowed. Signing in with a provider for the first time while
+  sign-ups are open also creates an account.
+- **Approval:** with `require_approval`, a new account can't be used until an admin presses **Approve** under
+  **Waiting for approval** on the Admin page (admins also see a notice on Today). **Decline** removes the
+  account. People who gave an email address are emailed when they're approved.
+- **Admin emails:** with `notify_admins` and the `mail` settings filled in, every active admin with an email
+  address is told about each sign-up, with a link to the Admin page.
+- New accounts go through the first-login setup. Sign-ups from one address are limited to 5 an hour.
+- Providers with `'auto_provision' => true` (a trusted Microsoft tenant or company directory) still create
+  accounts on first sign-in whatever these settings say, without approval. With open sign-ups and a public
+  provider such as Google, anyone with an account there can sign up, so keep `require_approval` on or
+  set `allowed_email_domains`.
 
 ## NHS medicines dictionary (dm+d) lookup
 

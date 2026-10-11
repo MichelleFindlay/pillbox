@@ -20,6 +20,9 @@ if ($areaKey && !share_area_allowed($areaKey)) {
     flash('error', "That part of {$user['display_name']}'s Pillbox hasn't been shared with you.");
     redirect('care.php');
 }
+if ($areaKey && isset($area['page'])) {
+    redirect($area['page']); // categories with a page of their own (Pregnancy)
+}
 $self = $areaKey ? 'care.php?area=' . $areaKey : 'care.php';
 $errors = [];
 $form = null;        // routine task form with errors
@@ -31,6 +34,30 @@ if (is_post()) {
     $task = post('id') !== '' ? find_care_task((int) post('id'), $uid) : null;
     $check = post('check_id') !== '' ? find_health_check((int) post('check_id'), $uid) : null;
     $back = safe_return(post('return'), $self);
+    if ($areaKey === 'menopause' && str_starts_with(post('action'), 'meno_')) {
+        menopause_handle_post($user, $today);
+    }
+    if ($areaKey === 'bp' && str_starts_with(post('action'), 'bp_')) {
+        bp_handle_post($user, $today);
+    }
+    if ($areaKey === 'migraine' && str_starts_with(post('action'), 'mg_')) {
+        migraine_handle_post($user, $today);
+    }
+    if ($areaKey === 'diabetes' && str_starts_with(post('action'), 'dm_')) {
+        diabetes_handle_post($user, $today);
+    }
+    if ($areaKey === 'thyroid' && str_starts_with(post('action'), 'thy_')) {
+        thyroid_handle_post($user, $today);
+    }
+    if ($areaKey === 'neuro' && str_starts_with(post('action'), 'nd_')) {
+        nd_handle_post($user, $today);
+    }
+    if ($areaKey === 'womens' && str_starts_with(post('action'), 'pmdd_')) {
+        pmdd_handle_post($user, $today);
+    }
+    if ($areaKey === 'bloods' && str_starts_with(post('action'), 'lab_')) {
+        labs_handle_post($user, $today);
+    }
     switch (post('action')) {
         /* ----- routine ----- */
         case 'toggle':
@@ -317,9 +344,12 @@ if (!$areaKey) {
             }
         } ?>
     <a class="care-tile" href="<?= h(url('care.php?area=' . $key)) ?>">
-        <span class="care-tile-title"><?= $a['icon'] ?> <?= h($a['title']) ?></span>
+        <span class="care-tile-title"><?= $a['icon'] ?> <?= h($a['tile'] ?? $a['title']) ?></span>
         <span class="muted small"><?= $tasks ? ($due ? "$done of $due done today" : 'Nothing to do today') : ($a['presets'] ? 'No routine yet' : '') ?></span>
-        <?php if ($next): ?><span class="small">Next: <?= h($next[0]['label']) ?>, <?= h(lcfirst(check_due_text($next[0], $next[1], $today))) ?></span>
+        <?php if (!empty($a['private'])): ?><span class="small">Open</span>
+        <?php elseif ($key === 'pregnancy'): $preg = active_pregnancy($uid); ?>
+        <span class="small"><?= $preg ? h(gestation_label($preg, $today)) . ' · due ' . h(date('j M', strtotime($preg['due_date']))) : 'Add your due date' ?></span>
+        <?php elseif ($next): ?><span class="small">Next: <?= h($next[0]['label']) ?>, <?= h(lcfirst(check_due_text($next[0], $next[1], $today))) ?></span>
         <?php elseif ($key === 'screening' && !$user['date_of_birth']): ?><span class="small">Add your date of birth to see when you're due</span>
         <?php elseif (!$tasks): ?><span class="small">Set up</span><?php endif; ?>
     </a>
@@ -531,7 +561,7 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
 <div class="page-head">
     <div>
         <h1><?= $area['icon'] ?> <?= h($area['title']) ?></h1>
-        <?php if ($tasks): ?><p class="muted"><?= $streak ? "$streak day" . ($streak === 1 ? '' : 's') . ' in a row with your whole routine done' : 'Tick tasks off on the Today page' ?></p><?php endif; ?>
+        <?php if ($tasks): ?><p class="muted"><?= $streak && !$user['hide_streaks'] ? "$streak day" . ($streak === 1 ? '' : 's') . ' in a row with your whole routine done' : 'Tick tasks off on the Today page' ?></p><?php endif; ?>
     </div>
     <span class="inline-actions">
         <?php if ($areaKey === 'mind'): ?>
@@ -602,6 +632,15 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
     <p class="muted small">Nights from Apple Health appear here too. Sleep is saved as a reading, so it's in your History and reports.</p>
 </section>
 <?php endif; ?>
+
+<?php if ($areaKey === 'menopause') { menopause_sections($user, $today); } ?>
+<?php if ($areaKey === 'bloods') { labs_sections($user, $today); } ?>
+<?php if ($areaKey === 'womens') { pmdd_sections($user, $today); } ?>
+<?php if ($areaKey === 'neuro') { nd_sections($user, $today); } ?>
+<?php if ($areaKey === 'thyroid') { thyroid_sections($user, $today); } ?>
+<?php if ($areaKey === 'diabetes') { diabetes_sections($user, $today); } ?>
+<?php if ($areaKey === 'migraine') { migraine_sections($user, $today); } ?>
+<?php if ($areaKey === 'bp') { bp_sections($user, $today); } ?>
 
 <?php if ($areaKey === 'womens'): ?>
 <section class="card" id="cycle">
@@ -780,8 +819,12 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
 </section>
 <?php endif; ?>
 
-<?php if ($areaKey === 'screening' && (!$user['date_of_birth'] || !$user['sex'])): ?>
-<p class="flash flash-warning">Add your <?= !$user['date_of_birth'] ? 'date of birth' : '' ?><?= !$user['date_of_birth'] && !$user['sex'] ? ' and ' : '' ?><?= !$user['sex'] ? 'sex' : '' ?>
+<?php if ($areaKey === 'screening' && ($gaps = screening_gaps($user))): ?>
+<p class="flash flash-info">Because of the sex on your GP record, you may not be invited automatically for: <?= h(implode(', ', $gaps)) ?>.
+    Ask your GP practice to arrange it. These reminders follow your body inventory.</p>
+<?php endif; ?>
+<?php if ($areaKey === 'screening' && (!$user['date_of_birth'] || (!$user['sex'] && body_inventory($user) === null))): ?>
+<p class="flash flash-warning">Add your <?= !$user['date_of_birth'] ? 'date of birth' : '' ?><?= !$user['date_of_birth'] && !$user['sex'] && body_inventory($user) === null ? ' and ' : '' ?><?= !$user['sex'] && body_inventory($user) === null ? 'body inventory (or sex)' : '' ?>
     to <a href="<?= h(url('account.php#health-profile')) ?>">your health profile</a> to see which screening you're invited to and when.</p>
 <?php endif; ?>
 

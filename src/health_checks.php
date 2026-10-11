@@ -40,6 +40,10 @@ const FILL_LEVELS = [0 => 'Empty', 25 => 'A quarter full', 50 => 'Half full', 75
 /** Does this screening programme apply to the user, from their profile? */
 function screening_applies(array $user, string $kind): bool
 {
+    // The body inventory, when filled in, decides (anatomy, not gender).
+    if (body_inventory($user) !== null) {
+        return inventory_screening($user, $kind);
+    }
     if ($user['sex'] === 'other') {
         return in_array($kind, explode(',', (string) $user['screening_programmes']), true);
     }
@@ -95,7 +99,7 @@ function apply_screening_profile(array $user): void
 /** Make sure the screening programmes for the user's sex are listed (once; removed ones stay hidden). */
 function sync_screening(array $user): void
 {
-    if (!$user['sex']) {
+    if (!$user['sex'] && body_inventory($user) === null) {
         return;
     }
     $have = q("SELECT kind FROM health_checks WHERE user_id = ? AND area = 'screening'", [$user['id']])->fetchAll(PDO::FETCH_COLUMN);

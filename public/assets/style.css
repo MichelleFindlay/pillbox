@@ -200,6 +200,8 @@ label.check { display: flex; align-items: center; gap: .6rem; font-weight: 400; 
 .flash-success { background: var(--ok-bg); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
 .flash-error { background: var(--bad-bg); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
 .flash-warning { background: var(--warn-bg); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.flash-info { background: var(--info-bg); color: var(--info); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
+.notice-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
 .badge {
   display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
   padding: .15rem .5rem; border-radius: 999px; background: var(--surface-2); color: var(--text-2); white-space: nowrap;
@@ -230,6 +232,12 @@ label.check { display: flex; align-items: center; gap: .6rem; font-weight: 400; 
 .dose-list, .plain, .schedule-list { list-style: none; margin: 0; padding: 0; }
 .dose-time { font-weight: 700; color: var(--text-2); font-size: .9rem; padding: .75rem 0 .25rem; border-bottom: 1px solid var(--border); }
 .dose-time:first-child { padding-top: 0; }
+.dose-block + .dose-block { margin-top: 1.25rem; }
+.dose-block-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; }
+.dose-block-head h3 { margin: 0; }
+.dose-block-head form { margin: 0; }
+.time-presets { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
+.time-presets button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
 .dose-item {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem;
   padding: .75rem 0; border-bottom: 1px solid var(--border);
@@ -1180,3 +1188,305 @@ pre.code { background: var(--surface-2); border: 1px solid var(--border); border
 .logo-body { fill: var(--logo-body); }
 .logo-edge { fill: color-mix(in srgb, var(--logo-body) 62%, var(--logo-score)); }
 .logo-score { fill: none; stroke: var(--logo-score); stroke-width: 2.4; stroke-linecap: round; }
+
+/* Sign-up form: a field only bots fill in */
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.auth-alt { text-align: center; margin: 1rem 0 0; }
+
+/* Today: running-low notices, with Ordered / Collected */
+.low-stock { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.low-stock details.collect { width: 100%; }
+.low-stock details.collect[open] summary { margin-bottom: .5rem; }
+.low-stock .inline-form { color: var(--text); }
+
+/* Pregnancy */
+.preg-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 1rem; }
+.preg-head > div { flex: 1 1 280px; }
+.preg-gestation { font-size: 2.2rem; font-weight: 700; line-height: 1.1; margin: 0 0 .25rem; }
+.preg-gestation span { font-size: 1rem; font-weight: 600; color: var(--text-2); }
+.preg-progress { width: 100%; height: .6rem; accent-color: var(--primary); }
+.preg-next { margin: 0; flex: 1 1 220px; }
+.preg-call { border-left: 4px solid var(--bad); }
+.preg-call.urgent { background: var(--bad-bg); }
+.preg-call ul { margin: .25rem 0 .75rem; padding-left: 1.2rem; }
+.preg-call .inline-form { margin-top: .75rem; }
+.preg-item { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1rem; padding: .7rem 0; border-bottom: 1px solid var(--border); }
+.preg-item:last-child { border-bottom: 0; }
+.preg-item-main { display: flex; gap: .6rem; flex: 1 1 320px; min-width: 0; }
+.preg-icon { font-size: 1.3rem; line-height: 1.4; }
+.preg-item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.preg-item-actions form { margin: 0; }
+.preg-item.state-now { background: color-mix(in srgb, var(--primary) 7%, transparent); border-radius: 8px; padding-left: .5rem; padding-right: .5rem; }
+.preg-item.state-past:not(.state-done), .preg-item.optional { opacity: .75; }
+.preg-result { margin-top: .2rem; }
+.bp-pair { display: flex; align-items: center; gap: .35rem; border: 0; padding: 0; margin: 0; }
+.bp-pair legend { padding: 0; margin-bottom: .3rem; font-size: .9rem; }
+
+/* Pregnancy options (private pathway) */
+.options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem 1.25rem; margin-bottom: .5rem; }
+.options-grid h3 { margin: 0 0 .25rem; font-size: 1rem; }
+.options-grid p { margin: 0; }
+.options-weeks .current { background: color-mix(in srgb, var(--primary) 8%, transparent); border-radius: 8px; padding-left: .5rem; padding-right: .5rem; }
+
+/* Supplements */
+.supplement-presets { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+.supplement-presets p { width: 100%; margin: 0 0 .2rem; }
+.supplement-presets button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.med-section { margin: 1.5rem 0 .75rem; }
+
+/* Menopause */
+.meno-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .5rem 1rem; }
+.meno-grid select { width: 100%; }
+.tile-value.small-value { font-size: 1.1rem; }
+.write-lines { height: 8rem; background: repeating-linear-gradient(to bottom, transparent 0 1.95rem, var(--border) 1.95rem 2rem); }
+
+/* Lab results */
+.lab-test { border-top: 1px solid var(--border); padding-top: .75rem; margin-top: .75rem; }
+.lab-test h3 { margin: 0 0 .25rem; }
+.chart .band { stroke: none; }
+.chart .band-target { fill: color-mix(in srgb, var(--ok) 16%, transparent); }
+.chart .band-lab { fill: color-mix(in srgb, var(--text-2) 10%, transparent); }
+.chart-key .key { display: inline-block; width: .9rem; height: .6rem; border-radius: 2px; vertical-align: middle; margin-left: .4rem; }
+.key-target { background: color-mix(in srgb, var(--ok) 30%, transparent); }
+.key-lab { background: color-mix(in srgb, var(--text-2) 20%, transparent); }
+.range-pair { display: flex; align-items: center; gap: .35rem; }
+
+/* Privacy cover while the app is in the background */
+html.privacy-cover body > * { visibility: hidden; }
+html.privacy-cover body { background: var(--bg); }
+.disguise-icon { border-radius: 6px; vertical-align: middle; }
+/* Body inventory */
+.inventory-row { display: grid; grid-template-columns: minmax(9rem, 1fr) auto auto; gap: .5rem; align-items: center; padding: .3rem 0; }
+
+/* Injection sites */
+.site-select { font-size: .85rem; padding: .25rem .4rem; max-width: 10rem; }
+.site-map { display: grid; grid-template-columns: repeat(2, 1fr); gap: .3rem; margin: .5rem 0; }
+.site-map .site { border: 1px solid var(--border); border-radius: 8px; padding: .3rem .5rem; line-height: 1.3; }
+.site-map .site.next { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); font-weight: 600; }
+
+/* Progress photos */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .75rem; margin-top: .75rem; }
+.photo-grid figure { margin: 0; }
+.photo-grid img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 8px; display: block; background: var(--surface-2); }
+.photo-grid figcaption form { display: inline; }
+
+/* Terms and privacy */
+.legal { max-width: 46rem; margin: 0 auto; }
+.legal h2 { font-size: 1.1rem; margin: 1.5rem 0 .4rem; }
+.legal ul { padding-left: 1.2rem; }
+.footer-meta a + a, .footer-meta a + span { margin-left: .2rem; }
+
+/* Premenstrual symptoms (DRSP) */
+.drsp-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .3rem 1rem; padding: .35rem 0; border-bottom: 1px solid var(--border); }
+.drsp-row > span:first-child { flex: 1 1 14rem; font-size: .95rem; }
+.drsp-scale { display: inline-flex; gap: .2rem; }
+.drsp-scale label { position: relative; }
+.drsp-scale input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.drsp-scale span { display: inline-flex; width: 2.1rem; height: 2.1rem; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 8px; font-weight: 600; }
+.drsp-scale input:checked + span { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.drsp-scale input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 1px; }
+.heatmap { width: 100%; height: auto; max-width: 680px; }
+.heatmap .luteal-band { fill: color-mix(in srgb, var(--series-1) 14%, transparent); }
+.heat-0 { fill: var(--surface-2); }
+.heat-1, .key.heat-1 { fill: color-mix(in srgb, var(--bad) 8%, var(--surface)); background: color-mix(in srgb, var(--bad) 8%, var(--surface)); }
+.heat-2 { fill: color-mix(in srgb, var(--bad) 22%, var(--surface)); }
+.heat-3, .key.heat-3 { fill: color-mix(in srgb, var(--bad) 40%, var(--surface)); background: color-mix(in srgb, var(--bad) 40%, var(--surface)); }
+.heat-4 { fill: color-mix(in srgb, var(--bad) 58%, var(--surface)); }
+.heat-5 { fill: color-mix(in srgb, var(--bad) 76%, var(--surface)); }
+.heat-6, .key.heat-6 { fill: var(--bad); background: var(--bad); }
+.key.luteal-key { background: color-mix(in srgb, var(--series-1) 25%, transparent); }
+
+/* Accessibility (Account > Display and reminders) */
+html[data-text="l"] { font-size: 112.5%; }
+html[data-text="xl"] { font-size: 125%; }
+html[data-text="l"] body { font-size: 18px; }
+html[data-text="xl"] body { font-size: 20px; }
+html[data-spacing="wide"] body { line-height: 1.8; letter-spacing: .03em; word-spacing: .12em; }
+html[data-spacing="wide"] p, html[data-spacing="wide"] li { margin-bottom: .8em; }
+html[data-font="easy"] body, html[data-font="easy"] input, html[data-font="easy"] select, html[data-font="easy"] textarea, html[data-font="easy"] button {
+  font-family: "Atkinson Hyperlegible", "Lexend", Verdana, "Comic Sans MS", "Trebuchet MS", sans-serif; }
+html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-motion="reduce"] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+.took-earlier { display: inline-block; }
+.took-earlier[open] { display: block; width: 100%; order: 10; }
+.took-earlier .inline-form { margin-top: .4rem; }
+
+/* Now / next and the day's timeline */
+.now-next { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; align-items: center; padding: .6rem .8rem; border-radius: 10px; background: var(--surface-2); margin-bottom: .5rem; }
+.now-next > div { display: flex; flex-direction: column; flex: 1 1 12rem; }
+.day-timeline { width: 100%; height: auto; }
+.day-timeline .tl-axis { stroke: var(--grid); stroke-width: 4; stroke-linecap: round; }
+.day-timeline .tl-dose { stroke: var(--surface); stroke-width: 2; }
+.tl-taken { fill: var(--ok); } .tl-skipped { fill: var(--text-2); } .tl-missed { fill: var(--warn); } .tl-due { fill: var(--primary); } .tl-upcoming { fill: var(--info); }
+.day-timeline .tl-now { stroke: var(--text); stroke-width: 2; stroke-dasharray: 3 2; }
+/* Timer */
+.timer { text-align: center; }
+.timer-ring { position: relative; width: min(18rem, 70vw); margin: 1rem auto; }
+.timer-ring svg { width: 100%; height: auto; transform: rotate(-90deg); }
+.timer-track { fill: none; stroke: var(--surface-2); stroke-width: 10; }
+.timer-fill { fill: none; stroke: var(--primary); stroke-width: 10; stroke-linecap: round; transition: stroke-dasharray .25s linear; }
+.timer-time { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 2.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.timer .preset-list, .timer .inline-actions { justify-content: center; }
+.timer.done .timer-fill { stroke: var(--ok); }
+.timer.done .timer-ring { animation: timer-flash 1s ease-in-out 3; }
+@keyframes timer-flash { 50% { opacity: .3; } }
+
+/* Step-by-step (order, collect, log stock) */
+.steps { display: flex; flex-wrap: wrap; gap: .25rem; list-style: none; padding: 0; margin: 0 0 .25rem; width: 100%; font-size: .8rem; counter-reset: step; }
+.steps li { counter-increment: step; padding: .1rem .55rem; border-radius: 999px; border: 1px solid currentColor; opacity: .6; }
+.steps li::before { content: counter(step) ". "; }
+.steps li.done { opacity: .6; text-decoration: line-through; }
+.steps li.current { opacity: 1; font-weight: 700; }
+.rx-dates p { margin: .2rem 0; }
+
+/* How a medicine is working */
+.effect-timeline { width: 100%; height: auto; }
+.eff-wait { fill: color-mix(in srgb, var(--primary) 30%, transparent); }
+.eff-on { fill: var(--primary); }
+.eff-taken { fill: var(--text); }
+.eff-crash { fill: var(--warn); font-size: 10px; font-weight: 700; }
+
+/* Communication passport */
+.passport { max-width: 44rem; margin: 0 auto; background: var(--surface); border: 3px solid var(--text); border-radius: 16px; padding: 1.5rem; font-size: 1.15rem; line-height: 1.6; }
+.passport h1 { margin: 0; font-size: 1.8rem; }
+.passport h1 span { font-size: 1.1rem; font-weight: 600; color: var(--text-2); }
+.passport-lead { font-size: 1.3rem; font-weight: 700; margin: .25rem 0 1rem; }
+.passport h2 { font-size: 1.05rem; margin: 1rem 0 .2rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
+.passport p { margin: 0; }
+.inline-form .grow { flex: 1 1 16rem; }
+
+.chart .marker line { stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.chart .marker text { font-size: 9px; }
+
+/* Thyroid weekly symptoms */
+.thy-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+.thy-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .2rem 0; }
+.thy-row select { max-width: 9rem; }
+
+/* Diabetes */
+.tir-bar { display: flex; height: 1.1rem; border-radius: 6px; overflow: hidden; margin: .5rem 0 .25rem; }
+.tir-bar span { flex: 0 0 auto; min-width: 2px; }
+.tir-very_low { background: var(--bad); } .tir-low { background: color-mix(in srgb, var(--bad) 55%, var(--warn)); } .tir-in_range { background: var(--ok); }
+.tir-high { background: var(--warn); } .tir-very_high { background: color-mix(in srgb, var(--warn) 60%, var(--bad)); }
+.tir-bar .w1 { width: 1%; }
+.tir-bar .w2 { width: 2%; }
+.tir-bar .w3 { width: 3%; }
+.tir-bar .w4 { width: 4%; }
+.tir-bar .w5 { width: 5%; }
+.tir-bar .w6 { width: 6%; }
+.tir-bar .w7 { width: 7%; }
+.tir-bar .w8 { width: 8%; }
+.tir-bar .w9 { width: 9%; }
+.tir-bar .w10 { width: 10%; }
+.tir-bar .w11 { width: 11%; }
+.tir-bar .w12 { width: 12%; }
+.tir-bar .w13 { width: 13%; }
+.tir-bar .w14 { width: 14%; }
+.tir-bar .w15 { width: 15%; }
+.tir-bar .w16 { width: 16%; }
+.tir-bar .w17 { width: 17%; }
+.tir-bar .w18 { width: 18%; }
+.tir-bar .w19 { width: 19%; }
+.tir-bar .w20 { width: 20%; }
+.tir-bar .w21 { width: 21%; }
+.tir-bar .w22 { width: 22%; }
+.tir-bar .w23 { width: 23%; }
+.tir-bar .w24 { width: 24%; }
+.tir-bar .w25 { width: 25%; }
+.tir-bar .w26 { width: 26%; }
+.tir-bar .w27 { width: 27%; }
+.tir-bar .w28 { width: 28%; }
+.tir-bar .w29 { width: 29%; }
+.tir-bar .w30 { width: 30%; }
+.tir-bar .w31 { width: 31%; }
+.tir-bar .w32 { width: 32%; }
+.tir-bar .w33 { width: 33%; }
+.tir-bar .w34 { width: 34%; }
+.tir-bar .w35 { width: 35%; }
+.tir-bar .w36 { width: 36%; }
+.tir-bar .w37 { width: 37%; }
+.tir-bar .w38 { width: 38%; }
+.tir-bar .w39 { width: 39%; }
+.tir-bar .w40 { width: 40%; }
+.tir-bar .w41 { width: 41%; }
+.tir-bar .w42 { width: 42%; }
+.tir-bar .w43 { width: 43%; }
+.tir-bar .w44 { width: 44%; }
+.tir-bar .w45 { width: 45%; }
+.tir-bar .w46 { width: 46%; }
+.tir-bar .w47 { width: 47%; }
+.tir-bar .w48 { width: 48%; }
+.tir-bar .w49 { width: 49%; }
+.tir-bar .w50 { width: 50%; }
+.tir-bar .w51 { width: 51%; }
+.tir-bar .w52 { width: 52%; }
+.tir-bar .w53 { width: 53%; }
+.tir-bar .w54 { width: 54%; }
+.tir-bar .w55 { width: 55%; }
+.tir-bar .w56 { width: 56%; }
+.tir-bar .w57 { width: 57%; }
+.tir-bar .w58 { width: 58%; }
+.tir-bar .w59 { width: 59%; }
+.tir-bar .w60 { width: 60%; }
+.tir-bar .w61 { width: 61%; }
+.tir-bar .w62 { width: 62%; }
+.tir-bar .w63 { width: 63%; }
+.tir-bar .w64 { width: 64%; }
+.tir-bar .w65 { width: 65%; }
+.tir-bar .w66 { width: 66%; }
+.tir-bar .w67 { width: 67%; }
+.tir-bar .w68 { width: 68%; }
+.tir-bar .w69 { width: 69%; }
+.tir-bar .w70 { width: 70%; }
+.tir-bar .w71 { width: 71%; }
+.tir-bar .w72 { width: 72%; }
+.tir-bar .w73 { width: 73%; }
+.tir-bar .w74 { width: 74%; }
+.tir-bar .w75 { width: 75%; }
+.tir-bar .w76 { width: 76%; }
+.tir-bar .w77 { width: 77%; }
+.tir-bar .w78 { width: 78%; }
+.tir-bar .w79 { width: 79%; }
+.tir-bar .w80 { width: 80%; }
+.tir-bar .w81 { width: 81%; }
+.tir-bar .w82 { width: 82%; }
+.tir-bar .w83 { width: 83%; }
+.tir-bar .w84 { width: 84%; }
+.tir-bar .w85 { width: 85%; }
+.tir-bar .w86 { width: 86%; }
+.tir-bar .w87 { width: 87%; }
+.tir-bar .w88 { width: 88%; }
+.tir-bar .w89 { width: 89%; }
+.tir-bar .w90 { width: 90%; }
+.tir-bar .w91 { width: 91%; }
+.tir-bar .w92 { width: 92%; }
+.tir-bar .w93 { width: 93%; }
+.tir-bar .w94 { width: 94%; }
+.tir-bar .w95 { width: 95%; }
+.tir-bar .w96 { width: 96%; }
+.tir-bar .w97 { width: 97%; }
+.tir-bar .w98 { width: 98%; }
+.tir-bar .w99 { width: 99%; }
+.tir-bar .w100 { width: 100%; }
+
+.annual-list { list-style: none; padding: 0; margin: 0 0 .75rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .3rem .75rem; }
+.annual-list li.done span[aria-hidden] { color: var(--ok); font-weight: 700; }
+.annual-list li.due span[aria-hidden] { color: var(--warn); }
+.tile-value.warn { color: var(--bad); }
+.hypo h1 { color: var(--bad); }
+.hypo-steps { font-size: 1.1rem; line-height: 1.6; padding-left: 1.4rem; }
+.hypo-steps li { margin-bottom: .6rem; }
+
+/* Migraine */
+.inline-relief { display: inline; }
+.inline-relief select { font-size: .85rem; padding: .1rem .3rem; }
+
+/* Blood pressure home monitoring */
+.bp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: .3rem; margin: .5rem 0; }
+.bp-day { display: flex; flex-direction: column; align-items: center; gap: .15rem; padding: .35rem .2rem; border: 1px solid var(--border); border-radius: 8px; font-size: .8rem; }
+.bp-day span { color: var(--text-2); }
+.bp-day span.done { color: var(--ok); font-weight: 700; }
+.bp-day.today { border-color: var(--primary); }
+.bp-day.first { opacity: .7; }
+.bp-entry fieldset { margin-bottom: .25rem; }

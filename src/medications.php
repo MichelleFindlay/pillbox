@@ -4,14 +4,46 @@ declare(strict_types=1);
 const WEEKDAYS = [1 => 'Mon', 2 => 'Tue', 4 => 'Wed', 8 => 'Thu', 16 => 'Fri', 32 => 'Sat', 64 => 'Sun'];
 const EVERY_DAY = 127;
 
-const MED_FORMS = ['tablet', 'capsule', 'liquid', 'inhaler', 'injection', 'patch', 'drops', 'cream', 'spray', 'suppository', 'sachet', 'other'];
-const DOSE_UNITS = ['tablet', 'capsule', 'ml', 'mg', 'mcg', 'g', 'puff', 'drop', 'unit', 'patch', 'sachet', 'spray', 'application', 'injection', 'suppository', 'lozenge'];
+const MED_FORMS = ['tablet', 'capsule', 'liquid', 'inhaler', 'injection', 'patch', 'drops', 'cream', 'gel', 'spray', 'suppository', 'sachet', 'other'];
+const DOSE_UNITS = ['tablet', 'capsule', 'ml', 'mg', 'mcg', 'g', 'puff', 'drop', 'unit', 'patch', 'sachet', 'spray', 'pump', 'application', 'injection', 'suppository', 'lozenge'];
 // Medication colours, used as CSS classes (.dot-<colour>) so no inline styles are needed.
 // How a medicine is paid for. Only NHS prescriptions have the set charge that a PPC or exemption covers.
 const SUPPLY_TYPES = [
     'nhs' => 'NHS prescription',
     'private' => 'Private prescription',
     'otc' => 'Bought without a prescription',
+];
+
+// Parts of the day: Today groups doses under these, and the schedule editor offers their usual times.
+// A dose belongs to the block its time falls in (before 12:00 morning, before 17:00 afternoon, then evening).
+const DOSE_BLOCKS = [
+    'morning'   => ['label' => 'Morning', 'time' => '08:00', 'before' => '12:00'],
+    'afternoon' => ['label' => 'Afternoon', 'time' => '13:00', 'before' => '17:00'],
+    'evening'   => ['label' => 'Evening', 'time' => '18:00', 'before' => '24:00'],
+];
+
+// How long a medicine is taken for. Short courses and one-off doses stop by themselves once finished.
+const MED_COURSES = [
+    'ongoing' => 'Ongoing',
+    'short'   => 'Short course',
+    'once'    => 'One-off dose',
+];
+
+// One-tap common supplements on the "Add supplement" page: [name, strength, form, dose unit].
+// Strengths only where the NHS gives a general amount; otherwise people enter what's on the packet.
+const SUPPLEMENT_PRESETS = [
+    ['Vitamin D', '10 micrograms', 'tablet', 'tablet'],
+    ['Multivitamin', '', 'tablet', 'tablet'],
+    ['Folic acid', '400 micrograms', 'tablet', 'tablet'],
+    ['Vitamin B12', '', 'tablet', 'tablet'],
+    ['Iron', '', 'tablet', 'tablet'],
+    ['Vitamin C', '', 'tablet', 'tablet'],
+    ['Calcium and vitamin D', '', 'tablet', 'tablet'],
+    ['Magnesium', '', 'tablet', 'tablet'],
+    ['Zinc', '', 'tablet', 'tablet'],
+    ['Omega-3 fish oil', '', 'capsule', 'capsule'],
+    ['Probiotic', '', 'capsule', 'capsule'],
+    ['Glucosamine', '', 'tablet', 'tablet'],
 ];
 
 const MED_COLOURS = ['blue', 'red', 'green', 'orange', 'purple', 'pink', 'teal', 'yellow', 'grey'];
@@ -55,14 +87,26 @@ function days_label(int $mask): string
 function user_medications(int $userId, bool $activeOnly = true): array
 {
     return q(
-        'SELECT * FROM medications WHERE user_id = ?' . ($activeOnly ? ' AND is_active = 1' : '') . ' ORDER BY is_active DESC, name',
+        'SELECT * FROM medications WHERE user_id = ?' . ($activeOnly ? ' AND is_active = 1' : '') . (private_meds_hidden() ? ' AND is_private = 0' : '') . ' ORDER BY is_active DESC, name',
         [$userId]
     )->fetchAll();
 }
 
+/** Private medicines are never shown to someone looking at a shared Pillbox. */
+function private_meds_hidden(): bool
+{
+    return isset(current_user()['_acting']);
+}
+
+/** A medicine's name, or "a private medicine" where it might be seen by others (notifications, emails). */
+function public_med_name(array $med): string
+{
+    return !empty($med['is_private']) ? 'Private medicine' : trim($med['name'] . ' ' . ($med['strength'] ?? ''));
+}
+
 function find_medication(int $id, int $userId): ?array
 {
-    return q('SELECT * FROM medications WHERE id = ? AND user_id = ?', [$id, $userId])->fetch() ?: null;
+    return q('SELECT * FROM medications WHERE id = ? AND user_id = ?' . (private_meds_hidden() ? ' AND is_private = 0' : ''), [$id, $userId])->fetch() ?: null;
 }
 
 /** Schedules still in effect today or later (the ones shown in the editor). */
@@ -119,7 +163,7 @@ function schedules_by_medication(array $medIds, string $todayYmd): array
 
 function schedule_summary(array $schedule, string $unit): string
 {
-    $text = substr($schedule['dose_time'], 0, 5) . ' · ' . dose_label($schedule['dose_amount'], $unit) . ' · ' . days_label((int) $schedule['days_mask']);
+    $text = substr($schedule['dose_time'], 0, 5) . ' · ' . dose_label($schedule['dose_amount'], $unit) . ' · ' . schedule_days_text($schedule);
     if ($schedule['valid_from'] || $schedule['valid_to']) {
         $from = $schedule['valid_from'] ? date('j M', strtotime($schedule['valid_from'])) : 'now';
         $to = $schedule['valid_to'] ? date('j M Y', strtotime($schedule['valid_to'])) : 'ongoing';
@@ -139,7 +183,7 @@ function schedules_for_editing(array $schedules): array
 {
     $groups = [];
     foreach ($schedules as $s) {
-        $groups[substr($s['dose_time'], 0, 5) . '|' . $s['valid_from'] . '|' . $s['valid_to']][] = $s;
+        $groups[substr($s['dose_time'], 0, 5) . '|' . $s['valid_from'] . '|' . $s['valid_to'] . '|' . ($s['every_days'] ?? '') . '|' . ($s['anchor_date'] ?? '') . '|' . ($s['cycle_phase'] ?? '')][] = $s;
     }
     $rows = [];
     foreach ($groups as $group) {
@@ -149,7 +193,7 @@ function schedules_for_editing(array $schedules): array
             $disjoint = $disjoint && ($covered & (int) $s['days_mask']) === 0;
             $covered |= (int) $s['days_mask'];
         }
-        if (count($group) > 1 && $disjoint) {
+        if (count($group) > 1 && $disjoint && empty($group[0]['every_days']) && empty($group[0]['cycle_phase'])) {
             $dayAmounts = [];
             foreach ($group as $s) {
                 foreach (WEEKDAYS as $bit => $_) {
@@ -180,6 +224,9 @@ function editor_row(array $s, array $ids, string $mode, array $dayAmounts): arra
         'day_amounts' => $dayAmounts,
         'valid_from'  => $s['valid_from'],
         'valid_to'    => $s['valid_to'],
+        'every_days'  => !empty($s['every_days']) ? (int) $s['every_days'] : null,
+        'anchor_date' => $s['anchor_date'] ?? null,
+        'cycle_phase' => $s['cycle_phase'] ?? null,
     ];
 }
 
@@ -213,7 +260,7 @@ function schedule_lines(array $schedules, string $unit): array
     $lines = [];
     foreach (schedules_for_editing($schedules) as $row) {
         if ($row['mode'] === 'same') {
-            $text = $row['dose_time'] . ' · ' . dose_label($row['dose_amount'], $unit) . ' · ' . days_label($row['days_mask']);
+            $text = $row['dose_time'] . ' · ' . dose_label($row['dose_amount'], $unit) . ' · ' . schedule_days_text($row);
         } else {
             $parts = [];
             foreach (editor_row_doses($row) as [$amount, $mask]) {
@@ -251,7 +298,7 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
     $scanFrom = new DateTimeImmutable($fromYmd . ' -1 day', $home);
     $scanTo = new DateTimeImmutable($toYmd . ' +1 day', $home);
 
-    $sql = 'SELECT s.*, m.name, m.strength, m.dose_unit, m.colour, m.instructions, m.start_date, m.end_date, m.is_active
+    $sql = 'SELECT s.*, m.user_id, m.name, m.strength, m.dose_unit, m.colour, m.instructions, m.start_date, m.end_date, m.is_active, m.course, m.form, m.is_private
             FROM medication_schedules s
             JOIN medications m ON m.id = s.medication_id
             WHERE m.user_id = ? AND m.as_needed = 0
@@ -260,6 +307,9 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
     $params = [$user['id'], $scanTo->format('Y-m-d'), $scanFrom->format('Y-m-d'), $scanTo->format('Y-m-d'), $scanFrom->format('Y-m-d')];
     if ($activeOnly) {
         $sql .= ' AND m.is_active = 1';
+    }
+    if (private_meds_hidden()) {
+        $sql .= ' AND m.is_private = 0';
     }
     if ($medId !== null) {
         $sql .= ' AND m.id = ?';
@@ -288,7 +338,7 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
         $ymd = $day->format('Y-m-d');
         $bit = weekday_bit($day);
         foreach ($schedules as $s) {
-            if (((int) $s['days_mask'] & $bit) === 0
+            if (!schedule_on_day($s, $ymd, $bit)
                 || $s['start_date'] > $ymd || ($s['end_date'] !== null && $s['end_date'] < $ymd)
                 || ($s['valid_from'] !== null && $s['valid_from'] > $ymd) || ($s['valid_to'] !== null && $s['valid_to'] < $ymd)) {
                 continue;
@@ -367,6 +417,14 @@ function daily_usage(array $med, array $schedules, ?string $asOf = null): float
         if (($s['valid_from'] !== null && $s['valid_from'] > $asOf) || ($s['valid_to'] !== null && $s['valid_to'] < $asOf)) {
             continue;
         }
+        if (!empty($s['every_days'])) {
+            $perWeek += (float) $s['dose_amount'] * 7 / (int) $s['every_days'];
+            continue;
+        }
+        if (($s['cycle_phase'] ?? null) === 'luteal') {
+            $perWeek += (float) $s['dose_amount'] * 7 / 2; // about half of each cycle
+            continue;
+        }
         $days = 0;
         foreach (WEEKDAYS as $bit => $_) {
             $days += ((int) $s['days_mask'] & $bit) ? 1 : 0;
@@ -398,7 +456,7 @@ function status_label(string $status): string
     return match ($status) {
         'taken' => 'Taken',
         'skipped' => 'Skipped',
-        'missed' => 'Missed',
+        'missed' => 'Not logged',
         'due' => 'Due now',
         default => 'Upcoming',
     };
@@ -467,14 +525,29 @@ function describe_med_changes(array $old, array $oldSchedules, array $new, array
             : 'Changed from as needed to regular doses: ' . medication_regimen($new, $newSchedules)]];
     }
 
+    // Every-N-days schedules (e.g. injections every 3 weeks) read best as the whole regimen.
+    if (array_filter([...$oldSchedules, ...$newSchedules], fn ($s) => !empty($s['every_days']))) {
+        $changes = [];
+        if (mb_strtolower(trim((string) $old['strength'])) !== mb_strtolower(trim((string) $new['strength']))) {
+            $changes[] = ['strength', 'Strength changed from ' . ($old['strength'] ?: 'not set') . ' to ' . ($new['strength'] ?: 'not set')];
+        }
+        if (schedule_lines($oldSchedules, $old['dose_unit']) !== schedule_lines($newSchedules, $unit)) {
+            $o = daily_usage($old, $oldSchedules, $asOf);
+            $n = daily_usage($new, $newSchedules, $asOf);
+            $changes[] = [abs($o - $n) < 0.0001 ? 'timing' : ($n > $o ? 'increased' : 'decreased'),
+                'Changed to ' . medication_regimen($new, $newSchedules) . ' (was ' . medication_regimen($old, $oldSchedules) . ')'];
+        }
+        return $changes;
+    }
+
     // Both compared on the same day: the day the change takes effect.
     $oldDaily = daily_usage($old, $oldSchedules, $asOf);
     $newDaily = daily_usage($new, $newSchedules, $asOf);
     $strengthChanged = mb_strtolower(trim((string) $old['strength'])) !== mb_strtolower(trim((string) $new['strength']));
     $dailyChanged = abs($oldDaily - $newDaily) > 0.001;
     $timingChanged = schedule_lines($oldSchedules, $old['dose_unit']) !== schedule_lines($newSchedules, $unit);
-    $everyDay = !array_filter($newSchedules, fn ($s) => (int) $s['days_mask'] !== EVERY_DAY)
-        && !array_filter($oldSchedules, fn ($s) => (int) $s['days_mask'] !== EVERY_DAY);
+    $everyDay = !array_filter($newSchedules, fn ($s) => (int) $s['days_mask'] !== EVERY_DAY || !empty($s['every_days']))
+        && !array_filter($oldSchedules, fn ($s) => (int) $s['days_mask'] !== EVERY_DAY || !empty($s['every_days']));
     // Weekly patterns (e.g. 5mg Mon/Wed/Fri, 3mg other days) read best as weekly totals.
     $factor = $everyDay ? 1 : 7;
     $perDay = $everyDay ? ' a day' : ' a week';
@@ -520,4 +593,171 @@ function describe_med_changes(array $old, array $oldSchedules, array $new, array
         return [['timing', 'Dose times changed to ' . medication_regimen($new, $newSchedules) . ' (was ' . medication_regimen($old, $oldSchedules) . ')']];
     }
     return [];
+}
+
+/** Which part of the day a dose time ("HH:MM") is in. */
+function dose_block(string $time): string
+{
+    foreach (DOSE_BLOCKS as $key => $block) {
+        if (substr($time, 0, 5) < $block['before']) {
+            return $key;
+        }
+    }
+    return 'evening';
+}
+
+/**
+ * Record a scheduled dose as taken or skipped (replacing any earlier record for it), keeping
+ * stock in step. $takenAt is UTC.
+ */
+function record_dose(int $userId, array $schedule, string $slotUtc, string $status, string $takenAt, ?string $site = null): void
+{
+    $amount = $status === 'taken' ? (float) $schedule['dose_amount'] : 0.0;
+    $site = $status === 'taken' && $site !== null && isset(INJECTION_SITES[$site]) ? $site : null;
+    transaction(function () use ($userId, $schedule, $slotUtc, $status, $amount, $takenAt, $site) {
+        $existing = q('SELECT * FROM dose_logs WHERE schedule_id = ? AND scheduled_for = ? FOR UPDATE', [$schedule['id'], $slotUtc])->fetch();
+        if ($existing) {
+            if ($existing['status'] === 'taken') {
+                adjust_stock((int) $schedule['med_id'], (float) $existing['amount']);
+            }
+            q('UPDATE dose_logs SET status = ?, amount = ?, taken_at = ?, site = ? WHERE id = ?', [$status, $amount, $takenAt, $site, $existing['id']]);
+        } else {
+            q(
+                'INSERT INTO dose_logs (user_id, medication_id, schedule_id, scheduled_for, status, amount, taken_at, site) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [$userId, $schedule['med_id'], $schedule['id'], $slotUtc, $status, $amount, $takenAt, $site]
+            );
+        }
+        if ($status === 'taken') {
+            adjust_stock((int) $schedule['med_id'], -$amount);
+        }
+    });
+}
+
+/** Each medicine's most recent "collected" stock event, keyed by medication id. */
+function last_collected(int $userId): array
+{
+    $out = [];
+    foreach (q(
+        "SELECT e.* FROM stock_events e
+         JOIN (SELECT medication_id, MAX(id) AS id FROM stock_events WHERE user_id = ? AND kind = 'collected' GROUP BY medication_id) x ON x.id = e.id",
+        [$userId]
+    ) as $e) {
+        $out[$e['medication_id']] = $e;
+    }
+    return $out;
+}
+
+/** "Day 3 of 7" or "One-off dose" for short courses on $day; null for ongoing medicines. */
+function course_progress(array $med, DateTimeImmutable $day): ?string
+{
+    if (($med['course'] ?? 'ongoing') === 'ongoing' || empty($med['end_date'])) {
+        return null;
+    }
+    if ($med['course'] === 'once') {
+        return 'One-off dose';
+    }
+    $start = new DateTimeImmutable($med['start_date']);
+    $total = $start->diff(new DateTimeImmutable($med['end_date']))->days + 1;
+    $ymd = $day->format('Y-m-d');
+    return match (true) {
+        $ymd < $med['start_date'] => "$total-day course, starts " . $start->format('j M'),
+        $ymd > $med['end_date'] => "$total-day course, finished",
+        default => 'Day ' . ($start->diff(new DateTimeImmutable($ymd))->days + 1) . " of $total",
+    };
+}
+
+/**
+ * Short courses and one-off doses move to stopped medicines once their last day is over
+ * (a day later, so "Missed yesterday" can still show their last doses). History is kept.
+ */
+function finish_courses(array $user): void
+{
+    $cutoff = (new DateTimeImmutable('today', home_tz($user)))->modify('-1 day')->format('Y-m-d');
+    foreach (q("SELECT id, end_date FROM medications WHERE user_id = ? AND is_active = 1 AND course <> 'ongoing' AND end_date IS NOT NULL AND end_date < ?",
+        [$user['id'], $cutoff]) as $m) {
+        q('UPDATE medications SET is_active = 0 WHERE id = ?', [$m['id']]);
+        record_med_change((int) $user['id'], (int) $m['id'], $m['end_date'], 'stopped', 'Course finished');
+    }
+}
+
+/** Is this schedule due on this day? Weekdays, or every N days from its first dose. */
+function schedule_on_day(array $s, string $ymd, ?int $bit = null): bool
+{
+    if (($s['cycle_phase'] ?? null) === 'luteal') {
+        // Only in the (known or predicted) 2 weeks before a period.
+        return is_luteal_day((int) ($s['user_id'] ?? current_user()['id'] ?? 0), $ymd);
+    }
+    if (!empty($s['every_days'])) {
+        $anchor = (string) ($s['anchor_date'] ?: $s['valid_from'] ?: $s['start_date'] ?? $ymd);
+        if ($ymd < $anchor) {
+            return false;
+        }
+        return (new DateTimeImmutable($anchor))->diff(new DateTimeImmutable($ymd))->days % (int) $s['every_days'] === 0;
+    }
+    return ((int) $s['days_mask'] & ($bit ?? weekday_bit(new DateTimeImmutable($ymd)))) !== 0;
+}
+
+/** "every 3 weeks" / "every 10 days". */
+function every_days_label(int $days): string
+{
+    return $days % 7 === 0 ? ($days === 7 ? 'every week' : 'every ' . ($days / 7) . ' weeks') : ($days === 1 ? 'every day' : "every $days days");
+}
+
+/** The next dose day of an every-N-days schedule, on or after $from. */
+function next_interval_day(array $s, DateTimeImmutable $from): ?DateTimeImmutable
+{
+    if (empty($s['every_days'])) {
+        return null;
+    }
+    $anchor = new DateTimeImmutable((string) ($s['anchor_date'] ?: $s['valid_from'] ?: $from->format('Y-m-d')));
+    $fromDay = new DateTimeImmutable($from->format('Y-m-d'));
+    if ($fromDay <= $anchor) {
+        return $anchor;
+    }
+    $gap = $anchor->diff($fromDay)->days % (int) $s['every_days'];
+    return $gap === 0 ? $fromDay : $fromDay->modify('+' . ((int) $s['every_days'] - $gap) . ' days');
+}
+
+/** Which days a schedule (or editor row) is on, in words. */
+function schedule_days_text(array $s): string
+{
+    if (($s['cycle_phase'] ?? null) === 'luteal') {
+        return 'only in the 2 weeks before a period';
+    }
+    if (!empty($s['every_days'])) {
+        $next = next_interval_day($s, local_today());
+        return every_days_label((int) $s['every_days']) . ($next ? ', next ' . $next->format('j M') : '');
+    }
+    return days_label((int) $s['days_mask']);
+}
+
+/**
+ * Prescription timing for a medicine with tracked stock: when supply runs out, when to ask for
+ * the next prescription, and (controlled drugs) the date a written prescription must be collected
+ * by: Schedule 2 to 4 controlled drug prescriptions are only valid for 28 days.
+ * @return array{runs_out: ?DateTimeImmutable, request: ?DateTimeImmutable, collect_by: ?DateTimeImmutable}
+ */
+function prescription_dates(array $med, array $schedules, DateTimeImmutable $today): array
+{
+    $days = stock_days_left($med, $schedules);
+    $runsOut = $days !== null ? $today->modify('+' . (int) floor($days) . ' days') : null;
+    $lead = $med['controlled'] ? 7 : max(7, (int) $med['low_stock_days']);
+    return [
+        'runs_out' => $runsOut,
+        'request' => $runsOut?->modify("-$lead days"),
+        'collect_by' => $med['controlled'] && $med['rx_written'] ? (new DateTimeImmutable($med['rx_written']))->modify('+27 days') : null,
+    ];
+}
+
+/** Changes to some of someone's medicines, as chart markers: [[unix time, label], ...]. $match decides by medicine name and reason. */
+function medication_change_markers(int $userId, callable $match): array
+{
+    $out = [];
+    foreach (q("SELECT c.effective_date, c.kind, c.summary, m.name, m.reason FROM medication_changes c JOIN medications m ON m.id = c.medication_id
+                WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'decreased', 'strength', 'stopped', 'restarted') ORDER BY c.effective_date", [$userId]) as $c) {
+        if ($match($c['name'] . ' ' . $c['reason'])) {
+            $out[] = [strtotime($c['effective_date'] . ' 12:00 UTC'), CHANGE_KINDS[$c['kind']] . ': ' . $c['name'] . ', ' . lcfirst($c['summary'])];
+        }
+    }
+    return $out;
 }

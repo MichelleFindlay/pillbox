@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * Cycle tracking (Women's health): logged periods, average cycle and period length,
+ * Cycle tracking (Periods and contraception): logged periods, average cycle and period length,
  * and when the next period is expected. No fertile-window predictions: they're not
  * reliable enough to use as contraception.
  */

@@ -63,6 +63,10 @@ render_header('Sign in');
     </form>
     <?php endif; ?>
 
+    <?php if (signups_open() && user_count() > 0): ?>
+    <p class="auth-alt">New here? <a href="<?= h(url('register.php')) ?>">Create an account</a></p>
+    <?php endif; ?>
+
     <?php if (demo_enabled()): ?>
     <div class="divider"><span>or</span></div>
     <form method="post">

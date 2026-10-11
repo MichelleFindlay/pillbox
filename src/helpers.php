@@ -40,7 +40,7 @@ function pretty_urls(): bool
 /** "medications.php?x=1" -> "medications?x=1", "index.php" -> "" (when tidy addresses are on). */
 function pretty_path(string $path): string
 {
-    if (!pretty_urls() || preg_match('#^(calendar|health_sync|cron|webauthn|push|connect)\.php#', $path)) {
+    if (!pretty_urls() || preg_match('#^(calendar|health_sync|cron|webauthn|push|connect|manifest|photo)\.php#', $path)) {
         return $path;
     }
     return preg_replace(['/^index\.php(?=$|[?#])/', '/^([a-z_]+)\.php(?=$|[?#])/'], ['', '$1'], $path);

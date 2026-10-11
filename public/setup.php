@@ -39,7 +39,7 @@ if (is_post()) {
 render_header('Set up');
 ?>
 <section class="auth-card card">
-    <img class="auth-logo" src="<?= h(asset('assets/logo.svg')) ?>" alt="" width="96" height="96">
+    <?= logo_svg(96, 'auth-logo') ?>
     <h1>Welcome to <?= h(config('app.name')) ?></h1>
     <p class="muted">Create the first administrator account. You can add more people, or turn on Microsoft sign-in, afterwards.</p>
     <?= form_errors($errors) ?>

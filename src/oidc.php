@@ -317,7 +317,8 @@ function oidc_find_or_create_user(string $key, array $claims): array
     $email = oidc_email($claims);
     $name = mb_substr((string) ($claims['name'] ?? $claims['preferred_username'] ?? $email ?? "{$p['name']} user"), 0, 150);
 
-    return transaction(function () use ($key, $p, $sub, $email, $name, $claims) {
+    $created = false;
+    $user = transaction(function () use ($key, $p, $sub, $email, $name, $claims, &$created) {
         $identity = q('SELECT * FROM user_identities WHERE provider = ? AND subject = ? FOR UPDATE', [$key, $sub])->fetch();
         if (!$identity && $email !== null && oidc_email_verified($claims)) {
             $identity = q('SELECT * FROM user_identities WHERE provider = ? AND subject IS NULL AND email = ? FOR UPDATE', [$key, $email])->fetch();
@@ -327,9 +328,11 @@ function oidc_find_or_create_user(string $key, array $claims): array
         }
 
         if (!$identity) {
-            if (!$p['auto_provision']) {
+            // A trusted directory (auto_provision) gets accounts straight away; otherwise only while sign-ups are open.
+            if (!$p['auto_provision'] && !signups_open()) {
                 throw new RuntimeException("Your {$p['name']} account hasn't been given access to Pillbox. Ask an administrator to add you.");
             }
+            $created = !$p['auto_provision'];
             q("INSERT INTO users (display_name, email, auth_provider, timezone, is_admin) VALUES (?, ?, 'oidc', ?, ?)",
                 [$name, $email, config('app.default_timezone'), user_count() === 0 ? 1 : 0]);
             $userId = (int) db()->lastInsertId();
@@ -355,6 +358,8 @@ function oidc_find_or_create_user(string $key, array $claims): array
         }
         return $user;
     });
+    // A sign-up (not a trusted directory): maybe waiting for approval; tell the admins.
+    return $created ? signup_created($user, 'oidc:' . $key) : $user;
 }
 
 /**

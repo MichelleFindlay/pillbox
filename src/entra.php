@@ -234,8 +234,11 @@ function entra_find_or_create_user(array $claims): array
         }
     }
 
+    $signup = false;
     if (!$user) {
-        if (!config('entra.auto_provision')) {
+        // A trusted tenant (auto_provision) gets accounts straight away; otherwise only while sign-ups are open.
+        $signup = !config('entra.auto_provision');
+        if ($signup && !signups_open()) {
             throw new RuntimeException('Your Microsoft account has not been given access to Pillbox. Ask an administrator to add you.');
         }
         q(
@@ -244,6 +247,9 @@ function entra_find_or_create_user(array $claims): array
             [mb_substr($name, 0, 150), $email, $oid, $tid, config('app.default_timezone'), user_count() === 0 ? 1 : 0]
         );
         $user = q('SELECT * FROM users WHERE id = ?', [db()->lastInsertId()])->fetch();
+        if ($signup) {
+            $user = signup_created($user, 'entra');
+        }
     }
 
     if (!$user['is_active']) {

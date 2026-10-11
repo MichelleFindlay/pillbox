@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
     entra_tid        CHAR(36)      NULL,
     is_admin         TINYINT(1)    NOT NULL DEFAULT 0,
     is_active        TINYINT(1)    NOT NULL DEFAULT 1,
+    pending_approval TINYINT(1)    NOT NULL DEFAULT 0,
+    terms_accepted_at DATETIME     NULL,     -- agreed to the terms and privacy policy when signing up  -- a sign-up waiting for an admin to approve it
+    signup_method    VARCHAR(60)   NULL,     -- how they signed up: password | entra | oidc:<provider>; NULL = added by an admin
     timezone         VARCHAR(64)   NOT NULL DEFAULT 'Europe/London',
     enabled_metrics  VARCHAR(1000) NULL,
     session_version  INT UNSIGNED  NOT NULL DEFAULT 0,  -- bumped to sign out every other device
@@ -27,6 +30,19 @@ CREATE TABLE IF NOT EXISTS users (
     date_of_birth    DATE          NULL,     -- for screening recall dates
     sex              VARCHAR(10)   NULL,     -- female | male | other: which screening programmes apply
     screening_programmes VARCHAR(100) NULL,  -- with sex 'other': the programmes ticked (comma list)
+    body_inventory   TEXT          NULL,     -- JSON: organ => {state: yes|removed|no, date}; NULL = not filled in (then sex is used)
+    pronouns         VARCHAR(40)   NULL,
+    gender_identity  VARCHAR(100)  NULL,
+    privacy_blur     TINYINT(1)    NOT NULL DEFAULT 0,  -- hide the screen when switching apps
+    text_size        VARCHAR(4)    NULL,     -- accessibility: NULL (normal) | l | xl
+    wide_spacing     TINYINT(1)    NOT NULL DEFAULT 0,
+    easy_font        TINYINT(1)    NOT NULL DEFAULT 0,  -- an easy-read font (dyslexia-friendly)
+    reduce_motion    TINYINT(1)    NOT NULL DEFAULT 0,
+    hide_streaks     TINYINT(1)    NOT NULL DEFAULT 0,
+    dose_followup    SMALLINT UNSIGNED NOT NULL DEFAULT 0, -- minutes after a dose reminder to ask "did you take it?" (0 = off)
+    pmdd_mode        TINYINT(1)    NOT NULL DEFAULT 0,  -- daily premenstrual symptom tracking in Periods and contraception
+    pmdd_headsup     TINYINT(1)    NOT NULL DEFAULT 0,  -- notification when the luteal phase is predicted to start
+    disguise         VARCHAR(10)   NULL,     -- home screen name and icon: NULL (Pillbox) | planner | notes
     mind_enabled     TINYINT(1)    NOT NULL DEFAULT 1,  -- show the Mind tab
     mind_pin_hash    VARCHAR(255)  NULL,     -- optional PIN for the Mind tab
     mind_lock_plan   TINYINT(1)    NOT NULL DEFAULT 0,  -- also keep the safety plan behind the PIN
@@ -98,8 +114,16 @@ CREATE TABLE IF NOT EXISTS medications (
     stock_count     DECIMAL(10,2) NULL,
     low_stock_days  SMALLINT UNSIGNED NOT NULL DEFAULT 7,
     expiry_date     DATE          NULL,          -- use-by date of the current supply, if known
+    course          VARCHAR(8)    NOT NULL DEFAULT 'ongoing', -- ongoing | short (a set number of days) | once (a one-off dose); short and once stop by themselves
+    ordered_on      DATE          NULL,          -- repeat ordered and waiting to be collected (cleared when collected)
     supply_type     VARCHAR(8)    NOT NULL DEFAULT 'nhs', -- nhs | private (private prescription) | otc (bought without one)
     supply_price    DECIMAL(8,2)  NULL,          -- what a supply costs, for private and bought medicines
+    brand           VARCHAR(100)  NULL,          -- brand or manufacturer of the current supply
+    controlled      TINYINT(1)    NOT NULL DEFAULT 0, -- a controlled drug (e.g. stimulants): prescriptions expire 28 days after writing
+    rx_written      DATE          NULL,          -- the latest prescription's date, until it's collected
+    rx_days         SMALLINT UNSIGNED NULL,      -- days of supply per prescription (often 30 for controlled drugs)
+    is_private      TINYINT(1)    NOT NULL DEFAULT 0, -- reminders and emails just say "Reminder"; hidden from people it's shared with
+    is_supplement   TINYINT(1)    NOT NULL DEFAULT 0, -- a vitamin, mineral or other supplement (listed separately)
     mental_health   TINYINT(1)    NOT NULL DEFAULT 0, -- shown in Mind, with side-effect and "how I feel" notes
     start_date      DATE          NOT NULL,
     end_date        DATE          NULL,
@@ -120,6 +144,9 @@ CREATE TABLE IF NOT EXISTS medication_schedules (
     dose_time      TIME          NOT NULL,
     dose_amount    DECIMAL(8,2)  NOT NULL,
     days_mask      TINYINT UNSIGNED NOT NULL DEFAULT 127,
+    every_days     SMALLINT UNSIGNED NULL,   -- set: every N days from anchor_date instead of on weekdays (e.g. injections every 3 weeks)
+    anchor_date    DATE          NULL,      -- the first dose of an every-N-days schedule
+    cycle_phase    VARCHAR(10)   NULL,      -- 'luteal': only in the 2 weeks before a period (e.g. SSRIs for PMDD)
     valid_from     DATE          NULL,
     valid_to       DATE          NULL,
     PRIMARY KEY (id),
@@ -135,6 +162,7 @@ CREATE TABLE IF NOT EXISTS dose_logs (
     scheduled_for  DATETIME      NULL,          -- UTC time of the scheduled slot
     status         ENUM('taken','skipped') NOT NULL,
     amount         DECIMAL(8,2)  NOT NULL DEFAULT 0,
+    site           VARCHAR(10)   NULL,     -- injection site (for rotation)
     taken_at       DATETIME      NOT NULL,      -- UTC time the action was recorded for
     notes          VARCHAR(255)  NULL,
     created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -222,6 +250,7 @@ CREATE TABLE IF NOT EXISTS stock_events (
     kind           ENUM('collected','recount') NOT NULL,
     quantity       DECIMAL(10,2) NOT NULL,      -- amount collected, or the new counted total
     stock_after    DECIMAL(10,2) NOT NULL,
+    brand          VARCHAR(100)  NULL,         -- brand or manufacturer collected (some people notice a difference)
     created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     KEY ix_stock_med (medication_id, created_at),
@@ -444,7 +473,7 @@ CREATE TABLE IF NOT EXISTS med_notes (
     id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
     user_id        INT UNSIGNED NOT NULL,
     medication_id  INT UNSIGNED NOT NULL,
-    kind           VARCHAR(12)   NOT NULL,              -- side_effect | feeling
+    kind           VARCHAR(12)   NOT NULL,              -- side_effect | feeling | supply (pharmacy and shortage notes)
     note           VARCHAR(1000) NOT NULL,
     severity       TINYINT UNSIGNED NULL,               -- side effects: 0-10
     created_at     DATETIME      NOT NULL,              -- UTC
@@ -614,4 +643,351 @@ CREATE TABLE IF NOT EXISTS connections (
     PRIMARY KEY (id),
     UNIQUE KEY uq_connection (user_id, provider),
     CONSTRAINT fk_connection_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Pregnancy (Care): one record per pregnancy; the antenatal timeline follows from its due date.
+CREATE TABLE IF NOT EXISTS pregnancies (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id         INT UNSIGNED NOT NULL,
+    due_date        DATE          NOT NULL,
+    due_source      VARCHAR(8)    NOT NULL DEFAULT 'lmp',  -- lmp (worked out from the last period) | scan (from the dating scan or midwife)
+    lmp_date        DATE          NULL,
+    first_baby      TINYINT(1)    NOT NULL DEFAULT 1,      -- first babies get extra checks at 25, 31 and 40 weeks
+    rh_negative     TINYINT(1)    NULL,                    -- NULL = not known yet
+    maternity_unit  VARCHAR(150)  NULL,
+    maternity_phone VARCHAR(40)   NULL,                    -- maternity triage / assessment line
+    midwife         VARCHAR(150)  NULL,
+    midwife_phone   VARCHAR(40)   NULL,
+    status          VARCHAR(8)    NOT NULL DEFAULT 'active', -- active | born | ended
+    ended_on        DATE          NULL,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_pregnancies_user (user_id, status),
+    CONSTRAINT fk_pregnancies_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Timeline items (appointments, scans, vaccines, forms) marked done, with an optional result.
+CREATE TABLE IF NOT EXISTS pregnancy_items (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    pregnancy_id  INT UNSIGNED NOT NULL,
+    item_key      VARCHAR(30)   NOT NULL,
+    done_on       DATE          NULL,
+    result        VARCHAR(500)  NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_pregnancy_item (pregnancy_id, item_key),
+    CONSTRAINT fk_pregnancy_items FOREIGN KEY (pregnancy_id) REFERENCES pregnancies (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- What was checked at each antenatal appointment.
+CREATE TABLE IF NOT EXISTS antenatal_checks (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    pregnancy_id  INT UNSIGNED NOT NULL,
+    user_id       INT UNSIGNED NOT NULL,
+    checked_on    DATE          NOT NULL,
+    bp_sys        SMALLINT UNSIGNED NULL,
+    bp_dia        SMALLINT UNSIGNED NULL,
+    urine         VARCHAR(20)   NULL,     -- clear | protein | glucose | both | not_done
+    fundal_cm     DECIMAL(4,1)  NULL,     -- bump measurement
+    heartbeat     TINYINT(1)    NULL,     -- baby's heartbeat heard
+    position      VARCHAR(12)   NULL,     -- head_down | breech | transverse | unsure
+    notes         VARCHAR(2000) NULL,
+    questions     VARCHAR(2000) NULL,     -- to ask next time
+    created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_antenatal_pregnancy (pregnancy_id, checked_on),
+    CONSTRAINT fk_antenatal_pregnancy FOREIGN KEY (pregnancy_id) REFERENCES pregnancies (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Changes in the baby's movements, and other notes.
+CREATE TABLE IF NOT EXISTS pregnancy_log (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    pregnancy_id  INT UNSIGNED NOT NULL,
+    user_id       INT UNSIGNED NOT NULL,
+    logged_at     DATETIME      NOT NULL,
+    kind          VARCHAR(12)   NOT NULL,  -- movements | note
+    note          VARCHAR(1000) NULL,
+    PRIMARY KEY (id),
+    KEY ix_pregnancy_log (pregnancy_id, logged_at),
+    CONSTRAINT fk_pregnancy_log FOREIGN KEY (pregnancy_id) REFERENCES pregnancies (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Private records (the pregnancy options and aftercare pathway): everything is in one encrypted blob
+-- (key in storage/app.key), never shared, reported, exported or emailed, and deleted in one go.
+CREATE TABLE IF NOT EXISTS private_records (
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id     INT UNSIGNED NOT NULL,
+    kind        VARCHAR(20)   NOT NULL,
+    data        MEDIUMTEXT    NOT NULL,   -- encrypted JSON
+    pin_hash    VARCHAR(255)  NULL,       -- optional PIN for this page
+    remind_at   DATETIME      NULL,       -- next reminder (UTC); reminders only ever say "You have a reminder"
+    created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_private_record (user_id, kind),
+    KEY ix_private_remind (remind_at),
+    CONSTRAINT fk_private_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Menopause (Care): stage and work notes, the daily symptom diary, and Greene Climacteric Scale scores.
+-- Periods and bleeds are in cycle_periods (shared with Women's health); HRT is in medications.
+CREATE TABLE IF NOT EXISTS menopause_profiles (
+    user_id      INT UNSIGNED NOT NULL,
+    stage        VARCHAR(10)   NULL,     -- unsure | peri | post
+    cause        VARCHAR(10)   NULL,     -- natural | surgery | treatment | unsure
+    hrt_started  DATE          NULL,     -- started or last changed HRT (for the 3-month review and bleeding advice)
+    work_notes   TEXT          NULL,
+    updated_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_meno_profile_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS menopause_logs (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id        INT UNSIGNED NOT NULL,
+    log_date       DATE          NOT NULL,
+    flushes        TINYINT UNSIGNED NULL,   -- hot flushes that day
+    flush_severity TINYINT UNSIGNED NULL,   -- 0 to 3
+    scores         VARCHAR(500)  NULL,      -- JSON: symptom => 0 to 3
+    triggers       VARCHAR(100)  NULL,      -- comma list: alcohol, caffeine, spicy, hot_drinks, stress
+    notes          VARCHAR(500)  NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_meno_log (user_id, log_date),
+    CONSTRAINT fk_meno_log_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS menopause_scores (
+    id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id    INT UNSIGNED NOT NULL,
+    taken_on   DATE          NOT NULL,
+    answers    VARCHAR(60)   NOT NULL,      -- 21 answers, 0 to 3, comma separated
+    total      TINYINT UNSIGNED NOT NULL,
+    psych      TINYINT UNSIGNED NOT NULL,
+    somatic    TINYINT UNSIGNED NOT NULL,
+    vasomotor  TINYINT UNSIGNED NOT NULL,
+    sexual     TINYINT UNSIGNED NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_meno_scores (user_id, taken_on),
+    CONSTRAINT fk_meno_scores_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Lab results (Blood tests): numbers in UK units, when the blood was taken relative to the last dose,
+-- and the lab's own range from the report. Target ranges are chosen by the person or their clinic.
+CREATE TABLE IF NOT EXISTS lab_results (
+    id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id          INT UNSIGNED NOT NULL,
+    test             VARCHAR(30)   NOT NULL,
+    value            DECIMAL(12,3) NOT NULL,
+    unit             VARCHAR(20)   NOT NULL,
+    taken_at         DATETIME      NOT NULL,     -- UTC
+    timing           VARCHAR(10)   NOT NULL DEFAULT 'unknown', -- trough | peak | mid | unknown
+    medication_id    INT UNSIGNED  NULL,
+    hours_since_dose INT UNSIGNED  NULL,
+    lab_low          DECIMAL(12,3) NULL,
+    lab_high         DECIMAL(12,3) NULL,
+    notes            VARCHAR(300)  NULL,
+    PRIMARY KEY (id),
+    KEY ix_lab_user (user_id, test, taken_at),
+    CONSTRAINT fk_lab_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS lab_targets (
+    user_id  INT UNSIGNED NOT NULL,
+    test     VARCHAR(30)   NOT NULL,
+    low      DECIMAL(12,3) NULL,
+    high     DECIMAL(12,3) NULL,
+    note     VARCHAR(150)  NULL,
+    PRIMARY KEY (user_id, test),
+    CONSTRAINT fk_lab_target_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Premenstrual symptoms (Periods and contraception): daily DRSP ratings, and "day 1" markers for cycles without a bleed.
+CREATE TABLE IF NOT EXISTS pmdd_logs (
+    id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id    INT UNSIGNED NOT NULL,
+    log_date   DATE          NOT NULL,
+    scores     VARCHAR(400)  NOT NULL,   -- JSON: DRSP item number => 1 to 6
+    quick      TINYINT(1)    NOT NULL DEFAULT 0,
+    lifestyle  VARCHAR(100)  NULL,       -- comma list: exercise, caffeine, alcohol, short_sleep
+    notes      VARCHAR(500)  NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_pmdd_log (user_id, log_date),
+    CONSTRAINT fk_pmdd_log_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS pmdd_markers (
+    id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id    INT UNSIGNED NOT NULL,
+    marked_on  DATE          NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_pmdd_marker (user_id, marked_on),
+    CONSTRAINT fk_pmdd_marker_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- How a dose worked: when it was taken, kicked in and wore off, a rating and side effects (titration and timing).
+CREATE TABLE IF NOT EXISTS dose_effects (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id        INT UNSIGNED NOT NULL,
+    medication_id  INT UNSIGNED NOT NULL,
+    log_date       DATE          NOT NULL,
+    dose           VARCHAR(150)  NULL,     -- the dose at the time (strength and regimen), for the titration table
+    taken_at       TIME          NULL,
+    onset_at       TIME          NULL,
+    wore_off_at    TIME          NULL,
+    crash          TINYINT(1)    NOT NULL DEFAULT 0,
+    rating         TINYINT UNSIGNED NULL,  -- 1 (not at all) to 5 (very well)
+    side_effects   VARCHAR(200)  NULL,     -- comma list: appetite, sleep, mood, heart, tics, headache, other
+    notes          VARCHAR(500)  NULL,
+    PRIMARY KEY (id),
+    KEY ix_effects (medication_id, log_date),
+    CONSTRAINT fk_effects_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_effects_med FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ADHD and autism (Care): identity, communication passport and assessment prep; waiting lists; daily energy and sensory log.
+CREATE TABLE IF NOT EXISTS nd_profiles (
+    user_id     INT UNSIGNED NOT NULL,
+    identity    VARCHAR(400)  NULL,      -- JSON: condition => self | waiting | diagnosed
+    passport    TEXT          NULL,      -- JSON: communication passport fields
+    raf_asked   DATE          NULL,      -- asked the GP for a Reasonable Adjustment Flag
+    updated_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_nd_profile_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS nd_waitlist (
+    id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id      INT UNSIGNED NOT NULL,
+    assessment   VARCHAR(20)   NOT NULL,  -- adhd | autism | other
+    provider     VARCHAR(150)  NULL,
+    route        VARCHAR(12)   NULL,      -- nhs | rtc (Right to Choose) | private
+    referred_on  DATE          NULL,
+    assessed_on  DATE          NULL,
+    notes        VARCHAR(1000) NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT fk_nd_wait_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS nd_prep (
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id     INT UNSIGNED NOT NULL,
+    category    VARCHAR(20)   NOT NULL,   -- childhood | daily | work | relationships | sensory | strengths | other
+    note        VARCHAR(2000) NOT NULL,
+    created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_nd_prep (user_id, category),
+    CONSTRAINT fk_nd_prep_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS nd_logs (
+    id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id      INT UNSIGNED NOT NULL,
+    log_date     DATE          NOT NULL,
+    spoons       TINYINT UNSIGNED NULL,   -- energy, 0 to 10
+    sensory      TINYINT UNSIGNED NULL,   -- sensory load, 0 to 5
+    event        VARCHAR(10)   NULL,      -- meltdown | shutdown
+    triggers     VARCHAR(300)  NULL,
+    sleep_hours  DECIMAL(3,1)  NULL,
+    burnout      VARCHAR(200)  NULL,      -- comma list of warning signs noticed
+    notes        VARCHAR(1000) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_nd_log (user_id, log_date),
+    CONSTRAINT fk_nd_log_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Thyroid (Care): a weekly check of symptoms that can mean under- or overtreatment.
+CREATE TABLE IF NOT EXISTS thyroid_weeks (
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id     INT UNSIGNED NOT NULL,
+    week_start  DATE          NOT NULL,   -- the Monday
+    scores      VARCHAR(500)  NOT NULL,   -- JSON: symptom => 0 to 3
+    notes       VARCHAR(500)  NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_thyroid_week (user_id, week_start),
+    CONSTRAINT fk_thyroid_week_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Diabetes (Care): type and targets, sick-day mode; insulin and carbs; hypos logged with the hypo guide.
+CREATE TABLE IF NOT EXISTS diabetes_profiles (
+    user_id       INT UNSIGNED NOT NULL,
+    type          VARCHAR(12)   NULL,      -- 1 | 2 | lada | mody | gestational | prediabetes | other
+    target_low    DECIMAL(3,1)  NOT NULL DEFAULT 3.9,
+    target_high   DECIMAL(3,1)  NOT NULL DEFAULT 10.0,
+    hba1c_target  TINYINT UNSIGNED NULL,   -- mmol/mol
+    drives        TINYINT(1)    NOT NULL DEFAULT 0,
+    sick_since    DATETIME      NULL,      -- sick-day mode on (UTC)
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_dm_profile_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS insulin_logs (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id       INT UNSIGNED NOT NULL,
+    taken_at      DATETIME      NOT NULL,  -- UTC
+    kind          VARCHAR(10)   NOT NULL,  -- basal | bolus | correction
+    units         DECIMAL(5,1)  NULL,
+    carbs         DECIMAL(5,1)  NULL,      -- grams
+    glucose       DECIMAL(4,1)  NULL,      -- mmol/L at the time
+    medication_id INT UNSIGNED  NULL,
+    notes         VARCHAR(300)  NULL,
+    external_id   CHAR(40)      NULL,      -- imported from Nightscout
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_insulin_external (user_id, external_id),
+    KEY ix_insulin_user (user_id, taken_at),
+    CONSTRAINT fk_insulin_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS hypo_events (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id       INT UNSIGNED NOT NULL,
+    at            DATETIME      NOT NULL,  -- UTC
+    glucose       DECIMAL(4,1)  NULL,
+    treated_with  VARCHAR(150)  NULL,
+    notes         VARCHAR(500)  NULL,
+    PRIMARY KEY (id),
+    KEY ix_hypo_user (user_id, at),
+    CONSTRAINT fk_hypo_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migraine and headaches (Care): each headache, and medicines taken for it.
+CREATE TABLE IF NOT EXISTS headache_episodes (
+    id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id     INT UNSIGNED NOT NULL,
+    started_at  DATETIME      NOT NULL,   -- UTC
+    ended_at    DATETIME      NULL,       -- NULL while it's still going
+    severity    TINYINT UNSIGNED NULL,    -- 1 mild, 2 moderate, 3 severe
+    location    VARCHAR(10)   NULL,
+    migraine    TINYINT(1)    NOT NULL DEFAULT 0,
+    aura        TINYINT(1)    NOT NULL DEFAULT 0,
+    symptoms    VARCHAR(200)  NULL,
+    triggers    VARCHAR(200)  NULL,
+    notes       VARCHAR(1000) NULL,
+    PRIMARY KEY (id),
+    KEY ix_headache_user (user_id, started_at),
+    CONSTRAINT fk_headache_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS episode_meds (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    episode_id     INT UNSIGNED NOT NULL,
+    medication_id  INT UNSIGNED  NULL,
+    name           VARCHAR(150)  NOT NULL,
+    taken_at       DATETIME      NOT NULL,  -- UTC
+    helped         TINYINT UNSIGNED NULL,   -- 0 no to 3 took it away
+    PRIMARY KEY (id),
+    KEY ix_episode_meds (episode_id),
+    CONSTRAINT fk_episode_meds FOREIGN KEY (episode_id) REFERENCES headache_episodes (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Blood pressure (Care): monitor, home target set by a clinician, sick-day rules given, and the home monitoring week.
+CREATE TABLE IF NOT EXISTS bp_profiles (
+    user_id        INT UNSIGNED NOT NULL,
+    target_sys     SMALLINT UNSIGNED NULL,  -- NULL: the NICE home target by age
+    target_dia     SMALLINT UNSIGNED NULL,
+    monitor        VARCHAR(100)  NULL,
+    cuff           VARCHAR(10)   NULL,
+    validated      TINYINT(1)    NOT NULL DEFAULT 0,
+    sick_day       TINYINT(1)    NOT NULL DEFAULT 0,  -- the clinician has given sick-day rules
+    session_start  DATE          NULL,               -- the current or last home monitoring week
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_bp_profile_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

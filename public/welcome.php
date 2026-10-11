@@ -54,7 +54,7 @@ if (is_post()) {
             }
             break;
         case 'use':
-            $areas = array_values(array_intersect(array_keys(care_categories()), (array) ($_POST['care_areas'] ?? [])));
+            $areas = array_values(array_intersect(array_keys(care_categories_for($user)), (array) ($_POST['care_areas'] ?? [])));
             $metrics = array_values(array_intersect(array_keys(builtin_metrics()), (array) ($_POST['metrics'] ?? [])));
             q('UPDATE users SET care_areas = ?, mind_enabled = ?, enabled_metrics = ? WHERE id = ?',
                 [implode(',', $areas), post('mind_enabled') === '1' ? 1 : 0, implode(',', $metrics), $uid]);
@@ -133,7 +133,7 @@ render_header('Welcome', 'today');
         <fieldset>
             <legend>Care: routines and check-ups</legend>
             <div class="checks">
-                <?php foreach (care_categories() as $key => $area): ?>
+                <?php foreach (care_categories_for($user) as $key => $area): ?>
                 <label class="check"><input type="checkbox" name="care_areas[]" value="<?= h($key) ?>"<?= checked(in_array($key, $myAreas, true)) ?>> <?= $area['icon'] ?> <?= h($area['title']) ?></label>
                 <?php endforeach; ?>
             </div>

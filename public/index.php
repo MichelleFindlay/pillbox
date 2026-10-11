@@ -3,6 +3,7 @@ require __DIR__ . '/../src/bootstrap.php';
 
 $user = require_login();
 $uid = (int) $user['id'];
+finish_courses($user);
 $tz = user_tz();
 $today = local_today();
 $utc = new DateTimeZone('UTC');
@@ -122,6 +123,27 @@ render_header('Today', 'today');
 </div>
 <?php endif; ?>
 
+<?php if (!isset($user['_acting']) && $user['is_admin'] && ($waiting = count(pending_signups()))): ?>
+<div class="flash flash-info notice-row" role="status">
+    <span><?= $waiting === 1 ? 'Someone has' : "$waiting people have" ?> signed up and <?= $waiting === 1 ? 'is' : 'are' ?> waiting for you to approve them.</span>
+    <a class="btn btn-small" href="<?= h(url('admin.php#signups')) ?>">Review</a>
+</div>
+<?php endif; ?>
+
+<?php if (!isset($user['_acting']) && ($dmProfile = diabetes_profile($uid)) && $dmProfile['sick_since']): ?>
+<div class="flash flash-warning notice-row" role="status">
+    <span><strong>Sick-day rules are on.</strong> Check your glucose every 2 to 4 hours<?= $dmProfile['type'] === '1' ? ', and ketones too if over 13' : '' ?>, and keep sipping fluids.</span>
+    <a class="btn btn-small" href="<?= h(url('care.php?area=diabetes#dm-sick')) ?>">Sick-day rules</a>
+</div>
+<?php endif; ?>
+
+<?php if (in_array('migraine', $careAreas, true) && ($ongoingHeadache = q('SELECT * FROM headache_episodes WHERE user_id = ? AND ended_at IS NULL AND started_at > ? ORDER BY started_at DESC LIMIT 1', [$uid, gmdate('Y-m-d H:i:s', time() - 3 * 86400)])->fetch())): ?>
+<div class="flash flash-info notice-row" role="status">
+    <span>Headache since <?= h(local_time($ongoingHeadache['started_at'], 'D H:i')) ?>.</span>
+    <a class="btn btn-small" href="<?= h(url('care.php?area=migraine#mg-diary')) ?>">Update</a>
+</div>
+<?php endif; ?>
+
 <div class="flash install-banner" hidden>
     <span>Add Pillbox to your home screen to use it like an app.</span>
     <span class="inline-actions">
@@ -130,10 +152,44 @@ render_header('Today', 'today');
     </span>
 </div>
 
-<?php foreach ($lowStock as [$m, $days]): ?>
-<div class="flash flash-warning" role="status">
-    <strong><?= h($m['name']) ?></strong> is running low: <?= h(num($m['stock_count'])) ?> left (about <?= (int) floor($days) ?> day<?= floor($days) == 1 ? '' : 's' ?>). Time to order a repeat prescription.
-    <a href="<?= h(url('medications.php#med-' . $m['id'])) ?>">Collected it?</a>
+<?php if ($lowStock): $lastCollected = last_collected($uid); $canLog = share_can('doses', 'log'); endif; ?>
+<?php foreach ($lowStock as [$m, $days]):
+    $left = h(num($m['stock_count'])) . ' left (about ' . (int) floor($days) . ' day' . (floor($days) == 1 ? '' : 's') . ')';
+    $hidden = csrf_field() . '<input type="hidden" name="id" value="' . (int) $m['id'] . '"><input type="hidden" name="return" value="index.php#low-' . (int) $m['id'] . '">'; ?>
+<div class="flash <?= $m['ordered_on'] ? 'flash-info' : 'flash-warning' ?> low-stock" role="status" id="low-<?= (int) $m['id'] ?>">
+    <ol class="steps" aria-label="Steps"><li class="<?= $m['ordered_on'] ? 'done' : 'current' ?>"><?= $m['controlled'] ? 'Ask for a prescription' : 'Order' ?></li>
+        <li class="<?= $m['ordered_on'] ? 'current' : '' ?>">Collect<?= $m['controlled'] && $m['rx_written'] ? ' by ' . h((new DateTimeImmutable($m['rx_written']))->modify('+27 days')->format('j M')) : '' ?></li><li>Log the stock</li></ol>
+    <?php if (!$m['ordered_on']): ?>
+    <span><strong><?= h($m['name']) ?></strong> is running low: <?= $left ?>. Time to order <?= $m['supply_type'] === 'otc' ? 'more' : 'a repeat prescription' ?>.</span>
+    <?php if ($canLog): ?>
+    <span class="inline-actions">
+        <form method="post" action="<?= h(url('medications.php')) ?>"><?= $hidden ?><input type="hidden" name="action" value="ordered">
+            <button class="btn btn-small btn-primary" type="submit">Ordered</button></form>
+        <a class="btn btn-small" href="<?= h(url('medications.php#med-' . $m['id'])) ?>">Collected</a>
+    </span>
+    <?php endif; ?>
+    <?php else: ?>
+    <span><strong><?= h($m['name']) ?></strong>: <?= $m['supply_type'] === 'otc' ? 'more' : 'repeat' ?> ordered <?= h(date('j M', strtotime($m['ordered_on']))) ?>, waiting to collect. <?= $left ?>.</span>
+    <?php if ($canLog): ?>
+    <details class="collect">
+        <summary class="btn btn-small btn-primary">Collected</summary>
+        <form method="post" action="<?= h(url('medications.php')) ?>" class="inline-form"><?= $hidden ?>
+            <input type="hidden" name="action" value="restock"><input type="hidden" name="kind" value="collected">
+            <label>How many <?= h(substr(dose_label(2, $m['dose_unit']), 2)) ?>
+                <input type="number" name="quantity" min="0" step="any" inputmode="decimal" required class="count-input"
+                    value="<?= isset($lastCollected[$m['id']]) ? h(num($lastCollected[$m['id']]['quantity'])) : '' ?>" placeholder="e.g. 56"></label>
+            <label><span>Expiry date <span class="muted small">(optional)</span></span><input type="date" name="expiry_date"></label>
+            <?php if ($m['supply_type'] !== 'nhs'): ?>
+            <label>Paid (&pound;) <input type="number" name="paid" min="0" step="0.01" inputmode="decimal" class="count-input"
+                value="<?= $m['supply_price'] !== null ? h(number_format((float) $m['supply_price'], 2, '.', '')) : '' ?>"></label>
+            <?php endif; ?>
+            <button class="btn btn-primary btn-small" type="submit">Add to stock</button>
+        </form>
+        <form method="post" action="<?= h(url('medications.php')) ?>"><?= $hidden ?><input type="hidden" name="action" value="unorder">
+            <button class="btn-link small" type="submit">Not ordered after all</button></form>
+    </details>
+    <?php endif; ?>
+    <?php endif; ?>
 </div>
 <?php endforeach; ?>
 
@@ -157,7 +213,8 @@ render_header('Today', 'today');
 
 <?php if ($missedYesterday): ?>
 <section class="card">
-    <h2>Missed yesterday</h2>
+    <h2>Yesterday, not logged</h2>
+    <p class="muted small">Took them? Log them now with the time you took them. Skipped them? That's fine too: just say so.</p>
     <ul class="dose-list">
     <?php foreach ($missedYesterday as $slot) { render_dose_item($slot, 'index.php'); } ?>
     </ul>
@@ -170,19 +227,58 @@ render_header('Today', 'today');
     <?php if (!$slots): ?>
         <p class="muted">Nothing scheduled for today. <a href="<?= h(url('medication_edit.php')) ?>">Add a medication</a> to get started.</p>
     <?php else: ?>
-    <ul class="dose-list">
-        <?php
-        $lastTime = null;
-        foreach ($slots as $slot) {
-            $time = $slot['local']->format('H:i');
-            if ($time !== $lastTime) {
-                echo '<li class="dose-time">' . h($time) . '</li>';
-                $lastTime = $time;
-            }
-            render_dose_item($slot, 'index.php');
+    <?php
+    $nowLocal = new DateTimeImmutable('now', $tz);
+    $nowDoses = array_filter($slots, fn ($s) => !$s['log'] && in_array($s['status'], ['due', 'missed'], true));
+    $nextDose = array_values(array_filter($slots, fn ($s) => !$s['log'] && $s['status'] === 'upcoming'))[0] ?? null; ?>
+    <div class="now-next">
+        <div><span class="tile-label">Now</span>
+            <strong><?= $nowDoses ? h(implode(', ', array_map(fn ($s) => $s['schedule']['name'], $nowDoses))) : 'Nothing to take right now' ?></strong></div>
+        <div><span class="tile-label">Next</span>
+            <?php if ($nextDose): $mins = (int) round(($nextDose['local']->getTimestamp() - $nowLocal->getTimestamp()) / 60); ?>
+            <strong><?= h($nextDose['local']->format('H:i')) ?> <?= h($nextDose['schedule']['name']) ?></strong>
+            <span class="muted small">in <?= $mins >= 60 ? intdiv($mins, 60) . ' h ' . ($mins % 60 ? ($mins % 60) . ' min' : '') : max(1, $mins) . ' min' ?></span>
+            <?php else: ?><strong>Nothing else today</strong><?php endif; ?></div>
+        <a class="btn btn-small" href="<?= h(url('timer.php')) ?>">Timer</a>
+    </div>
+    <?= render_day_timeline($slots, $nowLocal) ?>
+    <?php
+    // Grouped by part of the day, each with one button for every dose in it not yet recorded.
+    $blocks = [];
+    foreach ($slots as $slot) {
+        $blocks[dose_block($slot['local']->format('H:i'))][] = $slot;
+    }
+    foreach (DOSE_BLOCKS as $blockKey => $block):
+        if (empty($blocks[$blockKey])) {
+            continue;
         }
-        ?>
-    </ul>
+        $open = array_filter($blocks[$blockKey], fn ($s) => $s['log'] === null); ?>
+    <div class="dose-block" id="block-<?= h($blockKey) ?>">
+        <div class="dose-block-head">
+            <h3><?= h($block['label']) ?></h3>
+            <?php if (count($open) > 1 && share_can('doses', 'log')): ?>
+            <form method="post" action="<?= h(url('dose_action.php')) ?>">
+                <?= csrf_field() ?><input type="hidden" name="action" value="take_block"><input type="hidden" name="return" value="index.php#block-<?= h($blockKey) ?>">
+                <?php foreach ($open as $slot): ?><input type="hidden" name="slots[]" value="<?= h($slot['schedule']['id'] . '|' . $slot['utc']) ?>"><?php endforeach; ?>
+                <button class="btn btn-primary btn-small" type="submit">Take all <?= h(mb_strtolower($block['label'])) ?> (<?= count($open) ?>)</button>
+            </form>
+            <?php endif; ?>
+        </div>
+        <ul class="dose-list">
+            <?php
+            $lastTime = null;
+            foreach ($blocks[$blockKey] as $slot) {
+                $time = $slot['local']->format('H:i');
+                if ($time !== $lastTime) {
+                    echo '<li class="dose-time">' . h($time) . '</li>';
+                    $lastTime = $time;
+                }
+                render_dose_item($slot, 'index.php#block-' . $blockKey);
+            }
+            ?>
+        </ul>
+    </div>
+    <?php endforeach; ?>
     <?php endif; ?>
 </section>
 <?php endif; ?>
@@ -242,6 +338,18 @@ render_header('Today', 'today');
 </section>
 <?php endif; ?>
 
+<?php if (in_array('pregnancy', $careAreas, true) && ($preg = active_pregnancy($uid))): $pregNext = pregnancy_next(pregnancy_timeline($preg, $today)); ?>
+<section class="card">
+    <div class="card-head">
+        <h2>&#x1F930; <?= h(gestation_label($preg, $today)) ?></h2>
+        <a class="btn btn-small" href="<?= h(url('pregnancy.php')) ?>">Pregnancy</a>
+    </div>
+    <p>Due <?= h(date('j F', strtotime($preg['due_date']))) ?><?php if ($pregNext): ?> · Next: <a href="<?= h(url('pregnancy.php#item-' . $pregNext['key'])) ?>"><?= h($pregNext['label']) ?></a>
+        <span class="muted small"><?= $pregNext['state'] === 'now' ? 'now' : 'from ' . h($pregNext['from_date']->format('j M')) ?></span><?php endif; ?></p>
+    <p class="small"><a href="<?= h(url('pregnancy.php#call')) ?>">Something not right? Who to call</a></p>
+</section>
+<?php endif; ?>
+
 <?php if ($comingUp || $cycleNote || $expiring): ?>
 <section class="card" id="coming-up">
     <div class="card-head">
@@ -293,7 +401,7 @@ render_header('Today', 'today');
 <?php foreach ($careToday as $key => $c): $area = CARE_AREAS[$key]; [$careDone, $careDue] = $c['progress']; ?>
 <section class="card" id="care-<?= h($key) ?>">
     <div class="card-head">
-        <h2><?= $area['icon'] ?> <?= h($area['title']) ?> <span class="muted small">(<?= $careDone ?> of <?= $careDue ?> done<?= $c['streak'] > 1 ? ' · ' . $c['streak'] . ' days in a row' : '' ?>)</span></h2>
+        <h2><?= $area['icon'] ?> <?= h($area['title']) ?> <span class="muted small">(<?= $careDone ?> of <?= $careDue ?> done<?= $c['streak'] > 1 && !$user['hide_streaks'] ? ' · ' . $c['streak'] . ' days in a row' : '' ?>)</span></h2>
         <span class="inline-actions">
             <?php if ($key === 'sleep' && !sleep_nights($uid, $today)): ?>
             <a class="btn btn-small btn-primary" href="<?= h(url('care.php?area=sleep#log')) ?>">Log last night</a>

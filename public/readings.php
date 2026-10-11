@@ -44,7 +44,17 @@ if (is_post() && $def) {
             'INSERT INTO health_readings (user_id, metric, value1, value2, value3, context, notes, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             [$uid, $key, $values[0], $values[1], $values[2], $context ?: null, $notes ?: null, $recordedAt]
         );
-        flash('success', $def['label'] . ' saved.');
+        if ($key === 'blood_pressure' && ($bpAdvice = bp_advice((int) $values[0], (int) $values[1]))) {
+            flash('error', 'Saved. ' . $bpAdvice[1]);
+        } elseif ($key === 'blood_ketones') {
+            [$level, $advice] = ketone_advice((float) $values[0]);
+            flash($level === 'ok' ? 'success' : 'error', 'Saved. ' . $advice);
+        } elseif ($key === 'blood_glucose' && (float) $values[0] < 4.0) {
+            flash('error', 'Saved. Under 4 is a hypo: treat it now with 15 to 20 g of fast-acting sugar, then check again in 15 minutes. The hypo guide has a timer.');
+            redirect('hypo.php');
+        } else {
+            flash('success', $def['label'] . ' saved.');
+        }
         redirect('readings.php?metric=' . urlencode($key) . '&range=' . $range);
     }
 }
