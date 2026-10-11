@@ -27,6 +27,7 @@ if (!$med && ($preset = hormone_preset(get('preset')))) {
         'reason' => $preset['reason'], 'instructions' => $preset['instructions'] ?? '', 'is_private' => $preset['private'] ?? 0]);
     $rows = [editor_row(['dose_time' => $preset['time'], 'dose_amount' => $preset['amount'] ?? 1, 'days_mask' => $preset['days'] ?? EVERY_DAY,
         'every_days' => $preset['every'] ?? null, 'anchor_date' => isset($preset['every']) ? $todayYmd : null, 'cycle_phase' => $preset['phase'] ?? null,
+        'cycle_length' => $preset['cycle'][0] ?? null, 'cycle_from' => $preset['cycle'][1] ?? null, 'cycle_to' => $preset['cycle'][2] ?? null,
         'valid_from' => null, 'valid_to' => null], [], 'same', [])];
 }
 $errors = [];
@@ -138,6 +139,15 @@ if (is_post()) {
         if ($phase) {
             $mask = EVERY_DAY;
         }
+        // Part of a repeating cycle: days X to Y of every N days (from day 1), or of each calendar month.
+        $cycle = ['cycle_length' => null, 'cycle_from' => null, 'cycle_to' => null];
+        if (($r['repeat'] ?? '') === 'cycle' && $mode === 'same' && $form['course'] !== 'once') {
+            $monthly = ($r['cycle_kind'] ?? '') === 'month';
+            $phase = $monthly ? 'month' : 'cycle';
+            $cycle = ['cycle_length' => $monthly ? null : (int) ($r['cycle_length'] ?? 0), 'cycle_from' => (int) ($r['cycle_from'] ?? 0), 'cycle_to' => (int) ($r['cycle_to'] ?? 0)];
+            $anchor = $monthly ? null : (parse_date((string) ($r['cycle_start'] ?? ''))?->format('Y-m-d') ?: (string) $form['start_date']);
+            $mask = EVERY_DAY;
+        }
         if (($r['repeat'] ?? '') === 'every' && $mode === 'same' && $form['course'] !== 'once') {
             $n = (int) ($r['every_n'] ?? 0);
             $everyDays = ($r['every_unit'] ?? '') === 'days' ? $n : $n * 7;
@@ -156,7 +166,15 @@ if (is_post()) {
             'every_days' => $everyDays,
             'anchor_date' => $anchor,
             'cycle_phase' => $phase,
-        ];
+        ] + $cycle;
+        if (in_array($phase, ['cycle', 'month'], true)) {
+            $max = $phase === 'month' ? 31 : $cycle['cycle_length'];
+            if ($phase === 'cycle' && ($max < 2 || $max > 366)) {
+                $errors[] = 'Dose ' . (count($rows) + 1) . ': enter how long each cycle is, from 2 to 366 days.';
+            } elseif ($cycle['cycle_from'] < 1 || $cycle['cycle_to'] < $cycle['cycle_from'] || $cycle['cycle_to'] > $max) {
+                $errors[] = 'Dose ' . (count($rows) + 1) . ": enter which days of the cycle to take it, from day 1 to day $max.";
+            }
+        }
         $n = count($rows) + 1;
         if ($everyDays !== null && ($everyDays < 1 || $everyDays > 730)) {
             $errors[] = "Dose $n: enter how often, from every 1 day to every 104 weeks.";
@@ -254,7 +272,7 @@ if (is_post()) {
                 // stays attached; prefer the one that already has the same amount.
                 $pool = array_values(array_intersect($r['ids'], $existing));
                 foreach (editor_row_doses($r) as [$amount, $mask]) {
-                    $params = [$r['dose_time'] . ':00', $amount, $mask, $r['every_days'], $r['anchor_date'], $r['cycle_phase'], $r['valid_from'], $r['valid_to']];
+                    $params = [$r['dose_time'] . ':00', $amount, $mask, $r['every_days'], $r['anchor_date'], $r['cycle_phase'], $r['cycle_length'], $r['cycle_from'], $r['cycle_to'], $r['valid_from'], $r['valid_to']];
                     $match = null;
                     foreach ($pool as $i => $sid) {
                         if ((float) $current[$sid]['dose_amount'] === $amount) {
@@ -266,8 +284,8 @@ if (is_post()) {
                     if ($match === null) {
                         // A new dose time: from the split day if the medicine was already being taken.
                         $validFrom = $startDate < $newFrom->format('Y-m-d') ? max((string) $r['valid_from'], $newFrom->format('Y-m-d')) : $r['valid_from'];
-                        q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, every_days, anchor_date, cycle_phase, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                            [$r['dose_time'] . ':00', $amount, $mask, $r['every_days'], $r['anchor_date'], $r['cycle_phase'], $validFrom, $r['valid_to'], $medId]);
+                        q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, every_days, anchor_date, cycle_phase, cycle_length, cycle_from, cycle_to, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                            [$r['dose_time'] . ':00', $amount, $mask, $r['every_days'], $r['anchor_date'], $r['cycle_phase'], $r['cycle_length'], $r['cycle_from'], $r['cycle_to'], $validFrom, $r['valid_to'], $medId]);
                         continue;
                     }
                     $sid = $pool[$match];
@@ -275,15 +293,15 @@ if (is_post()) {
                     $old = $current[$sid];
                     $kept[] = $sid;
                     $sameDose = substr($old['dose_time'], 0, 5) === $r['dose_time'] && (float) $old['dose_amount'] === $amount && (int) $old['days_mask'] === $mask
-                        && (int) $old['every_days'] === (int) $r['every_days'] && (string) $old['anchor_date'] === (string) $r['anchor_date'] && (string) $old['cycle_phase'] === (string) $r['cycle_phase'];
+                        && (int) $old['every_days'] === (int) $r['every_days'] && (string) $old['anchor_date'] === (string) $r['anchor_date'] && (string) $old['cycle_phase'] === (string) $r['cycle_phase'] && cycle_key($old) === cycle_key($r);
                     $split = $splitDay($sid);
                     if ($sameDose || !$hasHistory($old, $split)) {
-                        q('UPDATE medication_schedules SET dose_time = ?, dose_amount = ?, days_mask = ?, every_days = ?, anchor_date = ?, cycle_phase = ?, valid_from = ?, valid_to = ? WHERE id = ?', [...$params, $sid]);
+                        q('UPDATE medication_schedules SET dose_time = ?, dose_amount = ?, days_mask = ?, every_days = ?, anchor_date = ?, cycle_phase = ?, cycle_length = ?, cycle_from = ?, cycle_to = ?, valid_from = ?, valid_to = ? WHERE id = ?', [...$params, $sid]);
                         continue;
                     }
                     q('UPDATE medication_schedules SET valid_to = ? WHERE id = ?', [$split->modify('-1 day')->format('Y-m-d'), $sid]);
-                    q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, every_days, anchor_date, cycle_phase, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                        [$r['dose_time'] . ':00', $amount, $mask, $r['every_days'], $r['anchor_date'], $r['cycle_phase'], max((string) $r['valid_from'], $split->format('Y-m-d')), $r['valid_to'], $medId]);
+                    q('INSERT INTO medication_schedules (dose_time, dose_amount, days_mask, every_days, anchor_date, cycle_phase, cycle_length, cycle_from, cycle_to, valid_from, valid_to, medication_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [$r['dose_time'] . ':00', $amount, $mask, $r['every_days'], $r['anchor_date'], $r['cycle_phase'], $r['cycle_length'], $r['cycle_from'], $r['cycle_to'], max((string) $r['valid_from'], $split->format('Y-m-d')), $r['valid_to'], $medId]);
                 }
             }
             // Removed dose times: end them (keeping their history), or delete them if they were never in use.
@@ -312,7 +330,7 @@ if (is_post()) {
         $changes = [];
         if (!$med) {
             record_med_change($uid, $medId, $saved['start_date'], 'started',
-                'Started ' . trim(($saved['strength'] ?? '') . ' ' . medication_regimen($saved, $newSchedules)), $changeReason);
+                'Started ' . trim(($saved['strength'] ?? '') . ' ' . medication_regimen($saved, $newSchedules, false)), $changeReason);
         } else {
             $changes = describe_med_changes($med, $oldSchedules, $saved, $newSchedules, $changeDate);
             foreach ($changes as [$kind, $summary]) {
@@ -323,6 +341,9 @@ if (is_post()) {
         $thyroidNote = (!$med || $changes) && preg_match('/oestr|estrad|estrogen|HRT|combined/i', $form['name'] . ' ' . $form['reason']) && thyroid_meds(user_medications($uid))
             ? ' Oestrogen can change how much thyroid medicine you need: ask your GP whether to check your TSH in 6 to 8 weeks.' : '';
         flash('success', $form['name'] . ($med ? ' updated.' : ' added.') . ($changes ? ' Change recorded: ' . lcfirst($changes[0][1]) . '.' : '') . $thyroidNote);
+        foreach (allergy_conflicts(user_allergies($uid, true), [['id' => 0, 'name' => $form['name'], 'brand' => $form['brand']]])[0] ?? [] as $a) {
+            flash('error', allergy_conflict_text(['name' => $form['name']], $a));
+        }
         redirect('medications.php');
     }
 }
@@ -358,18 +379,34 @@ function render_schedule_row(string $index, array $row): void
 
         <div class="mode-same">
             <label class="amount-field">Amount <input type="number" min="0.01" step="any" inputmode="decimal" name="<?= $name('amount') ?>" value="<?= h(num($row['dose_amount'] ?? '')) ?>"></label>
-            <?php $every = (int) ($row['every_days'] ?? 0); $luteal = ($row['cycle_phase'] ?? null) === 'luteal'; $id = fn (string $f) => 'row-' . h($index) . '-' . $f; ?>
+            <?php $every = (int) ($row['every_days'] ?? 0); $luteal = ($row['cycle_phase'] ?? null) === 'luteal'; $inCycle = in_array($row['cycle_phase'] ?? null, ['cycle', 'month'], true); $monthly = ($row['cycle_phase'] ?? null) === 'month'; $id = fn (string $f) => 'row-' . h($index) . '-' . $f; ?>
             <div class="repeat-choice" role="radiogroup" aria-label="Repeats">
-                <label class="check"><input type="radio" name="<?= $name('repeat') ?>" value="days" id="<?= $id('days') ?>"<?= checked(!$every && !$luteal) ?>> On these days</label>
+                <label class="check"><input type="radio" name="<?= $name('repeat') ?>" value="days" id="<?= $id('days') ?>"<?= checked(!$every && !$luteal && !$inCycle) ?>> On these days</label>
                 <label class="check"><input type="radio" name="<?= $name('repeat') ?>" value="luteal" id="<?= $id('luteal') ?>"<?= checked($luteal) ?>> Only in the 2 weeks before a period <span class="muted small">(from your cycle in Care)</span></label>
                 <label class="check"><input type="radio" name="<?= $name('repeat') ?>" value="every" id="<?= $id('every') ?>"<?= checked((bool) $every) ?>> Every few days or weeks <span class="muted small">(e.g. injections)</span></label>
+                <label class="check"><input type="radio" name="<?= $name('repeat') ?>" value="cycle" id="<?= $id('cycle') ?>"<?= checked($inCycle) ?>> Some days of a repeating cycle <span class="muted small">(e.g. sequential HRT)</span></label>
+            </div>
+            <div class="cycle-fields" data-show-when="<?= $id('cycle') ?>"<?= $inCycle ? '' : ' hidden' ?>>
+                <div class="row-fields">
+                    <label>From day <input type="number" name="<?= $name('cycle_from') ?>" min="1" max="366" class="count-input" value="<?= h((string) ($row['cycle_from'] ?? '')) ?>"></label>
+                    <label>to day <input type="number" name="<?= $name('cycle_to') ?>" min="1" max="366" class="count-input" value="<?= h((string) ($row['cycle_to'] ?? '')) ?>"></label>
+                </div>
+                <div class="repeat-choice" role="radiogroup" aria-label="Of what">
+                    <label class="check"><input type="radio" name="<?= $name('cycle_kind') ?>" value="cycle" id="<?= $id('kind-cycle') ?>"<?= checked(!$monthly) ?>> of every
+                        <input type="number" name="<?= $name('cycle_length') ?>" min="2" max="366" class="count-input" aria-label="Days in each cycle" value="<?= h((string) ($row['cycle_length'] ?? 28)) ?>"> days</label>
+                    <label class="check"><input type="radio" name="<?= $name('cycle_kind') ?>" value="month" id="<?= $id('kind-month') ?>"<?= checked($monthly) ?>> of each calendar month <span class="muted small">(the dates, e.g. the 1st to the 14th)</span></label>
+                </div>
+                <div class="row-fields" data-show-when="<?= $id('kind-cycle') ?>"<?= $monthly ? ' hidden' : '' ?>>
+                    <label>Day 1 of a cycle <input type="date" name="<?= $name('cycle_start') ?>" value="<?= h((string) (!$monthly ? ($row['anchor_date'] ?? '') : '')) ?>"></label>
+                </div>
+                <p class="muted small">For example, progestogen on days 15 to 28 of every 28 days, or for 14 days every 13 weeks (days 78 to 91 of every 91). Pillbox only reminds you on those days.</p>
             </div>
             <div class="row-fields every-fields" data-show-when="<?= $id('every') ?>"<?= $every ? '' : ' hidden' ?>>
                 <label>Every <input type="number" name="<?= $name('every_n') ?>" min="1" max="104" class="count-input" value="<?= $every ? ($every % 7 === 0 ? $every / 7 : $every) : '' ?>"></label>
                 <label><span class="sr">Unit</span><select name="<?= $name('every_unit') ?>"><option value="weeks"<?= selected(!$every || $every % 7 === 0) ?>>weeks</option><option value="days"<?= selected($every && $every % 7 !== 0) ?>>days</option></select></label>
                 <label>First (or next) dose <input type="date" name="<?= $name('anchor') ?>" value="<?= h((string) ($row['anchor_date'] ?? '')) ?>"></label>
             </div>
-            <div class="days" role="group" aria-label="Days" data-show-when="<?= $id('days') ?>"<?= $every || $luteal ? ' hidden' : '' ?>>
+            <div class="days" role="group" aria-label="Days" data-show-when="<?= $id('days') ?>"<?= $every || $luteal || $inCycle ? ' hidden' : '' ?>>
                 <?php foreach (WEEKDAYS as $bit => $label): ?>
                 <label class="day"><input type="checkbox" name="<?= $name('days') ?>[]" value="<?= $bit ?>"<?= checked(($mask & $bit) !== 0) ?>><span><?= $label ?></span></label>
                 <?php endforeach; ?>

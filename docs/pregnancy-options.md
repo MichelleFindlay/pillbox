@@ -9,6 +9,8 @@ A private page for deciding what to do about a pregnancy, having an abortion, or
 - Reminders only ever say "You have a reminder".
 - **Delete everything** removes it all, straight away.
 
+![The start of the private Pregnancy options and aftercare page](images/pregnancy-options.png)
+
 ## What's on it
 
 - **Your options**: continuing the pregnancy, adoption and abortion, without recommending any of them, and what's usually available at each stage (with "You are here")

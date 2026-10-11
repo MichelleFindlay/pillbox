@@ -15,6 +15,8 @@ Ready-made reminders for routine and specific tests (full blood count, kidney an
 - **Related medicine**: Pillbox works out how long it had been since your last logged dose
 - **Lab's range**: copy it from the report if you like
 
+![TSH results with the lab's range, a target range from the GP, and a dose change marked](images/blood-tests-results.png)
+
 Each test gets a chart. Shaded bands show the lab's range and **your target range**: set one under **All results** (from your clinic, for example). Lab ranges follow the sex on your record, which often doesn't fit on hormones, so you can keep both. Pillbox only says where a result sits ("above your target range"); your clinic interprets it.
 
 Charts for TSH and free T4 show thyroid dose changes as dashed lines.

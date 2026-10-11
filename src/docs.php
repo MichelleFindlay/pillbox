@@ -4,7 +4,8 @@ declare(strict_types=1);
 /*
  * The documentation in docs/*.md, shown in the app at docs.php?p=<page> (and readable on GitHub).
  * A small, safe Markdown renderer: headings (with anchors), paragraphs, lists (one level of
- * nesting), code blocks, `code`, **bold** and [links]; links to other .md pages stay in the app.
+ * nesting), code blocks, `code`, **bold**, [links] and screenshots (docs/images, served by docs.php);
+ * links to other .md pages stay in the app.
  * help_link() makes the small "?" next to headings that opens the right page and section.
  */
 
@@ -12,7 +13,7 @@ const DOCS_DIR = APP_ROOT . '/docs';
 
 // Care categories and the documentation page for each.
 const CARE_DOC_PAGES = ['pregnancy' => 'pregnancy', 'pathway' => 'pregnancy-options', 'womens' => 'periods', 'menopause' => 'menopause', 'thyroid' => 'thyroid',
-    'diabetes' => 'diabetes', 'bp' => 'blood-pressure', 'migraine' => 'migraine', 'neuro' => 'adhd-autism', 'gender' => 'gender-affirming-care', 'bloods' => 'blood-tests'];
+    'diabetes' => 'diabetes', 'bp' => 'blood-pressure', 'migraine' => 'migraine', 'neuro' => 'adhd-autism', 'gender' => 'gender-affirming-care', 'bloods' => 'blood-tests', 'allergies' => 'allergies'];
 // Everything else is a section of care-categories.md, headed with the category's title.
 
 /** The "?" link to a documentation page (and section). */
@@ -93,6 +94,13 @@ function docs_render(string $markdown): array
         }
         if ($inCode) {
             $html .= h($line) . "\n";
+            continue;
+        }
+        // A screenshot on its own line: ![What it shows](images/name.png)
+        if (preg_match('#^!\[([^\]]*)\]\(images/([a-z0-9-]+\.png)\)$#', trim($line), $m)) {
+            $flush();
+            $closeLists();
+            $html .= '<figure class="docs-shot"><img src="' . h(url('docs.php?img=' . $m[2])) . '" alt="' . h($m[1]) . '" loading="lazy"><figcaption>' . h($m[1]) . '</figcaption></figure>';
             continue;
         }
         if (preg_match('/^(#{1,3})\s+(.*)$/', $line, $m)) {

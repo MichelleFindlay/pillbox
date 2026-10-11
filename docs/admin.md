@@ -6,6 +6,8 @@ For people who run a Pillbox. Installation is in the main [README](../README.md)
 
 **Admin** (the shield icon) lists everyone: sign-in methods, medicines, last sign-in and status. **Manage** disables or enables an account, makes or removes an admin, unlinks a sign-in, resets a password, or deletes a user and all their data. **Add a user** creates a local account, or pre-registers someone for Microsoft or another single sign-on by email.
 
+![The Admin page](images/admin.png)
+
 ## Sign-ups
 
 **Site settings → Sign-ups**:
@@ -18,7 +20,7 @@ People agree to the terms and privacy policy when they sign up. Single sign-on p
 
 ## Site settings
 
-Saved to `config/settings.php` (which overrides `config/config.php`): site name and address, default time zone, update checks, tidy addresses, email (PHP mail or SMTP), the scheduled tasks token, sign-ups, terms and privacy, connected services, and demo mode. If the `config/` folder isn't writable, Pillbox shows what to paste into `config.php` instead.
+Saved to `config/settings.php` (which overrides `config/config.php`): site name and address, default time zone, update checks, weather for the headache diary (Open-Meteo), tidy addresses, email (PHP mail or SMTP), the scheduled tasks token, sign-ups, terms and privacy, connected services, and demo mode. If the `config/` folder isn't writable, Pillbox shows what to paste into `config.php` instead.
 
 ## Terms and privacy
 
@@ -30,7 +32,7 @@ To let people connect WHOOP, Fitbit, Withings or Oura, register a free app with 
 
 ## Scheduled tasks
 
-Reminders, notifications, email, connected app syncs and tidying up run on a schedule. Run every 5 minutes:
+Reminders, notifications, email, connected app syncs, the check for a new version on GitHub and tidying up run on a schedule. Run every 5 minutes:
 
 ```
 */5 * * * * php /path/to/pillbox/bin/cron.php

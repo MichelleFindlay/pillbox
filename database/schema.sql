@@ -146,7 +146,12 @@ CREATE TABLE IF NOT EXISTS medication_schedules (
     days_mask      TINYINT UNSIGNED NOT NULL DEFAULT 127,
     every_days     SMALLINT UNSIGNED NULL,   -- set: every N days from anchor_date instead of on weekdays (e.g. injections every 3 weeks)
     anchor_date    DATE          NULL,      -- the first dose of an every-N-days schedule
-    cycle_phase    VARCHAR(10)   NULL,      -- 'luteal': only in the 2 weeks before a period (e.g. SSRIs for PMDD)
+    cycle_phase    VARCHAR(10)   NULL,      -- 'luteal': only in the 2 weeks before a period (e.g. SSRIs for PMDD);
+                                            -- 'cycle': days cycle_from to cycle_to of a repeating cycle_length-day cycle, day 1 = anchor_date;
+                                            -- 'month': the cycle_from to cycle_to of each calendar month (e.g. sequential HRT)
+    cycle_length   SMALLINT UNSIGNED NULL,
+    cycle_from     SMALLINT UNSIGNED NULL,
+    cycle_to       SMALLINT UNSIGNED NULL,
     valid_from     DATE          NULL,
     valid_to       DATE          NULL,
     PRIMARY KEY (id),
@@ -976,6 +981,72 @@ CREATE TABLE IF NOT EXISTS episode_meds (
     PRIMARY KEY (id),
     KEY ix_episode_meds (episode_id),
     CONSTRAINT fk_episode_meds FOREIGN KEY (episode_id) REFERENCES headache_episodes (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Allergies (Care): allergies, intolerances and side effects. drug_class: a medicine group to check
+-- Meds against too (see DRUG_ALLERGY_CLASSES). status 'resolved': no longer current (kept as a record).
+CREATE TABLE IF NOT EXISTS allergies (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id       INT UNSIGNED NOT NULL,
+    allergen      VARCHAR(120)  NOT NULL,
+    category      VARCHAR(12)   NOT NULL DEFAULT 'other',
+    drug_class    VARCHAR(20)   NULL,
+    kind          VARCHAR(12)   NOT NULL DEFAULT 'allergy',  -- allergy | intolerance | side_effect
+    reactions     VARCHAR(200)  NULL,
+    severity      VARCHAR(12)   NULL,                      -- mild | moderate | severe | anaphylaxis
+    confirmed     VARCHAR(10)   NULL,
+    since         VARCHAR(40)   NULL,
+    notes         VARCHAR(1000) NULL,
+    status        VARCHAR(10)   NOT NULL DEFAULT 'current',
+    resolved_on   DATE          NULL,
+    resolved_note VARCHAR(200)  NULL,
+    created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_allergies_user (user_id),
+    CONSTRAINT fk_allergies_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- "No known allergies" (and when it was recorded), and adrenaline auto-injectors.
+CREATE TABLE IF NOT EXISTS allergy_profiles (
+    user_id       INT UNSIGNED NOT NULL,
+    none_known    TINYINT(1)    NOT NULL DEFAULT 0,
+    none_known_on DATE          NULL,
+    aai           TINYINT(1)    NOT NULL DEFAULT 0,
+    aai_brand     VARCHAR(40)   NULL,
+    aai_where     VARCHAR(120)  NULL,
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_allergy_profile_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Weather for the headache diary (Migraine): the town chosen (coordinates rounded to ~10 km), and daily
+-- weather there from Open-Meteo: mean sea-level pressure (hPa), how far it fell from the day before's
+-- (negative: rose), temperatures (°C), mean humidity (%) and rain (mm). forecast = 1 for days still ahead.
+CREATE TABLE IF NOT EXISTS weather_places (
+    user_id     INT UNSIGNED NOT NULL,
+    name        VARCHAR(120)  NOT NULL,
+    latitude    DECIMAL(4,1)  NOT NULL,
+    longitude   DECIMAL(5,1)  NOT NULL,
+    fetched_at  DATETIME      NULL,
+    last_error  VARCHAR(300)  NULL,
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_weather_place_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS weather_days (
+    user_id        INT UNSIGNED NOT NULL,
+    day            DATE          NOT NULL,
+    pressure       DECIMAL(5,1)  NOT NULL,
+    pressure_fall  DECIMAL(4,1)  NULL,
+    temp_max       DECIMAL(4,1)  NULL,
+    temp_min       DECIMAL(4,1)  NULL,
+    humidity       TINYINT UNSIGNED NULL,
+    rain           DECIMAL(5,1)  NULL,
+    pollen_grass   SMALLINT UNSIGNED NULL,  -- highest hourly count that day, grains/m³ (Europe only; Allergies)
+    pollen_tree    SMALLINT UNSIGNED NULL,  -- alder, birch or olive, whichever is highest
+    pollen_weed    SMALLINT UNSIGNED NULL,  -- mugwort or ragweed
+    forecast       TINYINT(1)    NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day),
+    CONSTRAINT fk_weather_day_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Blood pressure (Care): monitor, home target set by a clinician, sick-day rules given, and the home monitoring week.

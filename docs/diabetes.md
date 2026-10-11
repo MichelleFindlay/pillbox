@@ -6,6 +6,8 @@ For type 1, type 2 and other types. Set your type, glucose target range (usually
 
 Your latest glucose, **time in range** over 14 days (very low, low, in range, high, very high), lows in the last 30 days, HbA1c and ketones, then a chart and a table by time of day (night, morning, afternoon, evening). With cycle tracking, it compares glucose before a period with other times. Log glucose in Readings, or connect a CGM.
 
+![Time in range, the 14-day chart and patterns by time of day](images/diabetes-glucose.png)
+
 ## CGM and Nightscout
 
 Nightscout is a free, self-hosted service that collects readings from Libre, Dexcom and other CGMs. Under **CGM: connect Nightscout**, enter its address and an access token with the "readable" role (Nightscout Admin tools → Subjects). Pillbox imports the last 2 weeks, then keeps up to date about once an hour, including insulin and carbs.
@@ -22,6 +24,8 @@ Log basal, bolus and correction doses with carbs and glucose before, with daily 
 
 **Hypo guide** (also opened when you log glucose under 4): 15 to 20 g of fast-acting sugar, a 15-minute timer, recheck and repeat, then a longer-acting snack. If someone can't swallow or is unconscious: recovery position and 999. **Log this hypo** records it.
 
+![The hypo guide](images/hypo-guide.png)
+
 ## Sick days
 
 **I'm unwell: sick-day rules** turns on a reminder (on Today too): check glucose every 2 to 4 hours, ketones if needed, keep drinking, never stop insulin, and pause other medicines only if your team has said so. **I'm better now** turns it off.
@@ -30,8 +34,12 @@ Log basal, bolus and correction doses with carbs and glucose before, with daily 
 
 If you drive and take insulin or tablets that can cause hypos, enter your glucose before driving: above 5 is OK ("five to drive"); otherwise don't drive. Check every 2 hours on long journeys.
 
+![The "five to drive" check](images/diabetes-driving.png)
+
 ## Annual care checks
 
 A done / due list: HbA1c, blood pressure, cholesterol, kidney function, urine albumin, foot check, weight, smoking status, and diabetic eye screening (a separate invitation). **Track all the annual checks** adds them as reminders.
+
+![Annual care checks, done and due](images/diabetes-annual.png)
 
 **Clinician summary** prints medicines, HbA1c, time in range, hypos, ketones, insulin, annual checks, blood pressure and weight.

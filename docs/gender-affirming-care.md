@@ -2,6 +2,8 @@
 
 A private page, like Pregnancy options: everything is encrypted (including photos), it can have its own **PIN**, it's never shared, and **Delete everything** removes it all.
 
+![The start of the private Gender-affirming care page](images/gender-affirming-care.png)
+
 - **Your care**: gender identity clinic and referral date (Pillbox shows how long you've waited), first appointment, who prescribes (GIC, GP under shared care, or private), and your shared care agreement with a reminder a month before it needs renewing
 - **Hormones**: your hormones with dose and stock, and one-tap set-ups (testosterone gel or injections every 2 to 3 or 10 to 14 weeks, oestradiol patches, gel, spray, tablets or injections, progesterone, blockers, anti-androgens), marked private. Set your own dose, including low or micro doses.
 - **Fertility**: a note and an optional reminder to talk about fertility preservation

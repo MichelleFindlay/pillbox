@@ -2,6 +2,8 @@
 
 An optional space for mental health. Switch it on or off in your health profile.
 
+![A Mind check-in](images/mind.png)
+
 ## Help now
 
 The **Help** button in the top bar is always one tap away and is never locked. It lists UK crisis lines (Samaritans on 116 123, NHS 111 option 2, and others you can edit), your own contacts, and your safety plan. If you're in danger now, call 999.

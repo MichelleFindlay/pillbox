@@ -5,6 +5,18 @@
  */
 require __DIR__ . '/../src/bootstrap.php';
 
+// Screenshots: docs.php?img=<name>.png, from docs/images only.
+if (get('img') !== '') {
+    $file = DOCS_DIR . '/images/' . get('img');
+    if (!preg_match('/^[a-z0-9-]+\.png$/', get('img')) || !is_file($file)) {
+        not_found();
+    }
+    header('Content-Type: image/png');
+    header('Cache-Control: public, max-age=86400');
+    readfile($file);
+    exit;
+}
+
 $page = get('p') !== '' ? get('p') : 'README';
 $source = docs_source($page);
 if ($source === null) {

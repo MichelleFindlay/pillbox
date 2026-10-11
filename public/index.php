@@ -144,6 +144,14 @@ render_header('Today', 'today');
 </div>
 <?php endif; ?>
 
+<?php if (in_array('migraine', $careAreas, true) && weather_enabled() && ($fallAhead = weather_fall_ahead($uid, local_today()))
+    && (weather_patterns($uid, local_today())['rows']['fall']['likelier'] ?? false)): ?>
+<div class="flash flash-info notice-row" role="status">
+    <span>Air pressure is forecast to fall <?= $fallAhead[0] === local_today()->format('Y-m-d') ? 'today' : 'tomorrow' ?>. Your headaches have been more likely on days like this: keep your usual treatment to hand.</span>
+    <a class="btn btn-small" href="<?= h(url('care.php?area=migraine#mg-weather')) ?>">Weather</a>
+</div>
+<?php endif; ?>
+
 <div class="flash install-banner" hidden>
     <span>Add Pillbox to your home screen to use it like an app.</span>
     <span class="inline-actions">

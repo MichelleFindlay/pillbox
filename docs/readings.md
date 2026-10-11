@@ -2,6 +2,8 @@
 
 The **Readings** tab holds measurements: blood pressure, heart rate, blood glucose, ketones, weight, temperature, oxygen level, breathing rate, peak flow, INR, cholesterol, pain, mood, sleep, fluids, steps, heart rate variability, calories and symptoms. Choose which ones you see in **Account → Health profile**, or add your own.
 
+![Blood glucose readings, with the trend chart](images/readings.png)
+
 ## Logging a reading
 
 Pick the measurement, enter the value, when it was taken, and optionally the context (for example "Before meal" for glucose) and notes. Each measurement has a chart and averages.

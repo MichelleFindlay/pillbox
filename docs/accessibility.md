@@ -9,6 +9,8 @@
 - **Hide streaks**: no "days in a row" counts
 - **"Did you take it?" follow-up**: a gentle notification 15, 30 or 60 minutes after a dose reminder if it isn't logged yet
 
+![Display and reminders settings](images/accessibility.png)
+
 ## Built in for everyone
 
 - **No blame**: doses not logged say "Not logged"; skipping is just a record

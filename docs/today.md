@@ -2,6 +2,8 @@
 
 Today shows what to take, what's coming up, and anything that needs your attention.
 
+![Today for Nell, the demo account: running-low notices, appointments and yesterday's doses](images/today.png)
+
 ## Now and next
 
 At the top of your doses:
@@ -10,6 +12,10 @@ At the top of your doses:
 - **Next**: the next dose and how long until it
 - A **timeline** of the day: each dose as a dot (green taken, grey skipped, amber not logged, coloured due, blue later), with a line for now
 - **Timer**: a visual countdown, for anything from waiting for a medicine to work to a break
+
+![Now and Next, the timeline of the day, and doses by part of the day](images/today-doses.png)
+
+![The visual timer](images/timer.png)
 
 ## Doses
 

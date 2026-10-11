@@ -59,6 +59,9 @@ $export = [
     'headaches'       => q('SELECT e.started_at, e.ended_at, e.severity, e.location, e.migraine, e.aura, e.symptoms, e.triggers, e.notes,
                               (SELECT GROUP_CONCAT(CONCAT(m.name, " at ", m.taken_at, IFNULL(CONCAT(" helped ", m.helped), "")) SEPARATOR "; ") FROM episode_meds m WHERE m.episode_id = e.id) AS medicines
                           FROM headache_episodes e WHERE e.user_id = ? ORDER BY e.started_at', [$uid])->fetchAll(),
+    'allergies'       => q('SELECT allergen, category, drug_class, kind, reactions, severity, confirmed, since, notes, status, resolved_on, resolved_note FROM allergies WHERE user_id = ? ORDER BY id', [$uid])->fetchAll(),
+    'allergy_settings' => q('SELECT none_known, none_known_on, aai, aai_brand, aai_where FROM allergy_profiles WHERE user_id = ?', [$uid])->fetch() ?: null,
+    'weather_town'    => q('SELECT name, latitude, longitude FROM weather_places WHERE user_id = ?', [$uid])->fetch() ?: null,
     'diabetes'        => q('SELECT type, target_low, target_high, hba1c_target, drives, sick_since FROM diabetes_profiles WHERE user_id = ?', [$uid])->fetch() ?: null,
     'insulin_and_carbs' => q('SELECT taken_at, kind, units, carbs, glucose, notes FROM insulin_logs WHERE user_id = ? ORDER BY taken_at', [$uid])->fetchAll(),
     'hypos'           => q('SELECT at, glucose, treated_with, notes FROM hypo_events WHERE user_id = ? ORDER BY at', [$uid])->fetchAll(),

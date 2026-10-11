@@ -2,7 +2,9 @@
 
 The **Care** tab is for looking after yourself beyond medicines. Switch categories on in **Account → Health profile**: only the ones you choose appear.
 
-Categories include dental, eyes, sleep, activity and rehab, respiratory, diabetes, blood pressure, thyroid, migraine, blood tests, prescriptions and payments, feet, periods and contraception, menopause, pregnancy, hearing, skin, mobility, emergency and first aid, sharps and disposal, screening, vaccinations, ADHD and autism, and gender-affirming care. Some appear only if they fit your [body inventory](account.md#body-inventory).
+![Care: what's coming up, and the categories switched on](images/care.png)
+
+Categories include dental, eyes, sleep, activity and rehab, respiratory, allergies, diabetes, blood pressure, thyroid, migraine, blood tests, prescriptions and payments, feet, periods and contraception, menopause, pregnancy, hearing, skin, mobility, emergency and first aid, sharps and disposal, screening, vaccinations, ADHD and autism, and gender-affirming care. Some appear only if they fit your [body inventory](account.md#body-inventory).
 
 ## Routines
 
@@ -17,6 +19,8 @@ Things due now and then, each tracked the way that suits it:
 - **Stock to keep up**: test strips, needles, pens
 - **Fill level**: a sharps bin
 - **Kit contents**: a first aid or hypo kit
+
+![Checks in Emergency and first aid: expiry dates and a first aid kit](images/care-checks.png)
 
 **Done** records it and works out the next date. Anything due soon shows under **Coming up** on Today, and as a calendar event.
 

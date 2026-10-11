@@ -94,6 +94,7 @@ function legal_default_privacy(): string
         $connections ? '- **Connected apps** (' . implode(', ', $connections) . '): only if you connect one. We then fetch readings from that service using the access you gave, and you can disconnect at any time.' : null,
         dmd_enabled() ? '- **NHS medicines dictionary**: when you search for a medicine, only the words you type are sent to the NHS England Terminology Server, never anything about you.' : null,
         '- **Apple Health and Health Connect**: only if you import a file or set up the sync link yourself.',
+        weather_enabled() ? '- **Weather** (Migraine): only if you add your town. Its location, to about 10 km, is sent to Open-Meteo to get the weather there; nothing about you or your headaches is sent.' : null,
         sso_enabled() ? '- **Single sign-on**: if you sign in with a provider (such as Microsoft or Google), they tell us who you are (name, email and an ID). We don\'t get your password.' : null,
     ]);
     $optionalText = implode("\n", $optional);

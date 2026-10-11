@@ -11,8 +11,21 @@ Tap an appointment to open it:
 - **Suggested topics** from what you've recorded since last time
 - **After the appointment**: what was decided, and actions agreed
 
+![An appointment with questions to ask and suggested topics](images/appointment.png)
+
 **Print / save as PDF** gives a one-page sheet. If you've filled in a [communication passport](adhd-autism.md#communication-passport), it's printed on it too.
 
 ## Your calendar
 
-**Add to your calendar** makes a private link that Apple, Google or Outlook calendars can subscribe to, so appointments (and Care reminders) appear there automatically. Anyone with the link can see your appointments, so **Make a new link** if it's ever shared by mistake.
+**Add to your calendar** makes a private link that Apple, Google, Outlook or Proton calendars can subscribe to, so appointments (and Care reminders) appear there automatically. Anyone with the link can see your appointments, so **Make a new link** if it's ever shared by mistake.
+
+### Proton Calendar
+
+1. In Pillbox, press **Copy** next to your calendar link.
+2. Go to [calendar.proton.me](https://calendar.proton.me) on the web (subscriptions can't be added in Proton's apps).
+3. Press **+** next to **My calendars** (or go to **Settings → Calendars → Other calendars**) and choose **Add calendar from URL**.
+4. Paste the link, choose a name and colour, and press **Add calendar**.
+
+It then appears in Proton's phone and desktop apps too. Proton checks for changes every 4 to 16 hours, so new appointments can take a while to show up. A subscribed calendar counts towards the number of calendars your Proton plan allows.
+
+Proton, Google and the others fetch the link from the internet, so your Pillbox needs to be reachable from outside your home network.

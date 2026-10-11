@@ -320,7 +320,7 @@ render_header('Admin', 'admin');
 <?php $lastRun = tasks_last_run(); ?>
 <section class="card" id="tasks">
     <h2>Scheduled tasks</h2>
-    <p>Emails (daily summaries, appointment reminders, update notices) and tidying up happen in the scheduled tasks.
+    <p>Emails (daily summaries, appointment reminders, update notices), the check for a new version on GitHub and tidying up happen in the scheduled tasks.
         <?php if ($lastRun): ?>They last ran <strong><?= h(local_time(gmdate('Y-m-d H:i:s', (int) $lastRun['ran_at']), 'j M Y, H:i')) ?></strong>.
         <?php else: ?><strong>They haven't run yet.</strong><?php endif; ?></p>
     <?php if ($lastRun && $lastRun['ran_at'] < time() - 3600): ?><p class="flash flash-warning">That was over an hour ago: check the cron job is still set up.</p><?php endif; ?>
@@ -347,7 +347,8 @@ render_header('Admin', 'admin');
             <span class="warn"><?= h($latest['error']) ?></span>
         <?php endif; ?>
     </p>
-    <?php if ($latest !== null): ?><p class="muted small">Last checked <?= h(local_time(gmdate('Y-m-d H:i:s', $latest['checked_at']), 'j M Y, H:i')) ?>.</p><?php endif; ?>
+    <?php if ($latest !== null): ?><p class="muted small">Last checked <?= h(local_time(gmdate('Y-m-d H:i:s', $latest['checked_at']), 'j M Y, H:i')) ?>, and again each time the scheduled tasks run.
+        <?php if ($latest['version'] !== null && $latest['error']): ?><span class="warn">That check failed (<?= h($latest['error']) ?>), so this is the last release found.</span><?php endif; ?></p><?php endif; ?>
     <?php $problems = updater_problems(); if (update_available($latest)): ?>
         <?php if (!$problems): ?>
         <form method="post" class="inline-actions" data-confirm="Install Pillbox <?= h($latest['version']) ?> now? The current files are backed up first.">

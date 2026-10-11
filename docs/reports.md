@@ -14,6 +14,8 @@ Each prints as one page (or save it as a PDF from the print dialog):
 - **Menopause**, **premenstrual symptoms**, **thyroid**, **diabetes**, **blood pressure** and **migraine** summaries, from each Care page
 - **Communication passport** and **assessment prep** (ADHD and autism)
 
+![The doctor's report](images/report.png)
+
 Your pronouns, if you've added them, appear next to your name.
 
 ## Downloading your data

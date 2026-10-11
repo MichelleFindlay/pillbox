@@ -137,7 +137,7 @@ render_header('Appointments', 'appointments');
 <section class="card" id="subscribe">
     <h2>Add to your calendar</h2>
     <?php if (!$feedUrl): ?>
-        <p>Get a private link that shows your appointments in your phone or computer calendar &mdash; Apple Calendar, Google Calendar, Outlook and others. It updates by itself when you add or change appointments here.</p>
+        <p>Get a private link that shows your appointments in your phone or computer calendar &mdash; Apple Calendar, Google Calendar, Outlook, Proton Calendar and others. It updates by itself when you add or change appointments here.</p>
         <form method="post">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="calendar_create">
@@ -160,8 +160,11 @@ render_header('Appointments', 'appointments');
                 <li><strong>iPhone/iPad:</strong> tap <em>Apple Calendar / Outlook</em> above, then <em>Subscribe</em>. Or Settings &rarr; Calendar &rarr; Accounts &rarr; Add Account &rarr; Other &rarr; Add Subscribed Calendar, and paste the link.</li>
                 <li><strong>Android / Google Calendar:</strong> tap <em>Google Calendar</em> above (on a computer), or in Google Calendar on the web choose <em>Other calendars &rarr; + &rarr; From URL</em> and paste the link. It then appears on your phone too.</li>
                 <li><strong>Outlook:</strong> <em>Add calendar &rarr; Subscribe from web</em>, and paste the link.</li>
+                <li><strong>Proton Calendar:</strong> copy the link above, then at <a href="https://calendar.proton.me" target="_blank" rel="noopener">calendar.proton.me</a> press <em>+</em> next to <em>My calendars</em> (or <em>Settings &rarr; Calendars &rarr; Other calendars</em>), choose <em>Add calendar from URL</em>, paste the link and press <em>Add calendar</em>.
+                    It has to be done on the web, then it shows in Proton's phone and desktop apps too. It counts towards the number of calendars your Proton plan allows.</li>
             </ul>
-            <p>Calendar apps check for changes every few hours, so a new appointment can take a little while to appear.</p>
+            <p>Calendar apps check for changes every few hours (Proton every 4 to 16 hours), so a new appointment can take a little while to appear.
+                They fetch the link from the internet, so it only works if this Pillbox can be reached from outside your home network.</p>
         </details>
         <form method="post" class="feed-options">
             <?= csrf_field() ?>

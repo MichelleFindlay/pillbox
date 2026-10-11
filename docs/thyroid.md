@@ -2,6 +2,10 @@
 
 For an underactive thyroid treated with levothyroxine (sometimes liothyronine).
 
+![Thyroid medicine, timing and spacing advice](images/thyroid.png)
+
+![Latest TSH and free T4, and when the next TSH test is due](images/thyroid-bloods.png)
+
 - **Your thyroid medicine**: one-tap set-ups for morning (empty stomach, 30 to 60 minutes before breakfast) or bedtime dosing. Missed a dose? Take it when you remember unless the next is nearly due; never take two together.
 - **Spacing**: Pillbox checks all your medicines and warns if calcium, iron, antacids or multivitamins with minerals are within 4 hours of your thyroid medicine (on the Meds page too).
 - **Brand**: record it each time you collect; changes are noted in the medicine's history.

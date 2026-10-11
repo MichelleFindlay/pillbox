@@ -68,6 +68,7 @@ function site_settings_from_post(): array
             'public_url' => $publicUrl,
             'default_timezone' => $tz,
             'update_check' => post('update_check') === '1',
+            'weather' => post('weather') === '1',
             'pretty_urls' => post('pretty_urls') === '1' ? null : false,
         ],
         'mail' => [
@@ -143,6 +144,7 @@ function site_settings_fields(): void
                 <select name="default_timezone"><?php foreach (DateTimeZone::listIdentifiers() as $zone): ?><option<?= selected($zone === $tz) ?>><?= h($zone) ?></option><?php endforeach; ?></select></label>
         </div>
         <label class="check"><input type="checkbox" name="update_check" value="1"<?= checked((bool) config('app.update_check', true)) ?>> <span>Check GitHub for new versions</span></label>
+        <label class="check"><input type="checkbox" name="weather" value="1"<?= checked(weather_enabled()) ?>> <span>Weather for the headache diary <span class="muted small">(from Open-Meteo, for people who add their town)</span></span></label>
         <label class="check"><input type="checkbox" name="pretty_urls" value="1"<?= checked(config('app.pretty_urls', null) !== false) ?>> <span>Tidy addresses without ".php" <span class="muted small">(when the server supports them)</span></span></label>
     </fieldset>
     <fieldset>

@@ -10,6 +10,8 @@ The way NICE recommends checking your blood pressure at home:
 2. Sit quietly for 5 minutes, then take a reading. Press **1-minute timer**, then take a second.
 3. Enter both (and your pulse), morning and evening, for 4 to 7 days.
 
+![A week of home monitoring, with the average so far](images/blood-pressure.png)
+
 The grid shows which mornings and evenings you've done. Day 1 is left out, and the rest are averaged and compared with your target. Share the result with your GP or practice nurse.
 
 Tick **Irregular heartbeat symbol** if your monitor shows one. If it keeps happening, tell your GP.
@@ -17,6 +19,8 @@ Tick **Irregular heartbeat symbol** if your monitor shows one. If it keeps happe
 ## Readings
 
 Morning and evening averages over 90 days, irregular heartbeat flags, and a chart with changes to your blood pressure medicines marked.
+
+![Morning and evening averages and the 90-day chart](images/blood-pressure-readings.png)
 
 ## Importing from your monitor
 
