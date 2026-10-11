@@ -101,7 +101,7 @@ render_header('Today', 'today');
 ?>
 <div class="page-head">
     <div>
-        <h1><?= h($today->format('l j F')) ?></h1>
+        <h1><?= h($today->format('l j F')) ?> <?= help_link('today', '', 'Today') ?></h1>
         <p class="muted"><?= $total ? "$taken of $total scheduled doses taken" : 'No scheduled doses today' ?></p>
     </div>
     <?php if ($total): ?>
@@ -223,7 +223,7 @@ render_header('Today', 'today');
 
 <?php if ($canDoses): ?>
 <section class="card">
-    <h2>Scheduled doses</h2>
+    <h2>Scheduled doses <?= help_link('today', 'doses', 'logging doses') ?></h2>
     <?php if (!$slots): ?>
         <p class="muted">Nothing scheduled for today. <a href="<?= h(url('medication_edit.php')) ?>">Add a medication</a> to get started.</p>
     <?php else: ?>

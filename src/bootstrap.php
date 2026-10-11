@@ -41,6 +41,7 @@ require APP_ROOT . '/src/thyroid.php';
 require APP_ROOT . '/src/diabetes.php';
 require APP_ROOT . '/src/migraine.php';
 require APP_ROOT . '/src/bp.php';
+require APP_ROOT . '/src/docs.php';
 require APP_ROOT . '/src/mind.php';
 require APP_ROOT . '/src/mailer.php';
 require APP_ROOT . '/src/webauthn.php';

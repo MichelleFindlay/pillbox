@@ -283,7 +283,7 @@ function menopause_sections(array $user, DateTimeImmutable $today): void
     ?>
 <section class="card" id="menopause">
     <div class="card-head">
-        <h2>Your menopause</h2>
+        <h2>Your menopause <?= help_link('menopause', '', 'menopause') ?></h2>
         <a class="btn btn-small" href="<?= h(url('menopause_summary.php')) ?>">GP summary</a>
     </div>
     <p class="muted small">Menopause can affect anyone with ovaries, including trans men and non-binary people. It can happen naturally, or after surgery (such as removal of the ovaries)

@@ -181,7 +181,7 @@ $pending = pending_signups();
 
 render_header('Admin', 'admin');
 ?>
-<div class="page-head"><h1>Users</h1></div>
+<div class="page-head"><h1>Users <?= help_link('admin', 'users', 'administration') ?></h1></div>
 <?= form_errors($errors) ?>
 
 <?php if ($pending): ?>

@@ -428,7 +428,7 @@ function pmdd_sections(array $user, DateTimeImmutable $today): void
 <?php endif; ?>
 <section class="card" id="pmdd">
     <div class="card-head">
-        <h2>Premenstrual symptoms</h2>
+        <h2>Premenstrual symptoms <?= help_link('periods', 'premenstrual-symptoms-pms-pmdd-pme', 'premenstrual tracking') ?></h2>
         <a class="btn btn-small" href="<?= h(url('pmdd_summary.php')) ?>">GP summary</a>
     </div>
     <?php if ($pos): [$n, $phase, $w] = $pos; ?>

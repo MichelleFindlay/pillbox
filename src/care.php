@@ -243,7 +243,7 @@ const CARE_AREAS = [
         ],
     ],
     'womens' => [
-        'title' => 'Periods and contraception', 'short' => 'Periods', 'icon' => '&#x1F319;', 'default' => false, 'appointment' => null,
+        'title' => 'Periods and contraception', 'short' => 'Periods', 'icon' => '&#x1F4C5;', 'default' => false, 'appointment' => null,
         'intro' => 'Track periods or any bleeding (including occasional bleeding on testosterone), and keep contraception renewals and reviews on time.',
         'help'  => 'See a GP about very heavy or painful periods, bleeding between periods or after sex, or any bleeding after the menopause.',
         'presets' => [],

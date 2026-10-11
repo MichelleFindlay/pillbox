@@ -39,7 +39,7 @@ $return = 'history.php?' . http_build_query(array_filter(['from' => $from->forma
 render_header('History', 'history');
 ?>
 <div class="page-head">
-    <h1>Dose history</h1>
+    <h1>Dose history <?= help_link('reports', 'history', 'history') ?></h1>
 </div>
 
 <form method="get" class="card filters">

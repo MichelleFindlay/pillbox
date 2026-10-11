@@ -192,7 +192,7 @@ render_header('Private', 'care');
 <div class="page-head">
     <div>
         <p class="muted small"><a href="<?= h(url('care.php')) ?>">Care</a> &rsaquo;</p>
-        <h1>&#x1F512; Pregnancy options and aftercare</h1>
+        <h1>&#x1F512; Pregnancy options and aftercare <?= help_link('pregnancy-options', '', 'this page') ?></h1>
     </div>
     <?php if ($record && $record['pin_hash'] && pathway_unlocked($record)): ?>
     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="lock"><button class="btn btn-small" type="submit">Lock now</button></form>

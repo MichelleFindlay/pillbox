@@ -174,7 +174,7 @@ function thyroid_sections(array $user, DateTimeImmutable $today): void
 <?php endif; ?>
 <section class="card" id="thy-meds">
     <div class="card-head">
-        <h2>Your thyroid medicine</h2>
+        <h2>Your thyroid medicine <?= help_link('thyroid', '', 'thyroid') ?></h2>
         <a class="btn btn-small" href="<?= h(url('thyroid_summary.php')) ?>">Clinician summary</a>
     </div>
     <?php foreach ($thyroid as $m): $ms = $schedules[$m['id']] ?? []; ?>

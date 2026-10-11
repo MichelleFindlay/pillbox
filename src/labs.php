@@ -149,7 +149,7 @@ function labs_sections(array $user, DateTimeImmutable $today): void
     $meds = array_filter(user_medications($uid), fn ($m) => !$m['as_needed']);
     ?>
 <section class="card" id="labs">
-    <h2>Results and trends</h2>
+    <h2>Results and trends <?= help_link('blood-tests', 'results-and-trends', 'results and target ranges') ?></h2>
     <p class="muted small">Numbers from your blood tests, in UK units. Lab reports compare against the range for the sex on your record, which may not fit you
         (for example on hormones), so you can add a target range from your clinic as well. Pillbox shows where results sit; your clinic interprets them.</p>
     <?php if ($canEdit): ?>

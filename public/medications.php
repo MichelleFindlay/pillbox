@@ -125,7 +125,7 @@ render_header('Medications', 'meds');
 ?>
 <div class="page-head">
     <div>
-        <h1>Medications</h1>
+        <h1>Medications <?= help_link('medicines', '', 'Medicines') ?></h1>
         <form method="post" class="show-changes">
             <?= csrf_field() ?><input type="hidden" name="action" value="show_changes"><input type="hidden" name="show" value="0">
             <label class="check small"><input type="checkbox" name="show" value="1" data-autosubmit<?= checked((bool) $user['meds_show_changes']) ?>> Show dose changes</label>

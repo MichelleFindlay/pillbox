@@ -265,7 +265,7 @@ foreach ($identities as $key => $identity) {
 
 render_header('Account', 'account');
 ?>
-<div class="page-head"><h1>Your account</h1></div>
+<div class="page-head"><h1>Your account <?= help_link('account', '', 'your account') ?></h1></div>
 <?= form_errors($errors) ?>
 
 <nav class="chips" aria-label="Account sections">
@@ -311,7 +311,7 @@ render_header('Account', 'account');
 
 <section class="card" id="health-profile">
     <div class="card-head">
-        <h2>Health profile</h2>
+        <h2>Health profile <?= help_link('account', 'health-profile', 'health profile') ?></h2>
         <a class="btn btn-small" href="<?= h(url('welcome.php')) ?>">Run the setup again</a>
     </div>
     <form method="post" class="stack">
@@ -375,7 +375,7 @@ render_header('Account', 'account');
 </section>
 
 <section class="card" id="accessibility">
-    <h2>Display and reminders</h2>
+    <h2>Display and reminders <?= help_link('accessibility', '', 'display and accessibility') ?></h2>
     <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="accessibility">
         <div class="grid-2">
             <label>Text size <select name="text_size"><?php foreach (['' => 'Normal', 'l' => 'Larger', 'xl' => 'Largest'] as $k => $l): ?><option value="<?= $k ?>"<?= selected((string) $user['text_size'] === $k) ?>><?= h($l) ?></option><?php endforeach; ?></select></label>
@@ -391,7 +391,7 @@ render_header('Account', 'account');
 </section>
 
 <section class="card" id="privacy">
-    <h2>Privacy</h2>
+    <h2>Privacy <?= help_link('privacy', 'account-privacy', 'privacy') ?></h2>
     <form method="post" class="stack"><?= csrf_field() ?><input type="hidden" name="action" value="privacy">
         <label class="check"><input type="checkbox" name="privacy_blur" value="1"<?= checked((bool) $user['privacy_blur']) ?>>
             <span>Hide the screen when I switch to another app <span class="muted small">(so it doesn't show in the app switcher)</span></span></label>
@@ -572,7 +572,7 @@ render_header('Account', 'account');
 </section>
 
 <section class="card" id="notifications">
-    <h2>Notifications</h2>
+    <h2>Notifications <?= help_link('account', 'notifications-and-email', 'notifications') ?></h2>
     <?php if (!push_supported()): ?>
     <p class="muted">This server can't send notifications (PHP's OpenSSL or curl extension is missing).</p>
     <?php elseif ($user['is_demo']): ?>
@@ -651,7 +651,7 @@ render_header('Account', 'account');
 </section>
 
 <section class="card" id="data">
-    <h2>Your data</h2>
+    <h2>Your data <?= help_link('privacy', 'your-data', 'your data') ?></h2>
     <p>Pillbox holds <?= (int) $counts['meds'] ?> medication<?= (int) $counts['meds'] === 1 ? '' : 's' ?>,
         <?= (int) $counts['doses'] ?> dose record<?= (int) $counts['doses'] === 1 ? '' : 's' ?> and
         <?= (int) $counts['readings'] ?> health reading<?= (int) $counts['readings'] === 1 ? '' : 's' ?> for you.</p>

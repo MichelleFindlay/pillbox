@@ -29,7 +29,7 @@ const SHARE_PRESETS = [
  * change (or [action => level, '*' => level])]. null = always (their own or harmless pages).
  */
 const SHARE_PAGES = [
-    'index.php' => null, 'timer.php' => null, 'terms.php' => null, 'privacy.php' => null, 'sharing.php' => null, 'logout.php' => null, 'help.php' => null, 'breathe.php' => null,
+    'index.php' => null, 'docs.php' => null, 'timer.php' => null, 'terms.php' => null, 'privacy.php' => null, 'sharing.php' => null, 'logout.php' => null, 'help.php' => null, 'breathe.php' => null,
     'medications.php'        => ['doses', 'view', ['restock' => 'log', 'ordered' => 'log', 'unorder' => 'log', 'rx_written' => 'log', 'supply_note' => 'log', '*' => 'edit']],
     'medication_edit.php'    => ['doses', 'edit', 'edit'],
     'medication_history.php' => ['doses', 'view', 'edit'],

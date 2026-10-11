@@ -68,7 +68,7 @@ $readings = $def ? q(
 render_header('Readings', 'readings');
 ?>
 <div class="page-head">
-    <h1>Health readings</h1>
+    <h1>Health readings <?= help_link('readings', '', 'Readings') ?></h1>
     <span class="inline-actions">
         <a class="btn btn-small" href="<?= h(url('connections.php')) ?>">Connect apps and devices</a>
         <a class="btn btn-small" href="<?= h(url('account.php#metrics')) ?>">Choose what to track</a>

@@ -123,7 +123,7 @@ render_header('Sharing', 'sharing');
 ?>
 <div class="page-head">
     <div>
-        <h1>Sharing</h1>
+        <h1>Sharing <?= help_link('sharing', '', 'Sharing') ?></h1>
         <p class="muted">Let a carer, partner or family member see parts of your Pillbox, or help you keep them up to date. You choose exactly what.</p>
     </div>
 </div>

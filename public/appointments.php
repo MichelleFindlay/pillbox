@@ -109,7 +109,7 @@ function render_appointment(array $a, bool $isPast, array $counts): void
 render_header('Appointments', 'appointments');
 ?>
 <div class="page-head">
-    <h1>Appointments</h1>
+    <h1>Appointments <?= help_link('appointments', '', 'Appointments') ?></h1>
     <a class="btn btn-primary" href="<?= h(url('appointment_edit.php')) ?>">+ Add appointment</a>
 </div>
 

@@ -4,6 +4,8 @@
 
 A medication and health tracker built with PHP and MySQL. It works in mobile and desktop browsers.
 
+**How to use it:** see the [documentation](docs/README.md), also in the app under **Docs** in the footer (and the **?** next to headings).
+
 - **Medications**: search the NHS medicines dictionary (dm+d) or type them in; add, edit, stop (history is kept) or permanently delete. Each medicine can have several
   dose times with **different amounts**, on **chosen weekdays**, and between set dates (useful for reducing
   doses). "As needed" medicines can have a daily maximum, and any medicine an optional **expiry date**

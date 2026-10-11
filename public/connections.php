@@ -65,7 +65,7 @@ render_header('Connect apps and devices', 'readings');
 ?>
 <div class="page-head">
     <div>
-        <h1>Connect apps and devices</h1>
+        <h1>Connect apps and devices <?= help_link('readings', 'connecting-apps-and-devices', 'connecting apps') ?></h1>
         <p class="muted">Bring readings in from your phone, watch, ring, strap or scales. Imported readings are labelled with where they came from.</p>
     </div>
     <a class="btn btn-small" href="<?= h(url('readings.php')) ?>">&larr; Readings</a>
