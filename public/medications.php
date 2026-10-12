@@ -196,6 +196,7 @@ $allergyConflicts = allergy_conflicts($allergies, $active); ?>
         <?php endif; ?>
         <?php foreach ($allergyConflicts[(int) $m['id']] ?? [] as $a): ?><p class="small warn">&#9888; <?= h(allergy_conflict_text($m, $a)) ?></p><?php endforeach; ?>
         <?php if ($m['instructions']): ?><p class="small"><?= h($m['instructions']) ?></p><?php endif; ?>
+        <?php if ($m['min_interval_minutes']): $soon = dose_too_soon($m, utc_now()); ?><p class="small<?= $soon ? ' warn' : ' muted' ?>">At least <?= h(gap_label((int) $m['min_interval_minutes'])) ?> between doses<?= $soon ? ': next from ' . h(local_time($soon['next'], 'H:i')) : '' ?></p><?php endif; ?>
         <?php if (preg_match(HYPO_RISK_PATTERN, $m['name'])): ?><p class="small"><span class="badge badge-due">Can cause hypos</span> <a href="<?= h(url('hypo.php')) ?>">Hypo guide</a></p><?php endif; ?>
         <?php if (preg_match(SGLT2_PATTERN, $m['name'])): ?><p class="small muted">If you're unwell and not eating or drinking, your team may tell you to pause this (sick-day rules).</p><?php endif; ?>
         <?php if ($m['form'] === 'injection'): $sites = injection_site_history((int) $m['id']); $nextSite = injection_site_suggestion((int) $m['id']); ?>

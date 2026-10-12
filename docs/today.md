@@ -11,7 +11,7 @@ At the top of your doses:
 - **Now**: anything due or not yet logged
 - **Next**: the next dose and how long until it
 - A **timeline** of the day: each dose as a dot (green taken, grey skipped, amber not logged, coloured due, blue later), with a line for now
-- **Timer**: a visual countdown, for anything from waiting for a medicine to work to a break
+- **Timer to next dose**: a visual countdown that starts from the time left until your next dose (or pick another length, for anything from waiting for a medicine to work to a break). However long the page has been open, **Start** counts to the dose time itself.
 
 ![Now and Next, the timeline of the day, and doses by part of the day](images/today-doses.png)
 

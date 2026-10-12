@@ -9,6 +9,16 @@ require_post();
 $uid = (int) $user['id'];
 $return = safe_return(post('return'));
 
+/** Refuse a dose taken too soon after the last one, unless they confirmed it ("log anyway"). */
+$tooSoon = function (array $med, string $takenAt, ?int $excludeLogId, array $fields) use ($uid, $return): void {
+    if (post('override') === '1' || !($soon = dose_too_soon($med, $takenAt, $excludeLogId))) {
+        return;
+    }
+    $_SESSION['dose_override'] = ['user' => $uid, 'text' => too_soon_text($med, $soon), 'return' => $return,
+        'fields' => array_intersect_key($fields, array_flip(['action', 'schedule_id', 'slot', 'at', 'taken_time', 'site', 'medication_id', 'amount', 'notes']))];
+    redirect($return);
+};
+
 switch (post('action')) {
     case 'take':
     case 'skip':
@@ -30,6 +40,10 @@ switch (post('action')) {
             $at = local_to_utc(local_time($slotUtc, 'Y-m-d') . ' ' . post('taken_time'));
             $takenAt = $at && $at <= utc_now() ? $at : utc_now();
         }
+        if ($status === 'taken') {
+            $existingId = q('SELECT id FROM dose_logs WHERE schedule_id = ? AND scheduled_for = ?', [$schedule['id'], $slotUtc])->fetchColumn();
+            $tooSoon(find_medication((int) $schedule['med_id'], $uid), $takenAt, $existingId ? (int) $existingId : null, $_POST);
+        }
         record_dose($uid, $schedule, $slotUtc, $status, $takenAt, post('site') ?: null);
         flash('success', $schedule['name'] . ($status === 'taken' ? ' marked as taken.' : ' marked as skipped.'));
         break;
@@ -39,6 +53,7 @@ switch (post('action')) {
         // their time (missed) are recorded at their scheduled time, like their own Take buttons.
         $missedAfter = (int) config('doses.missed_after_minutes', 120);
         $count = 0;
+        $held = [];
         foreach (array_slice((array) ($_POST['slots'] ?? []), 0, 50) as $item) {
             [$scheduleId, $slotStr] = array_pad(explode('|', (string) $item, 2), 2, '');
             $schedule = q('SELECT s.*, m.id AS med_id, m.form FROM medication_schedules s JOIN medications m ON m.id = s.medication_id
@@ -49,10 +64,18 @@ switch (post('action')) {
                 continue;
             }
             $late = time() - $slot->getTimestamp() > $missedAfter * 60;
+            $med = find_medication((int) $schedule['med_id'], $uid);
+            if ($soon = dose_too_soon($med, $late ? $slotStr : utc_now())) {
+                $held[] = too_soon_text($med, $soon);
+                continue;
+            }
             record_dose($uid, $schedule, $slotStr, 'taken', $late ? $slotStr : utc_now(), $schedule['form'] === 'injection' ? injection_site_suggestion((int) $schedule['med_id']) : null);
             $count++;
         }
-        flash('success', $count ? ($count === 1 ? '1 dose' : "$count doses") . ' marked as taken.' : 'Those doses were already recorded.');
+        flash('success', $count ? ($count === 1 ? '1 dose' : "$count doses") . ' marked as taken.' : ($held ? 'Nothing logged.' : 'Those doses were already recorded.'));
+        foreach ($held as $text) {
+            flash('error', $text . ' Use its own Take button if you did take it.');
+        }
         break;
 
     case 'prn':
@@ -64,6 +87,7 @@ switch (post('action')) {
         if ($amount <= 0 || $amount > 10000) {
             $amount = (float) ($med['prn_dose_amount'] ?? 1);
         }
+        $tooSoon($med, utc_now(), null, $_POST);
         transaction(function () use ($med, $amount, $uid) {
             q(
                 "INSERT INTO dose_logs (user_id, medication_id, status, amount, taken_at, notes) VALUES (?, ?, 'taken', ?, ?, ?)",

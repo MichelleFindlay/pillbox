@@ -32,6 +32,8 @@ Add a row for each time of day. The **Morning**, **Afternoon** and **Evening** b
 
 Or tick **Take as needed** (no fixed times), with a usual dose and a daily maximum.
 
+**Minimum time between doses** (in hours, for any medicine): Pillbox won't log a dose sooner than this after the last one, for example 4 hours for paracetamol. It says when the next dose is allowed, on Today and the Meds page. If you did take it sooner, **I took it: log anyway** records it, so your history stays accurate. Only take a dose sooner if a doctor or pharmacist has told you to.
+
 ### How long
 
 - **Ongoing**, with an optional end date

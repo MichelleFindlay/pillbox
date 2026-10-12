@@ -66,7 +66,9 @@ if (is_post()) {
         case 'toggle':
             $day = parse_date(post('date'));
             $slot = (int) post('slot');
-            if (!$task || !$day || $day > $today || $day < $today->modify('-6 days') || !care_due($task, $day) || !isset(care_times($task)[$slot])) {
+            // Any day in the last year (History can tick past days), in a category that's shared.
+            if (!$task || !$day || $day > $today || $day < $today->modify('-366 days') || !care_due($task, $day) || !isset(care_times($task)[$slot])
+                || !share_area_allowed($task['area']) || ($task['area'] === 'mind' && !share_can('mind', 'edit'))) {
                 not_found();
             }
             if (post('done') === '1') {

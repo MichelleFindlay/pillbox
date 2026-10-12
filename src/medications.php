@@ -620,6 +620,40 @@ function dose_block(string $time): string
  * Record a scheduled dose as taken or skipped (replacing any earlier record for it), keeping
  * stock in step. $takenAt is UTC.
  */
+/** "4 hours", "1 hour 30 minutes", "45 minutes" */
+function gap_label(int $minutes): string
+{
+    $h = intdiv($minutes, 60);
+    $m = $minutes % 60;
+    return trim(($h ? $h . ' hour' . ($h === 1 ? '' : 's') : '') . ($m ? ' ' . $m . ' minute' . ($m === 1 ? '' : 's') : ''));
+}
+
+/**
+ * A dose at $takenAtUtc would be too soon after (or before) another taken dose of the same medicine,
+ * by its minimum time between doses. $excludeLogId: the record being changed, if any.
+ * @return array{last: string, next: string, minutes: int}|null UTC times of the nearby dose and of the earliest allowed
+ */
+function dose_too_soon(array $med, string $takenAtUtc, ?int $excludeLogId = null): ?array
+{
+    $minutes = (int) ($med['min_interval_minutes'] ?? 0);
+    if ($minutes <= 0) {
+        return null;
+    }
+    $t = strtotime($takenAtUtc . ' UTC');
+    $near = q("SELECT taken_at FROM dose_logs WHERE medication_id = ? AND status = 'taken' AND taken_at > ? AND taken_at < ? AND id <> ?
+               ORDER BY taken_at DESC LIMIT 1",
+        [$med['id'], gmdate('Y-m-d H:i:s', $t - $minutes * 60), gmdate('Y-m-d H:i:s', $t + $minutes * 60), $excludeLogId ?? 0])->fetchColumn();
+    return $near ? ['last' => (string) $near, 'next' => gmdate('Y-m-d H:i:s', strtotime($near . ' UTC') + $minutes * 60), 'minutes' => $minutes] : null;
+}
+
+/** "Too soon: Ibuprofen was taken at 13:05 ..." */
+function too_soon_text(array $med, array $soon): string
+{
+    $day = fn (string $utc) => local_time($utc, 'Y-m-d') === local_today()->format('Y-m-d') ? local_time($utc, 'H:i') : local_time($utc, 'D j M H:i');
+    return "Too soon: {$med['name']} was taken at " . $day($soon['last']) . ', and it should be at least ' . gap_label($soon['minutes'])
+        . ' between doses, so the next one is from ' . $day($soon['next']) . '.';
+}
+
 function record_dose(int $userId, array $schedule, string $slotUtc, string $status, string $takenAt, ?string $site = null): void
 {
     $amount = $status === 'taken' ? (float) $schedule['dose_amount'] : 0.0;

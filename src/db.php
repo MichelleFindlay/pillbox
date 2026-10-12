@@ -116,6 +116,7 @@ function ensure_schema(): void
         ['medication_schedules', 'cycle_phase', 'ALTER TABLE medication_schedules ADD COLUMN cycle_phase VARCHAR(10) NULL AFTER anchor_date'],
         ['weather_days', 'pollen_grass', 'ALTER TABLE weather_days ADD COLUMN pollen_grass SMALLINT UNSIGNED NULL AFTER rain, ADD COLUMN pollen_tree SMALLINT UNSIGNED NULL AFTER pollen_grass, ADD COLUMN pollen_weed SMALLINT UNSIGNED NULL AFTER pollen_tree'],
         ['medication_schedules', 'cycle_length', 'ALTER TABLE medication_schedules ADD COLUMN cycle_length SMALLINT UNSIGNED NULL AFTER cycle_phase, ADD COLUMN cycle_from SMALLINT UNSIGNED NULL AFTER cycle_length, ADD COLUMN cycle_to SMALLINT UNSIGNED NULL AFTER cycle_from'],
+        ['medications', 'min_interval_minutes', 'ALTER TABLE medications ADD COLUMN min_interval_minutes SMALLINT UNSIGNED NULL AFTER prn_max_daily'],
         ['medications', 'is_private', 'ALTER TABLE medications ADD COLUMN is_private TINYINT(1) NOT NULL DEFAULT 0 AFTER supply_price'],
         ['medications', 'is_supplement', 'ALTER TABLE medications ADD COLUMN is_supplement TINYINT(1) NOT NULL DEFAULT 0 AFTER supply_price'],
         ['medications', 'course', "ALTER TABLE medications ADD COLUMN course VARCHAR(8) NOT NULL DEFAULT 'ongoing' AFTER end_date"],

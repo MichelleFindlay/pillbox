@@ -247,7 +247,7 @@ render_header('Today', 'today');
             <strong><?= h($nextDose['local']->format('H:i')) ?> <?= h($nextDose['schedule']['name']) ?></strong>
             <span class="muted small">in <?= $mins >= 60 ? intdiv($mins, 60) . ' h ' . ($mins % 60 ? ($mins % 60) . ' min' : '') : max(1, $mins) . ' min' ?></span>
             <?php else: ?><strong>Nothing else today</strong><?php endif; ?></div>
-        <a class="btn btn-small" href="<?= h(url('timer.php')) ?>">Timer</a>
+        <a class="btn btn-small" href="<?= h(url('timer.php' . ($nextDose ? '?until=' . $nextDose['local']->getTimestamp() : ''))) ?>"><?= $nextDose ? 'Timer to next dose' : 'Timer' ?></a>
     </div>
     <?= render_day_timeline($slots, $nowLocal) ?>
     <?php
@@ -297,7 +297,8 @@ render_header('Today', 'today');
     <ul class="dose-list">
     <?php foreach ($prnMeds as $m):
         $usedToday = $prnCounts[$m['id']] ?? 0;
-        $atMax = $m['prn_max_daily'] !== null && $usedToday >= (float) $m['prn_max_daily']; ?>
+        $atMax = $m['prn_max_daily'] !== null && $usedToday >= (float) $m['prn_max_daily'];
+        $soon = dose_too_soon($m, utc_now()); ?>
         <li class="dose-item">
             <div class="dose-main">
                 <?= med_dot($m['colour']) ?>
@@ -309,6 +310,8 @@ render_header('Today', 'today');
                         <?= $m['instructions'] ? ' · ' . h($m['instructions']) : '' ?>
                     </div>
                     <?php if ($atMax): ?><div class="warn small">Daily maximum reached &mdash; check with your doctor or pharmacist before taking more.</div><?php endif; ?>
+                    <?php if ($soon): ?><div class="warn small">Next dose from <?= h(local_time($soon['next'], local_time($soon['next'], 'Y-m-d') === local_today()->format('Y-m-d') ? 'H:i' : 'D H:i')) ?> (at least <?= h(gap_label($soon['minutes'])) ?> between doses)</div>
+                    <?php elseif ($m['min_interval_minutes']): ?><div class="muted small">At least <?= h(gap_label((int) $m['min_interval_minutes'])) ?> between doses</div><?php endif; ?>
                 </div>
             </div>
             <?php if (share_can('doses', 'log')): ?>

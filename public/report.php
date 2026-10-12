@@ -97,7 +97,7 @@ render_header('Report', 'report');
                     <td><strong><?= h($m['name']) ?></strong> <?= h($m['strength']) ?><br><span class="muted small"><?= h(ucfirst($m['form'])) ?><?= $m['is_supplement'] ? ' · supplement' : '' ?><?= $m['dmd_code'] ? ' · dm+d ' . h($m['dmd_code']) : '' ?></span></td>
                     <td>
                         <?php if ($m['as_needed']): ?>
-                            As needed<?= $m['prn_dose_amount'] ? ', ' . h(dose_label($m['prn_dose_amount'], $m['dose_unit'])) : '' ?><?= $m['prn_max_daily'] ? ' (max ' . h(dose_label($m['prn_max_daily'], $m['dose_unit'])) . '/day)' : '' ?>
+                            As needed<?= $m['prn_dose_amount'] ? ', ' . h(dose_label($m['prn_dose_amount'], $m['dose_unit'])) : '' ?><?= $m['prn_max_daily'] ? ' (max ' . h(dose_label($m['prn_max_daily'], $m['dose_unit'])) . '/day)' : '' ?><?= $m['min_interval_minutes'] ? ', at least ' . h(gap_label((int) $m['min_interval_minutes'])) . ' apart' : '' ?>
                         <?php else: foreach (schedule_lines($schedules[$m['id']] ?? [], $m['dose_unit']) as $line): ?>
                             <div><?= h($line) ?></div>
                         <?php endforeach; endif; ?>

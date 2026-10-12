@@ -39,13 +39,17 @@ if (is_post()) {
             }
             break;
         case 'selfcare':
+            // Today, or a day in the last year (from History). Unticking also works for items since removed from the list.
             $item = post('item');
-            if (in_array($item, selfcare_items($user), true)) {
-                post('done') === '1'
-                    ? q('INSERT IGNORE INTO mind_selfcare (user_id, log_date, item) VALUES (?, ?, ?)', [$uid, $today->format('Y-m-d'), $item])
-                    : q('DELETE FROM mind_selfcare WHERE user_id = ? AND log_date = ? AND item = ?', [$uid, $today->format('Y-m-d'), $item]);
+            $day = post('date') !== '' ? parse_date(post('date')) : $today;
+            if ($day && $day <= $today && $day >= $today->modify('-366 days')) {
+                if (post('done') === '1' && in_array($item, selfcare_items($user), true)) {
+                    q('INSERT IGNORE INTO mind_selfcare (user_id, log_date, item) VALUES (?, ?, ?)', [$uid, $day->format('Y-m-d'), $item]);
+                } elseif (post('done') !== '1') {
+                    q('DELETE FROM mind_selfcare WHERE user_id = ? AND log_date = ? AND item = ?', [$uid, $day->format('Y-m-d'), $item]);
+                }
             }
-            redirect('mind.php#today');
+            redirect(safe_return(post('return'), 'mind.php#today'));
         case 'selfcare_items':
             $items = array_slice(array_filter(array_map(fn ($l) => trim(mb_substr($l, 0, 60)), explode("\n", str_replace("\r", '', post('items'))))), 0, 12);
             q('UPDATE users SET mind_selfcare = ? WHERE id = ?', [$items ? implode("\n", $items) : null, $uid]);

@@ -65,6 +65,12 @@ if (is_post()) {
             $errors[] = ucfirst($f) . " is too long (max $max characters).";
         }
     }
+    // Minimum time between doses: entered in hours (e.g. 4 or 0.5), stored in minutes.
+    $gap = trim((string) post('min_interval_hours'));
+    $form['min_interval_minutes'] = $gap === '' ? null : (int) round((float) $gap * 60);
+    if ($gap !== '' && (!is_numeric($gap) || $form['min_interval_minutes'] < 1 || $form['min_interval_minutes'] > 72 * 60)) {
+        $errors[] = 'Enter the minimum time between doses in hours, from 0.25 to 72, or leave it empty.';
+    }
     foreach (['prn_dose_amount' => 'Dose amount', 'prn_max_daily' => 'Daily maximum', 'stock_count' => 'Stock'] as $f => $label) {
         if ($form[$f] !== '' && (!is_numeric($form[$f]) || (float) $form[$f] < 0 || (float) $form[$f] > 99999)) {
             $errors[] = "$label must be a positive number.";
@@ -218,7 +224,7 @@ if (is_post()) {
         $values = [
             $form['name'], $nullable($form['dmd_code']), $nullable($form['strength']), $form['form'], $form['dose_unit'], $form['colour'],
             $nullable($form['reason']), $nullable($form['instructions']), $nullable($form['prescriber']), $nullable($form['notes']),
-            $form['as_needed'], $nullable($form['prn_dose_amount']), $nullable($form['prn_max_daily']),
+            $form['as_needed'], $nullable($form['prn_dose_amount']), $nullable($form['prn_max_daily']), $form['min_interval_minutes'],
             $nullable($form['stock_count']), (int) $form['low_stock_days'], $nullable($form['expiry_date']), (int) $form['mental_health'], $form['start_date'], $nullable($form['end_date']),
             $form['supply_type'], $form['supply_price'] === '' ? null : round((float) $form['supply_price'], 2), $form['course'], (int) $form['is_supplement'], (int) $form['is_private'], (int) $form['controlled'], $form['rx_days'], trim(mb_substr((string) $form['brand'], 0, 100)) ?: null,
         ];
@@ -227,14 +233,14 @@ if (is_post()) {
         $medId = transaction(function () use ($med, $values, $rows, $uid, $form, $today, $todayYmd) {
             if ($med) {
                 q('UPDATE medications SET name = ?, dmd_code = ?, strength = ?, form = ?, dose_unit = ?, colour = ?, reason = ?, instructions = ?,
-                     prescriber = ?, notes = ?, as_needed = ?, prn_dose_amount = ?, prn_max_daily = ?, stock_count = ?,
+                     prescriber = ?, notes = ?, as_needed = ?, prn_dose_amount = ?, prn_max_daily = ?, min_interval_minutes = ?, stock_count = ?,
                      low_stock_days = ?, expiry_date = ?, mental_health = ?, start_date = ?, end_date = ?, supply_type = ?, supply_price = ?, course = ?, is_supplement = ?, is_private = ?, controlled = ?, rx_days = ?, brand = ? WHERE id = ? AND user_id = ?',
                     [...$values, $med['id'], $uid]);
                 $medId = (int) $med['id'];
             } else {
                 q('INSERT INTO medications (name, dmd_code, strength, form, dose_unit, colour, reason, instructions, prescriber, notes,
-                     as_needed, prn_dose_amount, prn_max_daily, stock_count, low_stock_days, expiry_date, mental_health, start_date, end_date, supply_type, supply_price, course, is_supplement, is_private, controlled, rx_days, brand, user_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
+                     as_needed, prn_dose_amount, prn_max_daily, min_interval_minutes, stock_count, low_stock_days, expiry_date, mental_health, start_date, end_date, supply_type, supply_price, course, is_supplement, is_private, controlled, rx_days, brand, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
                 $medId = (int) db()->lastInsertId();
             }
 
@@ -534,6 +540,10 @@ render_header($med ? 'Edit ' . $med['name'] : "Add $noun", 'meds');
                 <label>Maximum per day <input type="number" min="0" step="any" name="prn_max_daily" value="<?= h(num($form['prn_max_daily'] ?? '')) ?>"></label>
             </div>
         </div>
+        <label class="narrow">Minimum time between doses <span class="muted small">(hours, optional)</span>
+            <input type="number" name="min_interval_hours" min="0.25" max="72" step="0.25" inputmode="decimal" placeholder="e.g. 4"
+                value="<?= !empty($form['min_interval_minutes']) ? h(num(round((int) $form['min_interval_minutes'] / 60, 2))) : '' ?>"></label>
+        <p class="muted small">Pillbox won't log a dose sooner than this after the last one (unless you say you did take it), and Today shows when the next is allowed. Use what's on the label or your prescription, e.g. 4 hours for paracetamol.</p>
 
         <div class="schedule-fields" data-hide-when="as_needed">
             <p class="muted small">Add a row for each time of day, e.g. 2 in the morning and 1 at night.

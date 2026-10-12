@@ -4,6 +4,8 @@
 
 The **History** tab shows each day's doses (taken, skipped, not logged) and the percentage of doses taken for each medicine.
 
+It also shows your **Care routines**, Mind habits and **self-care** checklist for each day, with how often each was done over the period. Forgot to tick something off? Tick it on the right day in History, as far back as a year. **Show** picks medicines, Care, or both; choosing a single medicine shows just that medicine. If Mind has a PIN, self-care and Mind habits only appear once it's unlocked.
+
 ## Reports and summaries
 
 Each prints as one page (or save it as a PDF from the print dialog):

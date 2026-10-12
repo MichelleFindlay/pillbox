@@ -233,14 +233,18 @@
     var startBtn = timer.querySelector('[data-timer-start]'), pauseBtn = timer.querySelector('[data-timer-pause]');
     var show = function () {
       var s = Math.max(0, Math.ceil(left));
-      label.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+      label.textContent = (s >= 3600 ? Math.floor(s / 3600) + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') : Math.floor(s / 60)) + ':' + String(s % 60).padStart(2, '0');
       ring.setAttribute('stroke-dasharray', (total ? (left / total) * 100 : 0) + ' 100');
     };
     var stop = function () { clearInterval(tick); tick = null; startBtn.hidden = false; pauseBtn.hidden = true; };
-    var set = function (secs) { stop(); total = left = secs; timer.classList.remove('done'); show(); };
+    // Counting down to a set time (the next dose): Start always counts to that moment, however long the page was open.
+    var until = parseInt(timer.getAttribute('data-timer-until') || '0', 10) * 1000, toUntil = false;
+    var set = function (secs) { stop(); total = left = secs; toUntil = false; timer.classList.remove('done'); show(); };
+    var setUntil = function () { set(Math.max(0, Math.round((until - Date.now()) / 1000))); toUntil = true; };
     timer.querySelectorAll('[data-timer-set]').forEach(function (b) { b.addEventListener('click', function () { set(parseInt(b.getAttribute('data-timer-set'), 10)); }); });
     timer.querySelector('[data-timer-custom]').addEventListener('change', function (e) { var m = parseInt(e.target.value, 10); if (m > 0) { set(m * 60); } });
     startBtn.addEventListener('click', function () {
+      if (toUntil && left === total) { set(Math.max(0, Math.round((until - Date.now()) / 1000))); toUntil = true; }
       if (left <= 0) { left = total; }
       endAt = Date.now() + left * 1000;
       startBtn.hidden = true; pauseBtn.hidden = false; timer.classList.remove('done');
@@ -254,7 +258,10 @@
       }, 250);
     });
     pauseBtn.addEventListener('click', stop);
-    timer.querySelector('[data-timer-reset]').addEventListener('click', function () { set(total); });
+    timer.querySelector('[data-timer-reset]').addEventListener('click', function () { if (toUntil) { setUntil(); } else { set(total); } });
+    var untilBtn = timer.querySelector('[data-timer-to-until]');
+    if (untilBtn) { untilBtn.addEventListener('click', setUntil); }
+    if (until > Date.now()) { setUntil(); }
     show();
   }
 

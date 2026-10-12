@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS medications (
     as_needed       TINYINT(1)    NOT NULL DEFAULT 0,
     prn_dose_amount DECIMAL(8,2)  NULL,
     prn_max_daily   DECIMAL(8,2)  NULL,
+    min_interval_minutes SMALLINT UNSIGNED NULL,   -- the shortest gap allowed between doses (e.g. 240 for 4 hours)
     stock_count     DECIMAL(10,2) NULL,
     low_stock_days  SMALLINT UNSIGNED NOT NULL DEFAULT 7,
     expiry_date     DATE          NULL,          -- use-by date of the current supply, if known
