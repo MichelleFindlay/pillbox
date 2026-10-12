@@ -4,8 +4,8 @@ declare(strict_types=1);
 /*
  * Scheduled tasks, run by bin/cron.php (command line) or public/cron.php?token=...
  * every 5 to 15 minutes (5 is best for dose reminders): push notifications, daily summary emails,
- * appointment reminders, the update check
- * (and telling admins about a new version once), and tidying up.
+ * appointment reminders, the update check (asking GitHub on every run, and telling admins about
+ * a new version once), and tidying up.
  */
 
 /** @return string[] what was done, for the log */
@@ -17,7 +17,7 @@ function run_scheduled_tasks(): array
     }
     $log = [];
     $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-    foreach (['sync_connections', 'send_push_notifications', 'send_digests', 'send_appointment_reminders', 'check_for_updates', 'tidy_up'] as $task) {
+    foreach (['sync_connections', 'sync_weather', 'send_push_notifications', 'send_digests', 'send_appointment_reminders', 'check_for_updates', 'tidy_up'] as $task) {
         try {
             $log = [...$log, ...$task($now)];
         } catch (Throwable $e) {
@@ -176,7 +176,7 @@ function send_appointment_reminders(DateTimeImmutable $now): array
 
 function check_for_updates(DateTimeImmutable $now): array
 {
-    $latest = latest_version();
+    $latest = latest_version(true);
     if (!update_available($latest)) {
         return $latest && $latest['error'] ? ['Update check: ' . $latest['error']] : [];
     }

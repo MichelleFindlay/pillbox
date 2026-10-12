@@ -2,6 +2,8 @@
 
 The **Meds** tab lists your current medicines, then **Supplements**, then stopped medicines.
 
+![The Meds page](images/medicines.png)
+
 ## Adding a medicine
 
 Press **+ Add medication** (or **+ Add supplement**). If your Pillbox has the NHS medicines dictionary switched on, start typing to find the exact product: it fills in the name, strength and form. Otherwise type them in.
@@ -23,9 +25,14 @@ Add a row for each time of day. The **Morning**, **Afternoon** and **Evening** b
   - **On these days** (weekdays)
   - **Every few days or weeks** (for example an injection every 3 weeks), from the first or next dose
   - **Only in the 2 weeks before a period** (worked out from your cycle in Care)
+  - **Some days of a repeating cycle**: for example sequential HRT, with progestogen on days 15 to 28 of every 28 days (set which day is day 1), the 1st to the 14th of each calendar month, or 14 days every 13 weeks. Reminders and stock only count those days, and the Meds page shows which day of the cycle it is.
 - **Only between certain dates**: for a reducing dose
 
+![Dose times, with the Morning, Afternoon and Evening buttons, and how each repeats](images/medicine-schedule.png)
+
 Or tick **Take as needed** (no fixed times), with a usual dose and a daily maximum.
+
+**Minimum time between doses** (in hours, for any medicine): Pillbox won't log a dose sooner than this after the last one, for example 4 hours for paracetamol. It says when the next dose is allowed, on Today and the Meds page. If you did take it sooner, **I took it: log anyway** records it, so your history stays accurate. Only take a dose sooner if a doctor or pharmacist has told you to.
 
 ### How long
 

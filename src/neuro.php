@@ -133,7 +133,7 @@ function nd_sections(array $user, DateTimeImmutable $today): void
     $todayLog = array_values(array_filter($logs, fn ($l) => $l['log_date'] === $todayYmd))[0] ?? null;
     $week = array_filter($logs, fn ($l) => $l['log_date'] > $today->modify('-7 days')->format('Y-m-d'));
     $weekSpoons = array_filter(array_column($week, 'spoons'), fn ($v) => $v !== null);
-    $weekSigns = array_unique(array_merge(...array_map(fn ($l) => array_filter(explode(',', (string) $l['burnout'])), $week ?: [[]])));
+    $weekSigns = $week ? array_unique(array_merge(...array_map(fn ($l) => array_filter(explode(',', (string) $l['burnout'])), array_values($week)))) : [];
     $controlled = array_filter(user_medications($uid), fn ($m) => $m['controlled']);
     ?>
 <section class="card" id="nd-about">

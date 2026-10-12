@@ -48,6 +48,7 @@ const SHARE_PAGES = [
     'menopause_summary.php'  => ['care', 'view', 'view'],
     'pmdd_summary.php'       => ['care', 'view', 'view'],
     'passport.php'           => ['care', 'view', 'view'],
+    'allergy_card.php'       => ['care', 'view', 'view'],
     'thyroid_summary.php'    => ['care', 'view', 'view'],
     'diabetes_summary.php'   => ['care', 'view', 'view'],
     'migraine_summary.php'   => ['care', 'view', 'view'],

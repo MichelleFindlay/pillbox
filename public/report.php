@@ -70,6 +70,21 @@ render_header('Report', 'report');
         </div>
     </header>
 
+    <?php $allergies = share_area_allowed('allergies') ? user_allergies($uid, true) : []; $allergyProfile = allergy_profile($uid); ?>
+    <?php if ($allergies || $allergyProfile['none_known']): ?>
+    <section>
+        <h2>Allergies</h2>
+        <?php if (!$allergies): ?><p>No known allergies (recorded <?= h(date('j M Y', strtotime((string) $allergyProfile['none_known_on']))) ?>).</p><?php else: ?>
+        <div class="table-wrap"><table><thead><tr><th>Allergic to</th><th>Type</th><th>Reaction</th><th>Severity</th><th>Confirmed by</th></tr></thead><tbody>
+            <?php foreach ($allergies as $a): ?><tr><td><strong><?= h($a['allergen']) ?></strong><?= $a['since'] ? '<br><span class="muted small">since ' . h($a['since']) . '</span>' : '' ?></td>
+                <td><?= h(ALLERGY_KINDS[$a['kind']] ?? '') ?></td><td><?= h(implode(', ', array_map(fn ($r) => mb_strtolower(ALLERGY_REACTIONS[$r] ?? $r), $a['reactions']))) ?></td>
+                <td><?= h(ALLERGY_SEVERITY[$a['severity']] ?? '') ?></td><td><?= h(ALLERGY_CONFIRMED[$a['confirmed']] ?? '') ?></td></tr><?php endforeach; ?>
+        </tbody></table></div>
+        <?= $allergyProfile['aai'] ? '<p>Carries adrenaline auto-injectors' . ($allergyProfile['aai_brand'] ? ' (' . h($allergyProfile['aai_brand']) . ')' : '') . '.</p>' : '' ?>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
+
     <section>
         <h2>Current medication</h2>
         <?php if (!$meds): ?><p class="muted">None recorded.</p><?php else: ?>
@@ -82,7 +97,7 @@ render_header('Report', 'report');
                     <td><strong><?= h($m['name']) ?></strong> <?= h($m['strength']) ?><br><span class="muted small"><?= h(ucfirst($m['form'])) ?><?= $m['is_supplement'] ? ' · supplement' : '' ?><?= $m['dmd_code'] ? ' · dm+d ' . h($m['dmd_code']) : '' ?></span></td>
                     <td>
                         <?php if ($m['as_needed']): ?>
-                            As needed<?= $m['prn_dose_amount'] ? ', ' . h(dose_label($m['prn_dose_amount'], $m['dose_unit'])) : '' ?><?= $m['prn_max_daily'] ? ' (max ' . h(dose_label($m['prn_max_daily'], $m['dose_unit'])) . '/day)' : '' ?>
+                            As needed<?= $m['prn_dose_amount'] ? ', ' . h(dose_label($m['prn_dose_amount'], $m['dose_unit'])) : '' ?><?= $m['prn_max_daily'] ? ' (max ' . h(dose_label($m['prn_max_daily'], $m['dose_unit'])) . '/day)' : '' ?><?= $m['min_interval_minutes'] ? ', at least ' . h(gap_label((int) $m['min_interval_minutes'])) . ' apart' : '' ?>
                         <?php else: foreach (schedule_lines($schedules[$m['id']] ?? [], $m['dose_unit']) as $line): ?>
                             <div><?= h($line) ?></div>
                         <?php endforeach; endif; ?>

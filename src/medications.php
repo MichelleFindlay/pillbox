@@ -183,7 +183,7 @@ function schedules_for_editing(array $schedules): array
 {
     $groups = [];
     foreach ($schedules as $s) {
-        $groups[substr($s['dose_time'], 0, 5) . '|' . $s['valid_from'] . '|' . $s['valid_to'] . '|' . ($s['every_days'] ?? '') . '|' . ($s['anchor_date'] ?? '') . '|' . ($s['cycle_phase'] ?? '')][] = $s;
+        $groups[substr($s['dose_time'], 0, 5) . '|' . $s['valid_from'] . '|' . $s['valid_to'] . '|' . ($s['every_days'] ?? '') . '|' . ($s['anchor_date'] ?? '') . '|' . cycle_key($s) . '|' . ($s['cycle_phase'] ?? '')][] = $s;
     }
     $rows = [];
     foreach ($groups as $group) {
@@ -227,6 +227,9 @@ function editor_row(array $s, array $ids, string $mode, array $dayAmounts): arra
         'every_days'  => !empty($s['every_days']) ? (int) $s['every_days'] : null,
         'anchor_date' => $s['anchor_date'] ?? null,
         'cycle_phase' => $s['cycle_phase'] ?? null,
+        'cycle_length' => !empty($s['cycle_length']) ? (int) $s['cycle_length'] : null,
+        'cycle_from'  => !empty($s['cycle_from']) ? (int) $s['cycle_from'] : null,
+        'cycle_to'    => !empty($s['cycle_to']) ? (int) $s['cycle_to'] : null,
     ];
 }
 
@@ -255,12 +258,12 @@ function editor_row_doses(array $row): array
  * "different amount each day" schedule, e.g.
  * "18:00 · 5 tablets Mon, Wed, Fri; 3 tablets Tue, Thu, Sat, Sun".
  */
-function schedule_lines(array $schedules, string $unit): array
+function schedule_lines(array $schedules, string $unit, bool $now = true): array
 {
     $lines = [];
     foreach (schedules_for_editing($schedules) as $row) {
         if ($row['mode'] === 'same') {
-            $text = $row['dose_time'] . ' · ' . dose_label($row['dose_amount'], $unit) . ' · ' . schedule_days_text($row);
+            $text = $row['dose_time'] . ' · ' . dose_label($row['dose_amount'], $unit) . ' · ' . schedule_days_text($row, $now);
         } else {
             $parts = [];
             foreach (editor_row_doses($row) as [$amount, $mask]) {
@@ -425,6 +428,11 @@ function daily_usage(array $med, array $schedules, ?string $asOf = null): float
             $perWeek += (float) $s['dose_amount'] * 7 / 2; // about half of each cycle
             continue;
         }
+        if (is_cycle_schedule($s)) {
+            $length = $s['cycle_phase'] === 'month' ? 30.44 : (int) $s['cycle_length'];
+            $perWeek += (float) $s['dose_amount'] * 7 * ((int) $s['cycle_to'] - (int) $s['cycle_from'] + 1) / $length;
+            continue;
+        }
         $days = 0;
         foreach (WEEKDAYS as $bit => $_) {
             $days += ((int) $s['days_mask'] & $bit) ? 1 : 0;
@@ -503,13 +511,16 @@ function parse_strength(?string $strength): ?array
     return null;
 }
 
-/** How a medicine is taken, in a few words: "1 tablet a day at 08:00" or "as needed". */
-function medication_regimen(array $med, array $schedules): string
+/**
+ * How a medicine is taken, in a few words: "1 tablet a day at 08:00" or "as needed".
+ * $now: include where it is today ("next 3 Nov", "today is day 9"); off for the change history.
+ */
+function medication_regimen(array $med, array $schedules, bool $now = true): string
 {
     if ($med['as_needed']) {
         return 'as needed';
     }
-    return $schedules ? implode('; ', schedule_lines($schedules, $med['dose_unit'])) : 'no dose times';
+    return $schedules ? implode('; ', schedule_lines($schedules, $med['dose_unit'], $now)) : 'no dose times';
 }
 
 /**
@@ -521,21 +532,21 @@ function describe_med_changes(array $old, array $oldSchedules, array $new, array
     $unit = $new['dose_unit'];
     if ((bool) $old['as_needed'] !== (bool) $new['as_needed']) {
         return [['as_needed', $new['as_needed']
-            ? 'Changed to as needed (was ' . medication_regimen($old, $oldSchedules) . ')'
-            : 'Changed from as needed to regular doses: ' . medication_regimen($new, $newSchedules)]];
+            ? 'Changed to as needed (was ' . medication_regimen($old, $oldSchedules, false) . ')'
+            : 'Changed from as needed to regular doses: ' . medication_regimen($new, $newSchedules, false)]];
     }
 
     // Every-N-days schedules (e.g. injections every 3 weeks) read best as the whole regimen.
-    if (array_filter([...$oldSchedules, ...$newSchedules], fn ($s) => !empty($s['every_days']))) {
+    if (array_filter([...$oldSchedules, ...$newSchedules], fn ($s) => !empty($s['every_days']) || is_cycle_schedule($s))) {
         $changes = [];
         if (mb_strtolower(trim((string) $old['strength'])) !== mb_strtolower(trim((string) $new['strength']))) {
             $changes[] = ['strength', 'Strength changed from ' . ($old['strength'] ?: 'not set') . ' to ' . ($new['strength'] ?: 'not set')];
         }
-        if (schedule_lines($oldSchedules, $old['dose_unit']) !== schedule_lines($newSchedules, $unit)) {
+        if (schedule_lines($oldSchedules, $old['dose_unit'], false) !== schedule_lines($newSchedules, $unit, false)) {
             $o = daily_usage($old, $oldSchedules, $asOf);
             $n = daily_usage($new, $newSchedules, $asOf);
             $changes[] = [abs($o - $n) < 0.0001 ? 'timing' : ($n > $o ? 'increased' : 'decreased'),
-                'Changed to ' . medication_regimen($new, $newSchedules) . ' (was ' . medication_regimen($old, $oldSchedules) . ')'];
+                'Changed to ' . medication_regimen($new, $newSchedules, false) . ' (was ' . medication_regimen($old, $oldSchedules, false) . ')'];
         }
         return $changes;
     }
@@ -545,9 +556,8 @@ function describe_med_changes(array $old, array $oldSchedules, array $new, array
     $newDaily = daily_usage($new, $newSchedules, $asOf);
     $strengthChanged = mb_strtolower(trim((string) $old['strength'])) !== mb_strtolower(trim((string) $new['strength']));
     $dailyChanged = abs($oldDaily - $newDaily) > 0.001;
-    $timingChanged = schedule_lines($oldSchedules, $old['dose_unit']) !== schedule_lines($newSchedules, $unit);
-    $everyDay = !array_filter($newSchedules, fn ($s) => (int) $s['days_mask'] !== EVERY_DAY || !empty($s['every_days']))
-        && !array_filter($oldSchedules, fn ($s) => (int) $s['days_mask'] !== EVERY_DAY || !empty($s['every_days']));
+    $timingChanged = schedule_lines($oldSchedules, $old['dose_unit'], false) !== schedule_lines($newSchedules, $unit, false);
+    $everyDay = !array_filter([...$newSchedules, ...$oldSchedules], fn ($s) => (int) $s['days_mask'] !== EVERY_DAY || !empty($s['every_days']) || !empty($s['cycle_phase']));
     // Weekly patterns (e.g. 5mg Mon/Wed/Fri, 3mg other days) read best as weekly totals.
     $factor = $everyDay ? 1 : 7;
     $perDay = $everyDay ? ' a day' : ' a week';
@@ -590,7 +600,7 @@ function describe_med_changes(array $old, array $oldSchedules, array $new, array
         return [['strength', 'Strength changed from ' . ($old['strength'] ?: 'not set') . ' to ' . ($new['strength'] ?: 'not set')]];
     }
     if ($timingChanged && !$new['as_needed']) {
-        return [['timing', 'Dose times changed to ' . medication_regimen($new, $newSchedules) . ' (was ' . medication_regimen($old, $oldSchedules) . ')']];
+        return [['timing', 'Dose times changed to ' . medication_regimen($new, $newSchedules, false) . ' (was ' . medication_regimen($old, $oldSchedules, false) . ')']];
     }
     return [];
 }
@@ -610,6 +620,40 @@ function dose_block(string $time): string
  * Record a scheduled dose as taken or skipped (replacing any earlier record for it), keeping
  * stock in step. $takenAt is UTC.
  */
+/** "4 hours", "1 hour 30 minutes", "45 minutes" */
+function gap_label(int $minutes): string
+{
+    $h = intdiv($minutes, 60);
+    $m = $minutes % 60;
+    return trim(($h ? $h . ' hour' . ($h === 1 ? '' : 's') : '') . ($m ? ' ' . $m . ' minute' . ($m === 1 ? '' : 's') : ''));
+}
+
+/**
+ * A dose at $takenAtUtc would be too soon after (or before) another taken dose of the same medicine,
+ * by its minimum time between doses. $excludeLogId: the record being changed, if any.
+ * @return array{last: string, next: string, minutes: int}|null UTC times of the nearby dose and of the earliest allowed
+ */
+function dose_too_soon(array $med, string $takenAtUtc, ?int $excludeLogId = null): ?array
+{
+    $minutes = (int) ($med['min_interval_minutes'] ?? 0);
+    if ($minutes <= 0) {
+        return null;
+    }
+    $t = strtotime($takenAtUtc . ' UTC');
+    $near = q("SELECT taken_at FROM dose_logs WHERE medication_id = ? AND status = 'taken' AND taken_at > ? AND taken_at < ? AND id <> ?
+               ORDER BY taken_at DESC LIMIT 1",
+        [$med['id'], gmdate('Y-m-d H:i:s', $t - $minutes * 60), gmdate('Y-m-d H:i:s', $t + $minutes * 60), $excludeLogId ?? 0])->fetchColumn();
+    return $near ? ['last' => (string) $near, 'next' => gmdate('Y-m-d H:i:s', strtotime($near . ' UTC') + $minutes * 60), 'minutes' => $minutes] : null;
+}
+
+/** "Too soon: Ibuprofen was taken at 13:05 ..." */
+function too_soon_text(array $med, array $soon): string
+{
+    $day = fn (string $utc) => local_time($utc, 'Y-m-d') === local_today()->format('Y-m-d') ? local_time($utc, 'H:i') : local_time($utc, 'D j M H:i');
+    return "Too soon: {$med['name']} was taken at " . $day($soon['last']) . ', and it should be at least ' . gap_label($soon['minutes'])
+        . ' between doses, so the next one is from ' . $day($soon['next']) . '.';
+}
+
 function record_dose(int $userId, array $schedule, string $slotUtc, string $status, string $takenAt, ?string $site = null): void
 {
     $amount = $status === 'taken' ? (float) $schedule['dose_amount'] : 0.0;
@@ -687,6 +731,10 @@ function schedule_on_day(array $s, string $ymd, ?int $bit = null): bool
         // Only in the (known or predicted) 2 weeks before a period.
         return is_luteal_day((int) ($s['user_id'] ?? current_user()['id'] ?? 0), $ymd);
     }
+    if (is_cycle_schedule($s)) {
+        $day = cycle_day_of($s, $ymd);
+        return $day !== null && $day >= (int) $s['cycle_from'] && $day <= (int) $s['cycle_to'];
+    }
     if (!empty($s['every_days'])) {
         $anchor = (string) ($s['anchor_date'] ?: $s['valid_from'] ?: $s['start_date'] ?? $ymd);
         if ($ymd < $anchor) {
@@ -695,6 +743,36 @@ function schedule_on_day(array $s, string $ymd, ?int $bit = null): bool
         return (new DateTimeImmutable($anchor))->diff(new DateTimeImmutable($ymd))->days % (int) $s['every_days'] === 0;
     }
     return ((int) $s['days_mask'] & ($bit ?? weekday_bit(new DateTimeImmutable($ymd)))) !== 0;
+}
+
+/** A repeating cycle (e.g. sequential HRT): some days of every N-day cycle, or of each calendar month. */
+function is_cycle_schedule(array $s): bool
+{
+    return in_array($s['cycle_phase'] ?? null, ['cycle', 'month'], true) && !empty($s['cycle_from']) && !empty($s['cycle_to'])
+        && ($s['cycle_phase'] === 'month' || !empty($s['cycle_length']));
+}
+
+function cycle_key(array $s): string
+{
+    return is_cycle_schedule($s) ? ($s['cycle_length'] ?? '') . '/' . $s['cycle_from'] . '-' . $s['cycle_to'] : '';
+}
+
+/** Which day of its cycle $ymd is (1 = the first), or null before the cycle starts. */
+function cycle_day_of(array $s, string $ymd): ?int
+{
+    if (($s['cycle_phase'] ?? null) === 'month') {
+        return (int) substr($ymd, 8, 2);
+    }
+    $anchor = (string) ($s['anchor_date'] ?: $s['valid_from'] ?: $s['start_date'] ?? $ymd);
+    if ($ymd < $anchor) {
+        return null;
+    }
+    return (new DateTimeImmutable($anchor))->diff(new DateTimeImmutable($ymd))->days % (int) $s['cycle_length'] + 1;
+}
+
+function ordinal(int $n): string
+{
+    return $n . (in_array($n % 100, [11, 12, 13], true) ? 'th' : (['th', 'st', 'nd', 'rd'][$n % 10] ?? 'th'));
 }
 
 /** "every 3 weeks" / "every 10 days". */
@@ -718,14 +796,25 @@ function next_interval_day(array $s, DateTimeImmutable $from): ?DateTimeImmutabl
     return $gap === 0 ? $fromDay : $fromDay->modify('+' . ((int) $s['every_days'] - $gap) . ' days');
 }
 
-/** Which days a schedule (or editor row) is on, in words. */
-function schedule_days_text(array $s): string
+/** Which days a schedule (or editor row) is on, in words; $now adds the next dose or today's cycle day. */
+function schedule_days_text(array $s, bool $now = true): string
 {
     if (($s['cycle_phase'] ?? null) === 'luteal') {
         return 'only in the 2 weeks before a period';
     }
+    if (is_cycle_schedule($s)) {
+        $from = (int) $s['cycle_from'];
+        $to = (int) $s['cycle_to'];
+        if ($s['cycle_phase'] === 'month') {
+            return 'the ' . ordinal($from) . ($to > $from ? ' to ' . ordinal($to) : '') . ' of each month';
+        }
+        $today = $now ? cycle_day_of($s, local_today()->format('Y-m-d')) : null;
+        return ($to > $from ? "days $from to $to" : "day $from") . ' of each ' . (int) $s['cycle_length'] . '-day cycle'
+            . ($today !== null ? " (today is day $today)" : ($now || !$s['anchor_date'] ? '' : ', day 1 was ' . date('j M Y', strtotime((string) $s['anchor_date']))))
+            . ($now && $today === null && $s['anchor_date'] ? ', starting ' . date('j M', strtotime((string) $s['anchor_date'])) : '');
+    }
     if (!empty($s['every_days'])) {
-        $next = next_interval_day($s, local_today());
+        $next = $now ? next_interval_day($s, local_today()) : null;
         return every_days_label((int) $s['every_days']) . ($next ? ', next ' . $next->format('j M') : '');
     }
     return days_label((int) $s['days_mask']);

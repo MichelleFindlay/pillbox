@@ -25,6 +25,7 @@ Pillbox keeps a record of your medicines, health readings, appointments and care
 - [Diabetes](diabetes.md)
 - [Blood pressure](blood-pressure.md)
 - [Migraine and headaches](migraine.md)
+- [Allergies](allergies.md)
 - [ADHD and autism](adhd-autism.md)
 - [Gender-affirming care](gender-affirming-care.md)
 

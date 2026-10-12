@@ -21,6 +21,7 @@ const APPOINTMENT_TYPES = [
     'psychiatrist'  => 'Psychiatrist',
     'pharmacy'      => 'Pharmacy / medication review',
     'vaccination'   => 'Vaccination',
+    'allergy'       => 'Allergy clinic',
     'other'         => 'Other',
 ];
 

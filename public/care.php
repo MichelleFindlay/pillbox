@@ -40,6 +40,9 @@ if (is_post()) {
     if ($areaKey === 'bp' && str_starts_with(post('action'), 'bp_')) {
         bp_handle_post($user, $today);
     }
+    if ($areaKey === 'allergies' && str_starts_with(post('action'), 'al_')) {
+        allergies_handle_post($user, $today);
+    }
     if ($areaKey === 'migraine' && str_starts_with(post('action'), 'mg_')) {
         migraine_handle_post($user, $today);
     }
@@ -63,7 +66,9 @@ if (is_post()) {
         case 'toggle':
             $day = parse_date(post('date'));
             $slot = (int) post('slot');
-            if (!$task || !$day || $day > $today || $day < $today->modify('-6 days') || !care_due($task, $day) || !isset(care_times($task)[$slot])) {
+            // Any day in the last year (History can tick past days), in a category that's shared.
+            if (!$task || !$day || $day > $today || $day < $today->modify('-366 days') || !care_due($task, $day) || !isset(care_times($task)[$slot])
+                || !share_area_allowed($task['area']) || ($task['area'] === 'mind' && !share_can('mind', 'edit'))) {
                 not_found();
             }
             if (post('done') === '1') {
@@ -640,6 +645,7 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
 <?php if ($areaKey === 'thyroid') { thyroid_sections($user, $today); } ?>
 <?php if ($areaKey === 'diabetes') { diabetes_sections($user, $today); } ?>
 <?php if ($areaKey === 'migraine') { migraine_sections($user, $today); } ?>
+<?php if ($areaKey === 'allergies') { allergies_sections($user, $today); } ?>
 <?php if ($areaKey === 'bp') { bp_sections($user, $today); } ?>
 
 <?php if ($areaKey === 'womens'): ?>

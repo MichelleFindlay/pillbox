@@ -157,6 +157,9 @@ function migraine_handle_post(array $user, DateTimeImmutable $today): never
 {
     $uid = (int) $user['id'];
     $back = 'care.php?area=migraine';
+    if (str_starts_with(post('action'), 'mg_weather_')) {
+        weather_handle_post($user);
+    }
     $when = function (string $d, string $t) use ($today) {
         $day = parse_date(post($d)) ?: $today;
         return preg_match('/^\d\d:\d\d$/', post($t)) ? local_to_utc($day->format('Y-m-d') . ' ' . post($t)) : null;
@@ -252,6 +255,7 @@ function migraine_sections(array $user, DateTimeImmutable $today): void
         }
     }
     arsort($triggerCounts);
+    $weather = weather_enabled() ? weather_between($uid, $today->modify('-120 days')->format('Y-m-d'), $todayYmd) : [];
     ?>
 <section class="card preg-call">
     <h2>Get help straight away</h2>
@@ -307,7 +311,7 @@ function migraine_sections(array $user, DateTimeImmutable $today): void
     <ul class="plain"><?php foreach (array_slice($episodes, 0, 15) as $e): ?>
         <li class="logline"><span><strong><?= h(local_time($e['started_at'], 'D j M H:i')) ?></strong><?= $e['ended_at'] ? ' to ' . h(local_time($e['ended_at'], local_time($e['ended_at'], 'Y-m-d') === local_time($e['started_at'], 'Y-m-d') ? 'H:i' : 'D H:i')) : ' (ongoing)' ?>
             · <?= h(HEADACHE_SEVERITY[$e['severity']] ?? '') ?><?= $e['migraine'] ? ' migraine' : ' headache' ?><?= $e['aura'] ? ' with aura' : '' ?>
-            <span class="muted small"><?= $e['triggers'] ? ' · ' . h(implode(', ', array_map(fn ($t) => mb_strtolower(HEADACHE_TRIGGERS[$t] ?? $t), $e['triggers']))) : '' ?></span>
+            <span class="muted small"><?= $e['triggers'] ? ' · ' . h(implode(', ', array_map(fn ($t) => mb_strtolower(HEADACHE_TRIGGERS[$t] ?? $t), $e['triggers']))) : '' ?><?= ($wn = weather_note($weather[local_time($e['started_at'], 'Y-m-d')] ?? null)) !== '' ? ' · ' . h($wn) : '' ?></span>
             <?php foreach ($e['meds'] as $m): ?><br><span class="small">&#x1F48A; <?= h($m['name']) ?> at <?= h(local_time($m['taken_at'], 'H:i')) ?>:
                 <?php if ($canEdit): ?><form method="post" class="inline-relief"><?= csrf_field() ?><input type="hidden" name="action" value="mg_relief"><input type="hidden" name="med_id" value="<?= (int) $m['id'] ?>">
                     <select name="helped" data-autosubmit aria-label="How well it helped"><option value="">How well did it help?</option><?php foreach (RELIEF as $k => $l): ?><option value="<?= $k ?>"<?= selected($m['helped'] !== null && (int) $m['helped'] === $k) ?>><?= h($l) ?></option><?php endforeach; ?></select></form>
@@ -330,6 +334,8 @@ function migraine_sections(array $user, DateTimeImmutable $today): void
     <p class="small"><?= $mm['in'] ?> of your <?= $mm['total'] ?> migraine days in the last year were in the 2 days before to 3 days after a period started<?= $mm['share'] >= 0.5 ? ': that suggests menstrual migraine, which can be treated differently, so mention it to your GP.' : '.' ?></p>
     <?php endif; ?>
 </section>
+
+<?php weather_section($user, $today, $canEdit); ?>
 
 <section class="card">
     <h2>Preventive treatment</h2>

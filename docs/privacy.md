@@ -15,6 +15,8 @@ Tick **Private** on a medicine: reminders and emails just say "Reminder", and it
 - **Hide the screen when I switch to another app**: covers Pillbox in the app switcher
 - **Name and icon on my home screen**: "Planner" or "Notes" instead of Pillbox. Remove it from your home screen and add it again for the new icon.
 
+![Privacy settings: hiding the screen and a disguised icon](images/privacy-settings.png)
+
 ## Notifications
 
 **Hide details on the lock screen** (Account → Notifications) makes every notification say "You have a reminder".

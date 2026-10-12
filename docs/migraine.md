@@ -8,6 +8,8 @@ Call 999 or go to A&E for: a sudden, severe headache that peaks within a minute 
 
 **Log a headache**: when it started and ended (or **Still going**: press **It's gone** later), how bad, where, whether it's a migraine, aura, symptoms, possible triggers, and anything you took with how well it helped. A medicine from your Meds list can be logged as a dose at the same time, so stock stays right.
 
+![The headache diary with monthly counts and how well each medicine helped](images/migraine.png)
+
 The tiles show **headache days**, **migraine days** and **painkiller or triptan days** in the last 30 days (including as-needed doses logged on Today), and a table shows month by month.
 
 ## Medication overuse
@@ -21,6 +23,16 @@ Painkillers or triptans on too many days can cause rebound headaches. Pillbox wa
 ## Patterns
 
 The triggers you note most often, and **menstrual migraine**: how many migraine days fall from 2 days before to 3 days after a period starts.
+
+## Weather
+
+Under **Weather**, add your town and Pillbox fetches the weather there (from Open-Meteo, a free weather service), including the last year, and keeps it up to date. Only the town's location, to about 10 km, is sent: nothing about you or your headaches.
+
+- Each diary entry shows the air pressure that day, how far it fell, and the temperature.
+- Once there's a month of weather and 5 headache days, a table compares how often you had a headache on days with **a big fall in pressure** (the day's average 5 hPa or more below the day before's), **low pressure**, **a big temperature change**, **hot** or **very humid** weather, with other days. Where headaches look more likely, it says so.
+- If pressure is forecast to fall sharply today or tomorrow, the Weather card says so. If falls have been linked to your headaches, Today shows a heads-up too.
+
+A pattern doesn't prove the weather causes your headaches, but it can help you plan and have treatment ready. **Turn off weather** deletes the town and its weather. Admins can switch weather off for the whole site.
 
 ## Preventive treatment
 

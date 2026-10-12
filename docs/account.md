@@ -13,6 +13,8 @@ Your name, email, username, time zone, **pronouns** (shown on reports) and, opti
 - **Body inventory**: see below
 - **Care categories** to switch on, and whether to show **Mind**
 
+![The health profile: date of birth, body inventory and Care categories](images/account-health-profile.png)
+
 ### Body inventory
 
 Optional and private. For each of cervix, uterus, ovaries, breasts or chest tissue, prostate and testes: have, removed (with the date of surgery), or don't have. Tick **Use my body, not a gender** to let it decide:

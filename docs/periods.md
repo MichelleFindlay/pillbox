@@ -6,6 +6,8 @@
 
 **Log a period** with the start date (and end date, flow and notes). Pillbox shows your average cycle and period length and when the next period is expected. It doesn't predict fertile days: that isn't reliable enough for contraception.
 
+![Cycle tracking](images/periods.png)
+
 ## Contraception
 
 Checks for pill reviews, implant, coil and injection renewals, and a link to add the pill or HRT as a medicine.
@@ -13,6 +15,8 @@ Checks for pill reviews, implant, coil and injection renewals, and a link to add
 ## Premenstrual symptoms (PMS, PMDD, PME)
 
 Press **Start tracking** to rate how you feel each day. Doing it every day of the month for at least 2 cycles shows whether symptoms follow your cycle.
+
+![Starting premenstrual symptom tracking](images/periods-pmdd.png)
 
 - **Quick check-in**: 7 questions, a few seconds a day, rated 1 (not at all) to 6 (extreme)
 - **All the questions**: the full DRSP (Daily Record of Severity of Problems) that clinicians recognise

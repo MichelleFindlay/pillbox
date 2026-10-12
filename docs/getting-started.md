@@ -4,6 +4,8 @@
 
 Sign in with your username and password, or with a single sign-on button (such as Microsoft or Google) if your Pillbox has one. If sign-ups are open, **Create an account** on the sign-in page lets you make your own account. Some Pillboxes ask an administrator to approve new accounts first: you'll be told, and emailed when you're approved if you gave an email address.
 
+![The sign-in page, with "Try the demo"](images/sign-in.png)
+
 Want to look around first? If the demo is switched on, **Try the demo** opens a sample account for a made-up person. Nothing you change there is kept.
 
 ## The first-time setup

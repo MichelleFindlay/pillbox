@@ -6,6 +6,8 @@ Switch on **Pregnancy** in your health profile. It's offered if your body invent
 
 Enter your due date, worked out from the first day of your last period or as given at your dating scan (the NHS uses the scan date, so update it afterwards). Add whether it's a first baby, whether you're Rhesus negative, and your maternity unit and midwife's phone numbers.
 
+![Setting up a pregnancy](images/pregnancy.png)
+
 ## The page
 
 - **How far along**: weeks and days, trimester, due date and days to go

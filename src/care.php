@@ -112,6 +112,22 @@ const CARE_AREAS = [
             'neb_filter'   => ['label' => 'Nebuliser compressor filter', 'interval' => 182, 'tip' => 'When it looks grey, or as the manual says.'],
         ],
     ],
+    'allergies' => [
+        'title' => 'Allergies', 'short' => 'Allergies', 'icon' => '&#x1F95C;', 'default' => false, 'appointment' => 'allergy',
+        'intro' => 'Your allergies and reactions, checked against your medicines; what to do in anaphylaxis; adrenaline pens; eating out; and pollen counts for hay fever.',
+        'help'  => 'Call 999 for swelling of the throat or tongue, difficulty breathing, feeling faint or collapse: use an adrenaline auto-injector first if you have one.',
+        'presets' => [
+            'antihistamine' => ['label' => 'Hay fever treatment', 'times' => ['08:00'], 'tip' => 'Steroid nasal sprays work best used every day, starting a couple of weeks before your pollen season.'],
+        ],
+        'checks' => [
+            'aai1'           => ['label' => 'Adrenaline auto-injector 1 expiry', 'track' => 'expiry', 'tip' => "Carry two. Sign up to the manufacturer's expiry alert service as well, if there is one."],
+            'aai2'           => ['label' => 'Adrenaline auto-injector 2 expiry', 'track' => 'expiry'],
+            'aai_trainer'    => ['label' => 'Practise with a trainer pen', 'interval' => 91, 'tip' => 'Every few months, and show the people around you how to use it too.'],
+            'antihistamines' => ['label' => 'Antihistamines in date', 'track' => 'expiry', 'tip' => 'Keep some with your adrenaline pens and at home.'],
+            'allergy_review' => ['label' => 'Allergy clinic review', 'interval' => 365, 'tip' => 'If you are under an allergy clinic. Ask about testing or immunotherapy if you have not been referred.'],
+            'allergy_plan'   => ['label' => 'Allergy action plan up to date', 'interval' => 365, 'tip' => 'A written plan from your doctor or allergy clinic. Share it with school, work or carers.'],
+        ],
+    ],
     'diabetes' => [
         'title' => 'Diabetes and monitoring', 'short' => 'Diabetes', 'icon' => '&#x1FA78;', 'default' => false, 'appointment' => 'nurse',
         'intro' => 'Glucose and time in range (with CGM via Nightscout), insulin and carbs, the hypo guide, sick-day rules, "five to drive", your annual care checks, and supplies.',

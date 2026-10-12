@@ -10,6 +10,8 @@ For ADHD, autism, dyslexia, dyspraxia, tics or other: self-identified, waiting f
 
 How to talk to you: how you communicate best, time to process, sensory needs, touch, what helps if you're overwhelmed or in shutdown, what helps at appointments, what not to do, and someone who can help.
 
+![A communication passport, shown full screen](images/adhd-passport.png)
+
 - **Show it**: full screen in large text, to hand your phone to someone
 - **Print** it, and it's printed on appointment sheets too
 - **Copy for an ICE / medical ID**, so it's there if you can't speak
@@ -19,6 +21,8 @@ How to talk to you: how you communicate best, time to process, sensory needs, to
 ## Waiting lists
 
 Each assessment with the provider, route (NHS, Right to Choose in England, or private) and referral date: Pillbox shows how long you've waited.
+
+![An ADHD assessment waiting list (Right to Choose)](images/adhd-waiting.png)
 
 ## Assessment prep
 
