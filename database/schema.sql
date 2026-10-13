@@ -85,6 +85,39 @@ CREATE TABLE IF NOT EXISTS user_identities (
     CONSTRAINT fk_identity_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Forgotten password: a one-hour, single-use link emailed to the account's address. Like remembered
+-- devices, the link holds selector.validator and only the validator's hash is kept.
+CREATE TABLE IF NOT EXISTS password_resets (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id         INT UNSIGNED NOT NULL,
+    selector        CHAR(24)      NOT NULL,
+    validator_hash  CHAR(64)      NOT NULL,
+    created_at      DATETIME      NOT NULL,
+    expires_at      DATETIME      NOT NULL,
+    ip              VARCHAR(45)   NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_reset_selector (selector),
+    KEY ix_reset_user (user_id, created_at),
+    CONSTRAINT fk_reset_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- "Remember this device": a long-lived cookie holds selector.validator; only the validator's hash is kept.
+-- Each use pushes expires_at back. Removed on sign-out, "sign out everywhere else" and password changes.
+CREATE TABLE IF NOT EXISTS remembered_devices (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id         INT UNSIGNED NOT NULL,
+    selector        CHAR(24)      NOT NULL,
+    validator_hash  CHAR(64)      NOT NULL,
+    label           VARCHAR(100)  NULL,
+    created_at      DATETIME      NOT NULL,
+    last_used_at    DATETIME      NOT NULL,
+    expires_at      DATETIME      NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_device_selector (selector),
+    KEY ix_device_user (user_id),
+    CONSTRAINT fk_device_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS login_attempts (
     id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
     ip            VARCHAR(45)  NOT NULL,

@@ -6,4 +6,5 @@ if (!entra_enabled()) {
     redirect('login.php');
 }
 unset($_SESSION['entra_link_uid']);
+$_SESSION['remember_device'] = get('remember') === '1'; // "Remember this device" on the sign-in page
 entra_begin_login();

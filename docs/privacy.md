@@ -27,4 +27,4 @@ Download everything, import it elsewhere, or delete your account at any time fro
 
 ## Keeping your account safe
 
-Use a strong password (or single sign-on), and **sign out everywhere else** if you've signed in on a device you no longer use.
+Use a strong password (or single sign-on), and **sign out everywhere else** if you've signed in on a device you no longer use. Only tick **Remember this device** on your own phone or computer, and forget any you no longer use under **Account → Sign-in**.

@@ -29,6 +29,9 @@ return [
         'disable_local_login_when_sso' => false,
         // Sign people out after this many minutes without activity.
         'session_idle_minutes' => 480,
+        // "Remember this device" on the sign-in page: how many days a remembered device stays signed in
+        // after it was last used. 0 turns the option off.
+        'remember_days'        => 90,
         // GitHub repository ("owner/name") linked in the footer and checked for new versions.
         // Set to '' to hide the link and turn off update checks.
         'github_repo'          => 'MichelleFindlay/pillbox',

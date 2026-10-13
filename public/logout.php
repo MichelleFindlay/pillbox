@@ -15,6 +15,7 @@ if ($provider === 'entra' && entra_enabled() && config('entra.single_logout')) {
         error_log('OIDC sign-out URL failed: ' . $e->getMessage());
     }
 }
+forget_this_device();
 logout_session();
 if ($demoId) {
     q('DELETE FROM users WHERE id = ? AND is_demo = 1', [$demoId]); // everything else goes with it

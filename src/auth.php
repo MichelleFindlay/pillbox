@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 const LOGIN_MAX_FAILURES = 8;
 const LOGIN_WINDOW_MINUTES = 15;
+const REMEMBER_COOKIE = 'PILLBOX_DEVICE';
 
 /**
  * The user whose Pillbox is being shown: the signed-in user, or someone who has shared
@@ -18,6 +19,9 @@ function current_user(): ?array
     static $user = null;
     if (!$loaded) {
         $loaded = true;
+        if (empty($_SESSION['uid'])) {
+            remembered_device_sign_in(); // a remembered device: sign back in without asking
+        }
         if (!empty($_SESSION['uid'])) {
             $user = q('SELECT * FROM users WHERE id = ? AND is_active = 1 AND pending_approval = 0', [$_SESSION['uid']])->fetch() ?: null;
             // Signed out remotely ("sign out everywhere else", password change or reset)?
@@ -133,6 +137,98 @@ function login_user(array $user, ?string $method = null): void
     $_SESSION['login_at'] = time();
     unset($_SESSION['csrf']);
     q('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [$user['id']]);
+    // "Remember this device", ticked on the sign-in page (kept in the session through single sign-on).
+    $remember = !empty($_SESSION['remember_device']);
+    unset($_SESSION['remember_device']);
+    if ($remember && remember_days() > 0 && empty($user['is_demo'])) {
+        remember_device((int) $user['id']);
+    }
+}
+
+/* ---------- Remembered devices ---------- */
+
+/** How long a remembered device stays signed in without being used (0: the option is off). */
+function remember_days(): int
+{
+    return max(0, min(400, (int) config('app.remember_days', 90)));
+}
+
+function remember_cookie(string $value, int $expires): void
+{
+    setcookie(REMEMBER_COOKIE, $value, ['expires' => $expires, 'path' => config('app.base_path') ?: '/',
+        'secure' => is_https(), 'httponly' => true, 'samesite' => 'Lax']);
+}
+
+/** "Firefox on Windows", "Safari on iPhone" */
+function device_label(string $agent): string
+{
+    $os = match (true) {
+        (bool) preg_match('/iPhone/i', $agent) => 'iPhone', (bool) preg_match('/iPad/i', $agent) => 'iPad',
+        (bool) preg_match('/Android/i', $agent) => 'Android', (bool) preg_match('/Windows/i', $agent) => 'Windows',
+        (bool) preg_match('/Macintosh|Mac OS/i', $agent) => 'Mac', (bool) preg_match('/CrOS/i', $agent) => 'ChromeOS',
+        (bool) preg_match('/Linux/i', $agent) => 'Linux', default => 'a device',
+    };
+    $browser = match (true) {
+        (bool) preg_match('/Edg\//', $agent) => 'Edge', (bool) preg_match('/Firefox|FxiOS/', $agent) => 'Firefox',
+        (bool) preg_match('/SamsungBrowser/', $agent) => 'Samsung Internet', (bool) preg_match('/Chrome|CriOS/', $agent) => 'Chrome',
+        (bool) preg_match('/Safari/', $agent) => 'Safari', default => 'Browser',
+    };
+    return "$browser on $os";
+}
+
+/**
+ * Remember this browser: a random token in a long-lived cookie, of which only a hash is stored.
+ * Each use pushes the expiry back, so a device used often stays signed in.
+ */
+function remember_device(int $userId): void
+{
+    $selector = bin2hex(random_bytes(12));
+    $validator = bin2hex(random_bytes(32));
+    $expires = time() + remember_days() * 86400;
+    q('INSERT INTO remembered_devices (user_id, selector, validator_hash, label, created_at, last_used_at, expires_at) VALUES (?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP(), ?)',
+        [$userId, $selector, hash('sha256', $validator), device_label((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), gmdate('Y-m-d H:i:s', $expires)]);
+    $_SESSION['device_id'] = (int) db()->lastInsertId();
+    remember_cookie("$selector.$validator", $expires);
+}
+
+/** Signed out, but this browser is remembered: sign back in. */
+function remembered_device_sign_in(): void
+{
+    $cookie = (string) ($_COOKIE[REMEMBER_COOKIE] ?? '');
+    if ($cookie === '' || PHP_SAPI === 'cli' || session_status() !== PHP_SESSION_ACTIVE) {
+        return;
+    }
+    [$selector, $validator] = array_pad(explode('.', $cookie, 2), 2, '');
+    $device = preg_match('/^[a-f0-9]{24}$/', $selector) && preg_match('/^[a-f0-9]{64}$/', $validator) && remember_days() > 0
+        ? q('SELECT d.*, u.session_version FROM remembered_devices d JOIN users u ON u.id = d.user_id AND u.is_active = 1 AND u.pending_approval = 0
+             WHERE d.selector = ? AND d.expires_at > UTC_TIMESTAMP()', [$selector])->fetch()
+        : false;
+    if (!$device || !hash_equals($device['validator_hash'], hash('sha256', $validator))) {
+        if ($device) {
+            q('DELETE FROM remembered_devices WHERE id = ?', [$device['id']]); // a guessed or copied token: stop it working
+        }
+        remember_cookie('', time() - 3600);
+        return;
+    }
+    session_regenerate_id(true);
+    $_SESSION['uid'] = (int) $device['user_id'];
+    $_SESSION['provider'] = 'remembered';
+    $_SESSION['sv'] = (int) $device['session_version'];
+    $_SESSION['login_at'] = time();
+    $_SESSION['device_id'] = (int) $device['id'];
+    $expires = time() + remember_days() * 86400;
+    q('UPDATE remembered_devices SET last_used_at = UTC_TIMESTAMP(), expires_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', $expires), $device['id']]);
+    remember_cookie($cookie, $expires);
+}
+
+/** Forget this browser (signing out). */
+function forget_this_device(): void
+{
+    $selector = explode('.', (string) ($_COOKIE[REMEMBER_COOKIE] ?? ''))[0];
+    if ($selector !== '') {
+        q('DELETE FROM remembered_devices WHERE selector = ?', [$selector]);
+        remember_cookie('', time() - 3600);
+    }
 }
 
 function finish_login_redirect(): never
@@ -206,6 +302,74 @@ function local_login_enabled(): bool
     return !($disable && sso_enabled());
 }
 
+/* ---------- Forgotten password ---------- */
+
+const RESET_MINUTES = 60;
+
+/** Can people reset a forgotten password by email here? */
+function password_reset_enabled(): bool
+{
+    return local_login_enabled() && mail_enabled();
+}
+
+/**
+ * "Forgotten password": email a reset link to the account with this username or email address,
+ * if there is one with a password and an email. Says nothing about whether there is (so it can't
+ * be used to find out who has an account), and sends at most 3 links an hour to an account.
+ */
+function send_password_reset(string $who): void
+{
+    $who = mb_strtolower(trim($who));
+    q('INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, ?, UTC_TIMESTAMP())', [client_ip(), 'reset:' . mb_substr($who, 0, 90)]);
+    $user = q("SELECT * FROM users WHERE (username = ? OR LOWER(email) = ?) AND auth_provider = 'local' AND password_hash IS NOT NULL
+               AND is_active = 1 AND is_demo = 0 AND email IS NOT NULL AND email <> '' ORDER BY username = ? DESC LIMIT 1", [$who, $who, $who])->fetch();
+    if (!$user || q('SELECT COUNT(*) FROM password_resets WHERE user_id = ? AND created_at > UTC_TIMESTAMP() - INTERVAL 1 HOUR', [$user['id']])->fetchColumn() >= 3) {
+        return;
+    }
+    $selector = bin2hex(random_bytes(12));
+    $validator = bin2hex(random_bytes(32));
+    q('INSERT INTO password_resets (user_id, selector, validator_hash, created_at, expires_at, ip) VALUES (?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP() + INTERVAL ? MINUTE, ?)',
+        [$user['id'], $selector, hash('sha256', $validator), RESET_MINUTES, client_ip()]);
+    $link = absolute_url('reset.php?t=' . $selector . '.' . $validator);
+    $app = (string) config('app.name');
+    $text = "Hello {$user['display_name']},\n\nSomeone (hopefully you) asked to reset the password for your $app account, \"{$user['username']}\".\n\n"
+        . "To choose a new password, open this link within " . RESET_MINUTES . " minutes:\n$link\n\n"
+        . "If you didn't ask for this, you can ignore this email: your password hasn't changed.\n";
+    $error = send_mail($user['email'], "Reset your $app password", $text, mail_html("Reset your $app password",
+        '<p>Hello ' . h($user['display_name']) . ',</p><p>Someone (hopefully you) asked to reset the password for your ' . h($app) . ' account, <strong>' . h($user['username']) . '</strong>.</p>'
+        . '<p><a href="' . h($link) . '" style="display:inline-block;background:#4b5e3a;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Choose a new password</a></p>'
+        . '<p style="color:#666">The link works once, for ' . RESET_MINUTES . " minutes. If you didn't ask for this, ignore this email: your password hasn't changed.</p>"));
+    if ($error) {
+        error_log("Pillbox password reset email to user {$user['id']} failed: $error");
+    }
+}
+
+/** The account a reset link belongs to, if it's valid and unused; null otherwise. */
+function password_reset_user(string $token): ?array
+{
+    [$selector, $validator] = array_pad(explode('.', $token, 2), 2, '');
+    if (!preg_match('/^[a-f0-9]{24}$/', $selector) || !preg_match('/^[a-f0-9]{64}$/', $validator)) {
+        return null;
+    }
+    $row = q("SELECT r.validator_hash, u.* FROM password_resets r JOIN users u ON u.id = r.user_id AND u.is_active = 1 AND u.auth_provider = 'local'
+              WHERE r.selector = ? AND r.expires_at > UTC_TIMESTAMP()", [$selector])->fetch();
+    return $row && hash_equals($row['validator_hash'], hash('sha256', $validator)) ? $row : null;
+}
+
+/** Set the new password: every reset link for the account stops working, and it's signed out everywhere. */
+function complete_password_reset(array $user, string $password): void
+{
+    q('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $user['id']]);
+    q('DELETE FROM password_resets WHERE user_id = ?', [$user['id']]);
+    q('DELETE FROM login_attempts WHERE username = ?', [$user['username']]);
+    bump_session_version((int) $user['id'], false);
+    $app = (string) config('app.name');
+    send_mail($user['email'], "Your $app password was changed", "Hello {$user['display_name']},\n\nThe password for your $app account, \"{$user['username']}\", has just been changed using a reset link, "
+        . "and you've been signed out on all your devices.\n\nIf this wasn't you, contact whoever runs this $app straight away.\n",
+        mail_html("Your $app password was changed", '<p>Hello ' . h($user['display_name']) . ',</p><p>The password for your ' . h($app) . ' account, <strong>' . h($user['username'])
+            . "</strong>, has just been changed using a reset link, and you've been signed out on all your devices.</p><p>If this wasn't you, contact whoever runs this " . h($app) . ' straight away.</p>'));
+}
+
 function validate_new_password(string $password, string $confirm): ?string
 {
     if (mb_strlen($password) < 10) {
@@ -234,6 +398,8 @@ function validate_username(string $username): ?string
 function bump_session_version(int $userId, bool $keepCurrent): void
 {
     q('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$userId]);
+    // Remembered devices too (except this one, if it stays signed in).
+    q('DELETE FROM remembered_devices WHERE user_id = ? AND id <> ?', [$userId, $keepCurrent ? (int) ($_SESSION['device_id'] ?? 0) : 0]);
     if ($keepCurrent) {
         session_regenerate_id(true);
         $_SESSION['sv'] = (int) q('SELECT session_version FROM users WHERE id = ?', [$userId])->fetchColumn();

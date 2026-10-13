@@ -222,6 +222,20 @@
     });
   });
 
+  // "Remember this device" on the sign-in page also applies to the single sign-on buttons.
+  var rememberBox = document.querySelector('[data-remember-device]');
+  if (rememberBox) {
+    var syncSso = function () {
+      document.querySelectorAll('a[data-sso]').forEach(function (a) {
+        var u = new URL(a.href, window.location.href);
+        if (rememberBox.checked) { u.searchParams.set('remember', '1'); } else { u.searchParams.delete('remember'); }
+        a.href = u.toString();
+      });
+    };
+    rememberBox.addEventListener('change', syncSso);
+    syncSso();
+  }
+
   // Read-only text to copy: select it all when focused.
   document.querySelectorAll('[data-select-on-focus]').forEach(function (el) { el.addEventListener('focus', function () { el.select(); }); });
 
