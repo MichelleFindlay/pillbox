@@ -204,6 +204,8 @@ function check_for_updates(DateTimeImmutable $now): array
 function tidy_up(DateTimeImmutable $now): array
 {
     $log = [];
+    q('DELETE FROM remembered_devices WHERE expires_at < UTC_TIMESTAMP()');
+    q('DELETE FROM password_resets WHERE expires_at < UTC_TIMESTAMP()');
     $n = q('DELETE FROM login_attempts WHERE attempted_at < ?', [$now->modify('-30 days')->format('Y-m-d H:i:s')])->rowCount();
     if ($n) {
         $log[] = "Removed $n old sign-in attempts.";

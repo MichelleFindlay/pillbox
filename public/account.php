@@ -164,6 +164,15 @@ if (is_post()) {
             }
             break;
 
+        case 'forget_device':
+            $forget = (int) post('device_id');
+            q('DELETE FROM remembered_devices WHERE id = ? AND user_id = ?', [$forget, $uid]);
+            if ($forget === (int) ($_SESSION['device_id'] ?? 0)) {
+                remember_cookie('', time() - 3600);
+            }
+            flash('success', 'That device will need to sign in again next time.');
+            redirect('account.php#security');
+
         case 'sign_out_others':
             bump_session_version($uid, true);
             flash('success', 'You have been signed out on all other devices.');
@@ -475,8 +484,25 @@ render_header('Account', 'account');
     </form>
     <?php endif; ?>
 
+    <?php $devices = q('SELECT * FROM remembered_devices WHERE user_id = ? AND expires_at > UTC_TIMESTAMP() ORDER BY last_used_at DESC', [$uid])->fetchAll(); ?>
+    <?php if ($devices || remember_days() > 0): ?>
+    <h3>Remembered devices</h3>
+    <?php if (!$devices): ?><p class="muted small">None. Tick <strong>Remember this device</strong> when you sign in on a phone or computer you use often, and it stays signed in for <?= remember_days() ?> days after you last use it.</p>
+    <?php else: ?>
+    <p class="muted small">These stay signed in until <?= remember_days() ?> days after they were last used. Mind and private pages still ask for their PIN.</p>
+    <ul class="plain">
+        <?php foreach ($devices as $d): $here = (int) $d['id'] === (int) ($_SESSION['device_id'] ?? 0); ?>
+        <li class="logline"><span><strong><?= h((string) ($d['label'] ?: 'A device')) ?></strong><?= $here ? ' <span class="badge">This device</span>' : '' ?>
+            <br><span class="muted small">Remembered <?= h(local_time($d['created_at'], 'j M Y')) ?> · last used <?= h(local_time($d['last_used_at'], 'j M Y, H:i')) ?></span></span>
+            <form method="post" data-confirm="Forget this device? It will need to sign in again."><?= csrf_field() ?><input type="hidden" name="action" value="forget_device"><input type="hidden" name="device_id" value="<?= (int) $d['id'] ?>">
+                <button class="btn btn-small" type="submit">Forget</button></form></li>
+        <?php endforeach; ?>
+    </ul>
+    <?php endif; ?>
+    <?php endif; ?>
+
     <h3>Other devices</h3>
-    <p class="muted small">Lost a phone, or signed in on a shared computer? Sign out everywhere except here.</p>
+    <p class="muted small">Lost a phone, or signed in on a shared computer? Sign out everywhere except here, and forget every other remembered device.</p>
     <form method="post" data-confirm="Sign out of Pillbox on every other device?">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="sign_out_others">

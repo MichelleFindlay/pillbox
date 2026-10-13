@@ -35,7 +35,9 @@ See [Display and accessibility](accessibility.md) and [Privacy and security](pri
 
 ## Sign-in
 
-Change your password, link a Microsoft or other sign-in, and **sign out everywhere else**.
+Change your password, link a Microsoft or other sign-in, and **sign out everywhere else**. Add an email address under **Profile** so you can reset your password yourself if you forget it.
+
+**Remembered devices** lists the phones and computers you ticked **Remember this device** on, with when each was last used. **Forget** one if it's lost or no longer yours. Signing out on a device, changing your password, or **sign out everywhere else** forgets remembered devices too.
 
 ## Your data
 

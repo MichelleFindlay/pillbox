@@ -12,6 +12,7 @@ if (!oidc_provider($key)) {
 }
 
 $linkUserId = null;
+$_SESSION['remember_device'] = get('remember') === '1'; // "Remember this device" on the sign-in page
 if (get('link') === '1') {
     $user = require_login();
     if (!hash_equals(csrf_token(), get('csrf'))) {

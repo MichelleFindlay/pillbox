@@ -6,6 +6,10 @@ Sign in with your username and password, or with a single sign-on button (such a
 
 ![The sign-in page, with "Try the demo"](images/sign-in.png)
 
+**Forgotten your password?** on the sign-in page emails a link to choose a new one, to the email address on your account. It works once, for an hour, and signs you out on all your devices. If your account has no email address, or your Pillbox can't send email, ask whoever runs it to reset your password. If you sign in with Microsoft or another sign-in button, your password is managed there.
+
+**Remember this device** keeps a phone or computer you use often signed in, for 90 days after you last used it (each use starts the 90 days again). It works with single sign-on too. Don't tick it on a shared or public computer. Mind and the private pages still ask for their PIN.
+
 Want to look around first? If the demo is switched on, **Try the demo** opens a sample account for a made-up person. Nothing you change there is kept.
 
 ## The first-time setup

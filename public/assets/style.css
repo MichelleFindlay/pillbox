@@ -1513,3 +1513,5 @@ h1 .help-q { width: 1.5rem; height: 1.5rem; font-size: .9rem; }
 .docs-shot { margin: 1rem 0 1.25rem; }
 .docs-shot img { display: block; max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); }
 .docs-shot figcaption { font-size: .85rem; color: var(--text-2); margin-top: .35rem; }
+/* Sign-in page: "Remember this device", centred above Sign in. */
+.remember-device { justify-content: center; align-items: center; text-align: center; }
