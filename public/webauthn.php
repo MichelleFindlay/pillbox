@@ -47,7 +47,7 @@ if ($action === 'login_options' || $action === 'login_finish') {
         }
         unset($_SESSION['pending_2fa']);
         $_SESSION['remember_device'] = !empty($pending['remember']);
-        login_user($signingIn);
+        login_user($signingIn, $pending['method'] ?? null);
         $next = url(safe_return($_SESSION['after_login'] ?? null));
         unset($_SESSION['after_login']);
         $reply(['ok' => true, 'next' => $next]);

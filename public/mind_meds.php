@@ -28,7 +28,8 @@ if (is_post()) {
             }
             break;
         case 'delete_note':
-            q('DELETE FROM med_notes WHERE id = ? AND user_id = ?', [(int) post('note_id'), $uid]);
+            // Only a note on this (visible) medicine: never one on a private medicine hidden from someone with shared access.
+            q('DELETE FROM med_notes WHERE id = ? AND user_id = ? AND medication_id = ?', [(int) post('note_id'), $uid, $med['id']]);
             break;
     }
     redirect('mind_meds.php#med-' . $med['id']);

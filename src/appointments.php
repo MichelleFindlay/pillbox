@@ -176,7 +176,7 @@ function appointment_suggestions(array $user, array $appointment): array
     $out = [];
 
     // Mental health appointments: the running question list, and how things have been in Mind.
-    if (in_array($appointment['kind'], MIND_APPOINTMENT_KINDS, true) && mind_enabled($user)) {
+    if (in_array($appointment['kind'], MIND_APPOINTMENT_KINDS, true) && mind_visible($user)) { // not while Mind is PIN-locked
         foreach (mind_notes($uid, 'question', false) as $n) {
             $out[] = $n['text'];
         }
@@ -222,14 +222,14 @@ function appointment_suggestions(array $user, array $appointment): array
 
     // Heavy use of as-needed medicines.
     foreach (q('SELECT m.name, COUNT(*) AS n FROM dose_logs l JOIN medications m ON m.id = l.medication_id
-                WHERE l.user_id = ? AND l.schedule_id IS NULL AND l.taken_at >= ? AND l.taken_at <= ? GROUP BY m.id HAVING n >= 5',
+                WHERE l.user_id = ? AND l.schedule_id IS NULL AND l.taken_at >= ? AND l.taken_at <= ?' . private_med_filter() . ' GROUP BY m.id HAVING n >= 5',
         [$uid, $sinceUtc, $until]) as $r) {
         $out[] = "I've needed {$r['name']} {$r['n']} times since $sinceLabel.";
     }
 
     // Recent dose changes.
     foreach (q("SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id
-                WHERE c.user_id = ? AND c.effective_date >= ? AND c.kind NOT IN ('note') ORDER BY c.effective_date",
+                WHERE c.user_id = ? AND c.effective_date >= ? AND c.kind NOT IN ('note')" . private_med_filter() . " ORDER BY c.effective_date",
         [$uid, local_time($sinceUtc, 'Y-m-d')]) as $c) {
         $out[] = "How the change to {$c['name']} is going: " . lcfirst($c['summary']) . ' (' . date('j M', strtotime($c['effective_date'])) . ').';
     }

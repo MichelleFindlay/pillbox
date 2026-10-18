@@ -315,7 +315,7 @@ render_header('Today', 'today');
                 </div>
             </div>
             <?php if (share_can('doses', 'log')): ?>
-            <form method="post" action="<?= h(url('dose_action.php')) ?>" class="dose-actions prn-form"<?= $atMax ? ' data-confirm="You have reached the daily maximum for this medicine. Log another dose anyway?"' : '' ?>>
+            <form method="post" action="<?= h(url('dose_action.php')) ?>" class="dose-actions prn-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="prn">
                 <input type="hidden" name="medication_id" value="<?= (int) $m['id'] ?>">

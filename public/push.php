@@ -28,7 +28,7 @@ switch ($input['action'] ?? '') {
     case 'subscribe':
         $p256dh = (string) ($sub['keys']['p256dh'] ?? '');
         $auth = (string) ($sub['keys']['auth'] ?? '');
-        if (!preg_match('#^https://#', $endpoint) || strlen(b64url_decode($p256dh)) !== 65 || strlen(b64url_decode($auth)) !== 16) {
+        if (push_endpoint_ip($endpoint) === null || strlen(b64url_decode($p256dh)) !== 65 || strlen(b64url_decode($auth)) !== 16) {
             $reply(['error' => 'The browser sent an unexpected subscription.'], 400);
         }
         q('INSERT INTO push_subscriptions (user_id, endpoint, endpoint_hash, p256dh, auth, label) VALUES (?, ?, ?, ?, ?, ?)

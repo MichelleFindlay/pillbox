@@ -24,6 +24,8 @@ People agree to the terms and privacy policy when they sign up. Single sign-on p
 
 **Forgotten your password?** on the sign-in page needs email to be set up (Site settings → Email). Without it, people are told to ask you, and you can reset a password from **Admin → Manage**.
 
+**Site address**: set it in Site settings. Until it is, Pillbox uses the address an administrator last visited it at for links in emails and calendar feeds (never just the address a request claims, which anyone can fake), and won't send password reset emails until it knows one.
+
 How long **Remember this device** keeps a device signed in is `remember_days` under `'app'` in `config/config.php` (90 days by default; 0 turns the option off).
 
 Site settings are saved to `config/settings.php` (which overrides `config/config.php`): site name and address, default time zone, update checks, weather for the headache diary (Open-Meteo), tidy addresses, email (PHP mail or SMTP), the scheduled tasks token, sign-ups, terms and privacy, connected services, and demo mode. If the `config/` folder isn't writable, Pillbox shows what to paste into `config.php` instead.

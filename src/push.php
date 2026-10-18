@@ -90,14 +90,46 @@ function ecdsa_der_to_raw(string $der): string
     return $out;
 }
 
+// Browsers' push services. The endpoint a browser gives us must be one of these (or one an admin adds
+// under 'push' => ['allowed_hosts' => [...]]), so a made-up endpoint can't make the server send requests
+// to other places, such as services on its own network.
+const PUSH_SERVICE_HOSTS = ['fcm.googleapis.com', 'android.googleapis.com', 'updates.push.services.mozilla.com', 'push.services.mozilla.com',
+    '.push.apple.com', '.notify.windows.com'];
+
+/** The IP to connect to for a push endpoint, or null if it isn't a known push service on the public internet. */
+function push_endpoint_ip(string $endpoint): ?string
+{
+    $p = parse_url($endpoint);
+    if (($p['scheme'] ?? '') !== 'https' || empty($p['host']) || isset($p['user']) || isset($p['pass'])) {
+        return null;
+    }
+    $host = strtolower($p['host']);
+    $allowed = false;
+    foreach ([...PUSH_SERVICE_HOSTS, ...(array) config('push.allowed_hosts', [])] as $h) {
+        $h = strtolower((string) $h);
+        $allowed = $allowed || $host === ltrim($h, '.') || (str_starts_with($h, '.') && str_ends_with($host, $h));
+    }
+    if (!$allowed) {
+        return null;
+    }
+    $ip = gethostbyname($host);
+    return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ? $ip : null;
+}
+
 /**
  * Send one notification. ['title', 'body', 'url', 'tag']
  * @return int HTTP status from the push service (201 = sent; 404 / 410 = the device has gone)
  */
 function push_send(array $sub, array $message): int
 {
+    $ip = push_endpoint_ip($sub['endpoint']);
+    if ($ip === null) {
+        return 410; // not a push service we send to: treated as gone, so it's removed
+    }
     $body = push_encrypt(json_encode($message, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), b64url_decode($sub['p256dh']), b64url_decode($sub['auth']));
     $ch = curl_init($sub['endpoint']);
+    $host = (string) parse_url($sub['endpoint'], PHP_URL_HOST);
+    curl_setopt($ch, CURLOPT_RESOLVE, [$host . ':' . (parse_url($sub['endpoint'], PHP_URL_PORT) ?: 443) . ':' . $ip]); // the address that was checked
     curl_setopt_array($ch, [
         CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
         CURLOPT_HTTPHEADER => ['Content-Type: application/octet-stream', 'Content-Encoding: aes128gcm', 'TTL: 86400', 'Urgency: normal',

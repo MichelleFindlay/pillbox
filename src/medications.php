@@ -98,6 +98,12 @@ function private_meds_hidden(): bool
     return isset(current_user()['_acting']);
 }
 
+/** SQL to add to a query on medications (alias $alias) so private ones are left out when they must be hidden. */
+function private_med_filter(string $alias = 'm'): string
+{
+    return private_meds_hidden() ? ' AND ' . preg_replace('/\W/', '', $alias) . '.is_private = 0' : '';
+}
+
 /** A medicine's name, or "a private medicine" where it might be seen by others (notifications, emails). */
 function public_med_name(array $med): string
 {
@@ -402,7 +408,7 @@ function prn_logs(int $userId, string $fromUtc, string $toUtc): array
     return q(
         'SELECT l.*, m.name, m.strength, m.dose_unit, m.colour
          FROM dose_logs l JOIN medications m ON m.id = l.medication_id
-         WHERE l.user_id = ? AND l.schedule_id IS NULL AND l.taken_at >= ? AND l.taken_at < ?
+         WHERE l.user_id = ? AND l.schedule_id IS NULL AND l.taken_at >= ? AND l.taken_at < ?' . private_med_filter() . '
          ORDER BY l.taken_at DESC',
         [$userId, $fromUtc, $toUtc]
     )->fetchAll();
@@ -843,7 +849,7 @@ function medication_change_markers(int $userId, callable $match): array
 {
     $out = [];
     foreach (q("SELECT c.effective_date, c.kind, c.summary, m.name, m.reason FROM medication_changes c JOIN medications m ON m.id = c.medication_id
-                WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'decreased', 'strength', 'stopped', 'restarted') ORDER BY c.effective_date", [$userId]) as $c) {
+                WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'decreased', 'strength', 'stopped', 'restarted')" . private_med_filter() . " ORDER BY c.effective_date", [$userId]) as $c) {
         if ($match($c['name'] . ' ' . $c['reason'])) {
             $out[] = [strtotime($c['effective_date'] . ' 12:00 UTC'), CHANGE_KINDS[$c['kind']] . ': ' . $c['name'] . ', ' . lcfirst($c['summary'])];
         }

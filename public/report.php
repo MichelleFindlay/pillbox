@@ -34,7 +34,7 @@ foreach ($prn as $log) {
 
 $appointments = appointments_between($uid, $fromUtc, $toUtc);
 $medChanges = q('SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id
-                 WHERE c.user_id = ? AND c.effective_date BETWEEN ? AND ? ORDER BY c.effective_date, m.name',
+                 WHERE c.user_id = ? AND c.effective_date BETWEEN ? AND ?' . private_med_filter() . ' ORDER BY c.effective_date, m.name',
     [$uid, $from->format('Y-m-d'), $to->format('Y-m-d')])->fetchAll();
 $nextAppointments = appointments_between($uid, utc_now(), gmdate('Y-m-d H:i:s', strtotime('+6 months')));
 

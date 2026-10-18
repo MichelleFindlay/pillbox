@@ -63,7 +63,8 @@ function nhs_terminology_token(bool $refresh = false): string
 {
     $cache = nhs_token_cache_file();
     if (!$refresh && is_file($cache)) {
-        $cached = json_decode((string) file_get_contents($cache), true);
+        // Kept encrypted (with storage/app.key), like the other tokens Pillbox stores.
+        $cached = json_decode((string) unseal((string) file_get_contents($cache)), true);
         if (is_array($cached) && ($cached['expires_at'] ?? 0) > time() + 30) {
             return (string) $cached['access_token'];
         }
@@ -77,7 +78,7 @@ function nhs_terminology_token(bool $refresh = false): string
         throw new RuntimeException('The NHS Terminology Server did not return an access token.');
     }
     $expiresAt = time() + (int) ($data['expires_in'] ?? 300);
-    if (@file_put_contents($cache, json_encode(['access_token' => $data['access_token'], 'expires_at' => $expiresAt]), LOCK_EX)) {
+    if (@file_put_contents($cache, seal((string) json_encode(['access_token' => $data['access_token'], 'expires_at' => $expiresAt])), LOCK_EX)) {
         @chmod($cache, 0600);
     }
     return (string) $data['access_token'];

@@ -80,12 +80,32 @@ const PATHWAY_OPTIONS_BY_WEEK = [
 const PRIVATE_PAGES = ['pathway' => 'pathway.php', 'gender' => 'gender.php'];
 
 /** A private page's record (with 'data' decoded), or null. */
+/**
+ * The label a private record is stored under: a keyed code, not "pathway" or "gender", so the database
+ * alone doesn't show which private pages someone has used.
+ */
+function private_kind_key(int $userId, string $kind): string
+{
+    return 'k' . substr(hash_hmac('sha256', $userId . '|' . $kind, app_key()), 0, 19);
+}
+
+/** The key wrong PINs for a private page are counted under (see pin_is_throttled). */
+function private_pin_key(int $userId, string $kind): string
+{
+    return '#' . private_kind_key($userId, $kind);
+}
+
 function private_record(int $userId, string $kind): ?array
 {
-    $row = q('SELECT * FROM private_records WHERE user_id = ? AND kind = ?', [$userId, $kind])->fetch();
+    $key = private_kind_key($userId, $kind);
+    $row = q('SELECT * FROM private_records WHERE user_id = ? AND kind = ?', [$userId, $key])->fetch();
+    if (!$row && ($row = q('SELECT * FROM private_records WHERE user_id = ? AND kind = ?', [$userId, $kind])->fetch())) {
+        q('UPDATE private_records SET kind = ? WHERE id = ?', [$key, $row['id']]); // stored before the labels were coded
+    }
     if (!$row) {
         return null;
     }
+    $row['kind'] = $kind;
     $row['data'] = json_decode((string) unseal($row['data']), true) ?: [];
     return $row;
 }
@@ -111,7 +131,7 @@ function private_record_save(int $userId, string $kind, array $data): void
     }
     q('INSERT INTO private_records (user_id, kind, data, remind_at) VALUES (?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE data = VALUES(data), remind_at = VALUES(remind_at)',
-        [$userId, $kind, seal(json_encode($data, JSON_UNESCAPED_UNICODE)), $next]);
+        [$userId, private_kind_key($userId, $kind), seal(json_encode($data, JSON_UNESCAPED_UNICODE)), $next]);
 }
 
 /** Delete everything, and forget it was ever unlocked or reminded about. */
@@ -126,7 +146,9 @@ function private_record_delete(int $userId, string $kind): void
     foreach ($record['data']['reminders'] ?? [] as $r) {
         q('DELETE FROM push_sent WHERE user_id = ? AND ref = ?', [$userId, 'private|' . $r['id']]);
     }
-    q('DELETE FROM private_records WHERE user_id = ? AND kind = ?', [$userId, $kind]);
+    q('DELETE FROM private_records WHERE user_id = ? AND kind IN (?, ?)', [$userId, private_kind_key($userId, $kind), $kind]);
+    // Nothing left to show the page was used: not even wrong PIN attempts.
+    q('DELETE FROM login_attempts WHERE username IN (?, ?)', [private_pin_key($userId, $kind), '#' . $kind . $userId]);
     unset($_SESSION[$kind . '_unlocked']);
 }
 
@@ -183,7 +205,13 @@ function send_private_reminders(DateTimeImmutable $now): array
     $sent = 0;
     foreach (q('SELECT user_id, kind FROM private_records WHERE remind_at IS NOT NULL AND remind_at <= ?', [$now->format('Y-m-d H:i:s')])->fetchAll() as $row) {
         $uid = (int) $row['user_id'];
-        $record = private_record($uid, $row['kind']);
+        $kind = null; // which private page: the row's label is coded
+        foreach (array_keys(PRIVATE_PAGES) as $k) {
+            if ($row['kind'] === $k || $row['kind'] === private_kind_key($uid, $k)) {
+                $kind = $k;
+            }
+        }
+        $record = $kind ? private_record($uid, $kind) : null;
         $user = q('SELECT * FROM users WHERE id = ? AND is_active = 1', [$uid])->fetch();
         if (!$record || !$user) {
             continue;
@@ -198,9 +226,9 @@ function send_private_reminders(DateTimeImmutable $now): array
             }
         }
         if ($due) {
-            $sent += push_user(['push_private' => 1] + $user, ['title' => 'Pillbox', 'body' => 'You have a reminder.', 'url' => url(PRIVATE_PAGES[$row['kind']] ?? 'index.php'), 'tag' => 'reminder']);
+            $sent += push_user(['push_private' => 1] + $user, ['title' => 'Pillbox', 'body' => 'You have a reminder.', 'url' => url(PRIVATE_PAGES[$kind] ?? 'index.php'), 'tag' => 'reminder']);
         }
-        private_record_save($uid, $row['kind'], $data);
+        private_record_save($uid, $kind, $data);
     }
     return $sent ? ["Sent $sent reminder" . ($sent === 1 ? '' : 's') . '.'] : [];
 }

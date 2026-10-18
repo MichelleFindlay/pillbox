@@ -35,20 +35,20 @@ if (is_post()) {
         } else {
             pathway_save($uid, ['purpose' => isset(PATHWAY_PURPOSES[post('purpose')]) ? post('purpose') : 'options', 'steps' => [], 'meds' => [], 'symptoms' => [], 'reminders' => []]);
             if ($pin !== '') {
-                q('UPDATE private_records SET pin_hash = ? WHERE user_id = ? AND kind = ?', [password_hash($pin, PASSWORD_DEFAULT), $uid, PATHWAY_KIND]);
+                q('UPDATE private_records SET pin_hash = ? WHERE user_id = ? AND kind = ?', [password_hash($pin, PASSWORD_DEFAULT), $uid, private_kind_key($uid, PATHWAY_KIND)]);
                 $_SESSION['pathway_unlocked'] = time();
             }
             redirect('pathway.php');
         }
     } elseif ($action === 'unlock' && $record) {
-        if (login_is_throttled('#pathway' . $uid)) {
-            $errors[] = 'Too many tries. Please wait ' . LOGIN_WINDOW_MINUTES . ' minutes.';
+        if (pin_is_throttled(private_pin_key($uid, PATHWAY_KIND))) {
+            $errors[] = 'Too many wrong PINs. Please wait a while and try again (or delete everything here if you have forgotten it).';
         } elseif ($record['pin_hash'] && password_verify((string) ($_POST['pin'] ?? ''), $record['pin_hash'])) {
             $_SESSION['pathway_unlocked'] = time();
-            q('DELETE FROM login_attempts WHERE username = ?', ['#pathway' . $uid]);
+            q('DELETE FROM login_attempts WHERE username = ?', [private_pin_key($uid, PATHWAY_KIND)]);
             redirect('pathway.php');
         } else {
-            q('INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, ?, UTC_TIMESTAMP())', [client_ip(), '#pathway' . $uid]);
+            pin_failed(private_pin_key($uid, PATHWAY_KIND));
             $errors[] = "That PIN isn't right.";
         }
     } elseif ($action === 'delete_all' && $record) {
@@ -71,10 +71,10 @@ if (is_post()) {
             case 'pin':
                 $pin = (string) ($_POST['pin'] ?? '');
                 if ($pin === '') {
-                    q('UPDATE private_records SET pin_hash = NULL WHERE user_id = ? AND kind = ?', [$uid, PATHWAY_KIND]);
+                    q('UPDATE private_records SET pin_hash = NULL WHERE user_id = ? AND kind = ?', [$uid, private_kind_key($uid, PATHWAY_KIND)]);
                     flash('success', 'PIN removed.');
                 } elseif (preg_match('/^\d{4,8}$/', $pin)) {
-                    q('UPDATE private_records SET pin_hash = ? WHERE user_id = ? AND kind = ?', [password_hash($pin, PASSWORD_DEFAULT), $uid, PATHWAY_KIND]);
+                    q('UPDATE private_records SET pin_hash = ? WHERE user_id = ? AND kind = ?', [password_hash($pin, PASSWORD_DEFAULT), $uid, private_kind_key($uid, PATHWAY_KIND)]);
                     $_SESSION['pathway_unlocked'] = time();
                     flash('success', 'PIN set. This page locks after ' . PATHWAY_UNLOCK_MINUTES . ' minutes without use.');
                 } else {

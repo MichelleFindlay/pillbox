@@ -93,6 +93,8 @@ if (pretty_urls() && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
 }
 if (!defined('PILLBOX_NO_SESSION')) {
     start_session();
-    remember_site_url();
 }
 ensure_schema();
+if (!defined('PILLBOX_NO_SESSION')) {
+    remember_site_url(); // after the schema, as it checks the user is an admin
+}

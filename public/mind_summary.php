@@ -38,7 +38,7 @@ arsort($triggers);
 $scores = q('SELECT * FROM mind_questionnaires WHERE user_id = ? AND taken_at >= ? AND taken_at < ? ORDER BY taken_at', [$uid, $fromUtc, $toUtc])->fetchAll();
 $sleep = q("SELECT value1 FROM health_readings WHERE user_id = ? AND metric = 'sleep' AND recorded_at >= ? AND recorded_at < ?", [$uid, $fromUtc, $toUtc])->fetchAll(PDO::FETCH_COLUMN);
 $medChanges = q('SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id
-                 WHERE c.user_id = ? AND c.effective_date BETWEEN ? AND ? ORDER BY c.effective_date',
+                 WHERE c.user_id = ? AND c.effective_date BETWEEN ? AND ?' . private_med_filter() . ' ORDER BY c.effective_date',
     [$uid, $from->format('Y-m-d'), $today->format('Y-m-d')])->fetchAll();
 $sideEffects = q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'symptom' AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at",
     [$uid, $fromUtc, $toUtc])->fetchAll();

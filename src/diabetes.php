@@ -116,9 +116,15 @@ function nightscout_url_ok(string $url): bool
 
 function nightscout_get(string $base, string $token, string $path, array $query): array
 {
+    // The access token goes in the address (as Nightscout expects), so only ever over HTTPS, except on a
+    // home network the admin has allowed (nightscout.allow_private), where plain HTTP is common.
+    $local = (bool) config('nightscout.allow_private', false);
+    if (!$local && strtolower((string) parse_url($base, PHP_URL_SCHEME)) !== 'https') {
+        throw new RuntimeException('The Nightscout address must start with https://, so your access token is sent securely.');
+    }
     $url = rtrim($base, '/') . $path . '?' . http_build_query($query + ($token !== '' ? ['token' => $token] : []));
     $ch = curl_init($url);
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS | CURLPROTO_HTTP,
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_FOLLOWLOCATION => false, CURLOPT_PROTOCOLS => $local ? CURLPROTO_HTTPS | CURLPROTO_HTTP : CURLPROTO_HTTPS,
         CURLOPT_HTTPHEADER => ['Accept: application/json']]);
     // Connect to the address that was checked (so a name can't switch to an internal address in between).
     $parts = parse_url($base);

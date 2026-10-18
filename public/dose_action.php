@@ -9,14 +9,32 @@ require_post();
 $uid = (int) $user['id'];
 $return = safe_return(post('return'));
 
-/** Refuse a dose taken too soon after the last one, unless they confirmed it ("log anyway"). */
-$tooSoon = function (array $med, string $takenAt, ?int $excludeLogId, array $fields) use ($uid, $return): void {
-    if (post('override') === '1' || !($soon = dose_too_soon($med, $takenAt, $excludeLogId))) {
-        return;
+/*
+ * Safety checks (minimum time between doses, an as-needed medicine's daily maximum): a dose that breaks
+ * one isn't logged. Instead the person is shown why, with "I took it: log anyway". That button carries a
+ * one-time code from this session, so the check can only be skipped by that confirmation, never by
+ * simply sending override=1.
+ */
+$overridden = false;
+if (post('override') !== '' && !empty($_SESSION['dose_override_code'])) {
+    [$code, $at] = $_SESSION['dose_override_code'];
+    $overridden = $at > time() - 600 && hash_equals($code, post('override'));
+    if ($overridden) {
+        unset($_SESSION['dose_override_code']);
     }
-    $_SESSION['dose_override'] = ['user' => $uid, 'text' => too_soon_text($med, $soon), 'return' => $return,
+}
+$refuse = function (string $text, array $fields) use ($uid, $return): never {
+    $code = bin2hex(random_bytes(16));
+    $_SESSION['dose_override_code'] = [$code, time()];
+    $_SESSION['dose_override'] = ['user' => $uid, 'text' => $text, 'return' => $return, 'code' => $code,
         'fields' => array_intersect_key($fields, array_flip(['action', 'schedule_id', 'slot', 'at', 'taken_time', 'site', 'medication_id', 'amount', 'notes']))];
     redirect($return);
+};
+/** Refuse a dose taken too soon after the last one, unless they confirmed it. */
+$tooSoon = function (array $med, string $takenAt, ?int $excludeLogId, array $fields) use (&$overridden, $refuse): void {
+    if (!$overridden && ($soon = dose_too_soon($med, $takenAt, $excludeLogId))) {
+        $refuse(too_soon_text($med, $soon), $fields);
+    }
 };
 
 switch (post('action')) {
@@ -26,7 +44,7 @@ switch (post('action')) {
         $schedule = q(
             'SELECT s.*, m.id AS med_id, m.name FROM medication_schedules s
              JOIN medications m ON m.id = s.medication_id
-             WHERE s.id = ? AND m.user_id = ?',
+             WHERE s.id = ? AND m.user_id = ?' . private_med_filter() . '',
             [(int) post('schedule_id'), $uid]
         )->fetch();
         $slot = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', post('slot'), new DateTimeZone('UTC'));
@@ -57,7 +75,7 @@ switch (post('action')) {
         foreach (array_slice((array) ($_POST['slots'] ?? []), 0, 50) as $item) {
             [$scheduleId, $slotStr] = array_pad(explode('|', (string) $item, 2), 2, '');
             $schedule = q('SELECT s.*, m.id AS med_id, m.form FROM medication_schedules s JOIN medications m ON m.id = s.medication_id
-                           WHERE s.id = ? AND m.user_id = ? AND m.as_needed = 0', [(int) $scheduleId, $uid])->fetch();
+                           WHERE s.id = ? AND m.user_id = ? AND m.as_needed = 0' . private_med_filter() . '', [(int) $scheduleId, $uid])->fetch();
             $slot = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $slotStr, new DateTimeZone('UTC'));
             if (!$schedule || $slot === false
                 || q('SELECT 1 FROM dose_logs WHERE schedule_id = ? AND scheduled_for = ?', [$schedule['id'], $slotStr])->fetch()) {
@@ -88,6 +106,15 @@ switch (post('action')) {
             $amount = (float) ($med['prn_dose_amount'] ?? 1);
         }
         $tooSoon($med, utc_now(), null, $_POST);
+        // The daily maximum for an as-needed medicine (today, in the person's own time).
+        if (!$overridden && $med['prn_max_daily'] !== null) {
+            $dayStart = local_today()->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+            $used = (float) q("SELECT COALESCE(SUM(amount), 0) FROM dose_logs WHERE medication_id = ? AND status = 'taken' AND taken_at >= ?", [$med['id'], $dayStart])->fetchColumn();
+            if ($used + $amount > (float) $med['prn_max_daily'] + 0.0001) {
+                $refuse("That would be more than the daily maximum for {$med['name']} (" . dose_label($med['prn_max_daily'], $med['dose_unit']) . ' a day; '
+                    . dose_label($used, $med['dose_unit']) . ' logged today). Check with a doctor or pharmacist before taking more.', $_POST);
+            }
+        }
         transaction(function () use ($med, $amount, $uid) {
             q(
                 "INSERT INTO dose_logs (user_id, medication_id, status, amount, taken_at, notes) VALUES (?, ?, 'taken', ?, ?, ?)",

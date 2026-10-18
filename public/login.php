@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/../src/bootstrap.php';
 
-if (user_count() === 0 && !sso_enabled()) {
+if (user_count() === 0) { // a new Pillbox: create the first administrator (with the setup code) first
     redirect('setup.php');
 }
 if (current_user()) {
@@ -20,14 +20,8 @@ if (is_post() && local_login_enabled()) {
     $username = post('username');
     $result = attempt_local_login($username, (string) ($_POST['password'] ?? ''));
     if (is_array($result)) {
-        if (has_totp_enabled((int) $result['id']) || has_login_security_key((int) $result['id'])) {
-            session_regenerate_id(true);
-            $_SESSION['pending_2fa'] = ['uid' => (int) $result['id'], 'at' => time(), 'remember' => post('remember') === '1'];
-            redirect('login_2fa.php');
-        }
         $_SESSION['remember_device'] = post('remember') === '1';
-        login_user($result);
-        finish_login_redirect();
+        begin_sign_in($result); // asks for the second factor first, if the account has one
     }
     $error = $result;
 }
@@ -46,16 +40,7 @@ render_header('Sign in');
         . remember_days() . ' days<br><span class="muted small">Not on a shared or public computer</span></span></label>' : ''; ?>
     <?php if (!local_login_enabled() && (entra_enabled() || oidc_providers())): ?><?= $rememberBox ?><?php endif; ?>
 
-    <?php if (entra_enabled()): ?>
-    <a class="btn btn-microsoft btn-block" data-sso href="<?= h(url('auth_entra.php')) ?>">
-        <svg viewBox="0 0 21 21" width="18" height="18" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
-        <?= h(config('entra.button_label')) ?>
-    </a>
-    <?php endif; ?>
-
-    <?php foreach (oidc_providers() as $key => $p): ?>
-    <a class="btn btn-sso btn-block" data-sso href="<?= h(url('oidc_start.php?provider=' . urlencode($key))) ?>"><?= h($p['label']) ?></a>
-    <?php endforeach; ?>
+    <?= sso_buttons() ?>
 
     <?php if (sso_enabled() && local_login_enabled()): ?>
     <div class="divider"><span>or use a local account</span></div>
@@ -90,7 +75,7 @@ render_header('Sign in');
     <?php endif; ?>
 
     <?php if (user_count() === 0 && local_login_enabled()): ?>
-    <p class="muted small">First time here? <a href="<?= h(url('setup.php')) ?>">Create a local administrator account</a><?= sso_enabled() ? ', or use a sign-in button above &mdash; the first person to sign in that way becomes the administrator' : '' ?>.</p>
+    <p class="muted small">First time here? <a href="<?= h(url('setup.php')) ?>">Set up this Pillbox</a>.</p>
     <?php endif; ?>
 </section>
 <?php render_footer();

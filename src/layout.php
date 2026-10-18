@@ -181,9 +181,9 @@ function render_header(string $title, string $active = ''): void
         unset($_SESSION['dose_override']);
         if (($pending['user'] ?? null) === ($user['id'] ?? null)): ?>
     <div class="flash flash-error notice-row" role="alert"><span><?= h($pending['text']) ?></span>
-        <form method="post" action="<?= h(url('dose_action.php')) ?>" data-confirm="Only take it sooner if a doctor or pharmacist has told you to. Log it anyway?"><?= csrf_field() ?>
+        <form method="post" action="<?= h(url('dose_action.php')) ?>" data-confirm="Only take more, or sooner, if a doctor or pharmacist has told you to. Log it anyway?"><?= csrf_field() ?>
             <?php foreach ($pending['fields'] as $k => $v): ?><input type="hidden" name="<?= h($k) ?>" value="<?= h((string) $v) ?>"><?php endforeach; ?>
-            <input type="hidden" name="override" value="1"><input type="hidden" name="return" value="<?= h($pending['return']) ?>">
+            <input type="hidden" name="override" value="<?= h((string) ($pending['code'] ?? '')) ?>"><input type="hidden" name="return" value="<?= h($pending['return']) ?>">
             <button class="btn btn-small" type="submit">I took it: log anyway</button></form></div>
 <?php endif; endif;
 }

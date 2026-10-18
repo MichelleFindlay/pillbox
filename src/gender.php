@@ -154,6 +154,10 @@ function store_private_photo(int $userId, array $upload): array|string
     if ($upload['size'] > 12 * 1024 * 1024) {
         return 'That photo is too big (12 MB at most).';
     }
+    // A limit on how many are kept, so storage can't be filled up.
+    if (count(glob(private_photo_dir($userId) . '/*.bin') ?: []) >= 300) {
+        return 'There are already 300 photos here: delete some older ones to add more.';
+    }
     $type = (new finfo(FILEINFO_MIME_TYPE))->file($upload['tmp_name']);
     if (!in_array($type, ['image/jpeg', 'image/png', 'image/webp', 'image/heic'], true)) {
         return 'Upload a JPEG, PNG, WebP or HEIC photo.';

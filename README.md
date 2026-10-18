@@ -233,7 +233,10 @@ The server needs PHP's `xmlreader` extension (standard) and, to read `export.zip
 4. **Make `storage/` writable** by the web server (it caches Microsoft's signing keys):
    `chown www-data storage` (or set it to 775 in your file manager).
 
-5. **Open the site**. On a new install you'll be asked to create the first administrator account. Everyone's
+5. **Open the site**. On a new install you'll be asked to create the first administrator account, with a one-time
+   **setup code** so nobody else who finds the site first can take it over. The code is in `storage/setup_code.txt`
+   on the server, and in PHP's error log (`docker logs`, or your host's error log); or set your own as `'setup_code'`
+   under `'app'` in config.php. It's deleted once the administrator exists. Everyone's
    first sign-in then goes through a short setup (about you, what to use, reminders), and administrators get a
    **Site settings** step too: site name and address, default time zone, email, scheduled tasks, demo mode.
    Those are saved in `config/settings.php` (git-ignored), which overrides `config/config.php`, so config.php
@@ -314,7 +317,7 @@ How accounts are created:
 - With `auto_provision` on (the default), anyone from your tenant gets a Pillbox account on first sign-in.
 - With it off, an admin adds them first under **Admin → Add a user → Microsoft**, using their sign-in email.
 - Accounts are matched by Entra object ID and tenant ID, so a name or email change won't create a second account.
-- If no users exist yet, the first person to sign in with Microsoft becomes the administrator.
+- On a new install, the administrator can be a Microsoft account: open the site, enter the setup code, then sign in with Microsoft.
 
 **Multi-tenant:** set `tenant_id` to `organizations` and list the permitted tenant GUIDs in `allowed_tenants`.
 Sign-ins from any other tenant are rejected.

@@ -49,7 +49,9 @@ function headache_episodes(int $userId, string $fromUtc): array
     foreach ($rows as &$r) {
         $r['symptoms'] = array_filter(explode(',', (string) $r['symptoms']));
         $r['triggers'] = array_filter(explode(',', (string) $r['triggers']));
-        $r['meds'] = q('SELECT * FROM episode_meds WHERE episode_id = ? ORDER BY taken_at', [$r['id']])->fetchAll();
+        // Medicines from Meds that are private are left out for someone looking at a shared Pillbox.
+        $r['meds'] = q('SELECT em.* FROM episode_meds em LEFT JOIN medications m ON m.id = em.medication_id
+                        WHERE em.episode_id = ?' . (private_meds_hidden() ? ' AND (m.id IS NULL OR m.is_private = 0)' : '') . ' ORDER BY em.taken_at', [$r['id']])->fetchAll();
     }
     return $rows;
 }

@@ -80,7 +80,10 @@ self.addEventListener('push', (event) => {
 // Tapping a notification opens (or focuses) Pillbox at the right page.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = new URL(event.notification.data && event.notification.data.url ? event.notification.data.url : '', self.registration.scope).href;
+  let target = new URL(event.notification.data && event.notification.data.url ? event.notification.data.url : '', self.registration.scope).href;
+  if (!target.startsWith(self.registration.scope)) {
+    target = self.registration.scope; // only ever Pillbox's own pages
+  }
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
     for (const w of windows) {
       if (w.url.startsWith(self.registration.scope) && 'focus' in w) {

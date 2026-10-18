@@ -12,8 +12,8 @@ if (!signups_open()) {
     flash('error', 'New accounts can only be added by an administrator.');
     redirect('login.php');
 }
-if (user_count() === 0 && !sso_enabled()) {
-    redirect('setup.php');
+if (user_count() === 0) {
+    redirect('setup.php'); // the first account is the administrator, made with the setup code
 }
 
 $error = null;
@@ -54,15 +54,7 @@ render_header('Create an account');
     <p class="muted small">By signing up with <?= entra_enabled() && oidc_providers() ? 'a provider' : (entra_enabled() ? 'Microsoft' : 'a provider') ?>, you agree to the
         <a href="<?= h(url('terms.php')) ?>" target="_blank" rel="noopener">terms of use</a> and <a href="<?= h(url('privacy.php')) ?>" target="_blank" rel="noopener">privacy policy</a>.</p>
     <?php endif; ?>
-    <?php if (entra_enabled()): ?>
-    <a class="btn btn-microsoft btn-block" href="<?= h(url('auth_entra.php')) ?>">
-        <svg viewBox="0 0 21 21" width="18" height="18" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
-        Sign up with Microsoft
-    </a>
-    <?php endif; ?>
-    <?php foreach (oidc_providers() as $key => $p): ?>
-    <a class="btn btn-sso btn-block" href="<?= h(url('oidc_start.php?provider=' . urlencode($key))) ?>">Sign up with <?= h($p['name']) ?></a>
-    <?php endforeach; ?>
+    <?= sso_buttons('Sign up with') ?>
 
     <?php if (sso_enabled() && local_login_enabled()): ?>
     <div class="divider"><span>or choose a username and password</span></div>

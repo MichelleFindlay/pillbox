@@ -25,11 +25,10 @@ try {
     }
     $user = oidc_find_or_create_user($result['provider'], $result['claims']);
 } catch (RuntimeException $e) {
-    error_log('OIDC sign-in failed: ' . $e->getMessage());
+    log_line('OIDC sign-in failed: ' . $e->getMessage());
     flash('error', $e->getMessage());
     redirect(!$linking ? 'login.php' : ($stepup ? 'account.php#security' : 'account.php#sign-in-options'));
 }
 
-login_user($user, 'oidc:' . $result['provider']);
 $_SESSION['oidc_id_token'] = $result['id_token']; // only used as a hint when signing out of the provider
-finish_login_redirect();
+begin_sign_in($user, 'oidc:' . $result['provider']); // asks for the second factor first, if the account has one

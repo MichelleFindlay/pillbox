@@ -113,7 +113,7 @@ function entra_http(string $url, ?array $form = null): array
         throw new RuntimeException("Unexpected response from Microsoft (HTTP $status).");
     }
     if ($status >= 400) {
-        error_log('Entra error: ' . $body);
+        log_line('Entra error: ' . $body);
         throw new RuntimeException('Microsoft rejected the sign-in: ' . ($data['error_description'] ?? $data['error'] ?? "HTTP $status"));
     }
     return $data;
@@ -238,13 +238,22 @@ function entra_find_or_create_user(array $claims): array
     if (!$user) {
         // A trusted tenant (auto_provision) gets accounts straight away; otherwise only while sign-ups are open.
         $signup = !config('entra.auto_provision');
+        // The very first account becomes the administrator: only for the person who entered the setup code.
+        $first = user_count() === 0;
+        if ($first && !setup_unlocked()) {
+            throw new RuntimeException('This Pillbox has not been set up yet. Whoever is setting it up should go to the setup page first.');
+        }
+        if ($first) {
+            $signup = false;
+            setup_finished();
+        }
         if ($signup && !signups_open()) {
             throw new RuntimeException('Your Microsoft account has not been given access to Pillbox. Ask an administrator to add you.');
         }
         q(
             "INSERT INTO users (display_name, email, auth_provider, entra_oid, entra_tid, timezone, is_admin)
              VALUES (?, ?, 'entra', ?, ?, ?, ?)",
-            [mb_substr($name, 0, 150), $email, $oid, $tid, config('app.default_timezone'), user_count() === 0 ? 1 : 0]
+            [mb_substr($name, 0, 150), $email, $oid, $tid, config('app.default_timezone'), $first ? 1 : 0]
         );
         $user = q('SELECT * FROM users WHERE id = ?', [db()->lastInsertId()])->fetch();
         if ($signup) {

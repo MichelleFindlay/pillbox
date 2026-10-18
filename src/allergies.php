@@ -187,7 +187,8 @@ function allergies_handle_post(array $user, DateTimeImmutable $today): never
     if (str_contains(post('action'), '_weather_')) {
         weather_handle_post($user);
     }
-    $profile = fn (array $cols) => q('INSERT INTO allergy_profiles (user_id, ' . implode(', ', array_keys($cols)) . ') VALUES (?' . str_repeat(', ?', count($cols)) . ')
+    // Column names are fixed in this file (never from input); checked anyway, as they go into the SQL.
+    $profile = fn (array $cols) => array_filter(array_keys($cols), fn ($k) => !preg_match('/^[a-z_]+$/', (string) $k)) ? throw new InvalidArgumentException('Bad column') : q('INSERT INTO allergy_profiles (user_id, ' . implode(', ', array_keys($cols)) . ') VALUES (?' . str_repeat(', ?', count($cols)) . ')
         ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(fn ($c) => "$c = VALUES($c)", array_keys($cols))), [$uid, ...array_values($cols)]);
     switch (post('action')) {
         case 'al_save':

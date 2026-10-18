@@ -33,6 +33,11 @@ if (is_post()) {
     require_post();
     $task = post('id') !== '' ? find_care_task((int) post('id'), $uid) : null;
     $check = post('check_id') !== '' ? find_health_check((int) post('check_id'), $uid) : null;
+    // Only items in categories this person can see (someone with shared access may have some hidden), and
+    // Mind's habits only with Mind access: otherwise as if they didn't exist.
+    $allowedItem = fn (?array $item) => $item && share_area_allowed($item['area']) && ($item['area'] !== 'mind' || (mind_visible($user) && share_can('mind', 'edit')));
+    $task = $allowedItem($task) ? $task : null;
+    $check = $allowedItem($check) ? $check : null;
     $back = safe_return(post('return'), $self);
     // Changing anything in Mind (habits, checks) needs Mind's own 'edit' permission, not just Care's.
     if (($task['area'] ?? $check['area'] ?? $areaKey) === 'mind' && !share_can('mind', 'edit')) {
@@ -742,7 +747,7 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
 <?php endif; ?>
 
 <?php if ($areaKey === 'sharps'):
-    $toReturn = q('SELECT * FROM medications WHERE user_id = ? AND ((is_active = 0 AND stock_count > 0) OR (is_active = 1 AND expiry_date < ?)) ORDER BY name',
+    $toReturn = q('SELECT * FROM medications m WHERE user_id = ? AND ((is_active = 0 AND stock_count > 0) OR (is_active = 1 AND expiry_date < ?))' . private_med_filter() . ' ORDER BY name',
         [$uid, $today->format('Y-m-d')])->fetchAll(); ?>
 <section class="card" id="returns">
     <h2>Medicines to take back to a pharmacy</h2>

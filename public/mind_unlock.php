@@ -8,7 +8,8 @@ require __DIR__ . '/../src/bootstrap.php';
 $user = require_login();
 $uid = (int) $user['id'];
 $return = safe_return(get('return') ?: post('return'), 'mind.php');
-$freshLogin = ($_SESSION['login_at'] ?? 0) > time() - 300;
+// Only straight after a real sign-in (or re-confirming who you are): not a remembered device signing itself back in.
+$freshLogin = step_up_confirmed() && ($_SESSION['provider'] ?? '') !== 'remembered';
 $error = null;
 
 if (!$user['mind_pin_hash'] || mind_unlocked($user)) {
@@ -22,15 +23,14 @@ if (is_post()) {
         flash('success', 'PIN removed. You can set a new one under Privacy on the Mind page.');
         redirect('mind.php#privacy');
     }
-    $tries = $_SESSION['mind_pin_tries'] ?? ['n' => 0, 'at' => 0];
-    if ($tries['n'] >= 5 && $tries['at'] > time() - 300) {
-        $error = 'Too many wrong PINs. Wait 5 minutes and try again.';
+    if (pin_is_throttled('#mind' . $uid)) {
+        $error = 'Too many wrong PINs. Please wait a while, or sign out and in again to remove the PIN.';
     } elseif (password_verify(post('pin'), $user['mind_pin_hash'])) {
-        unset($_SESSION['mind_pin_tries']);
+        q('DELETE FROM login_attempts WHERE username = ?', ['#mind' . $uid]);
         $_SESSION['mind_unlocked_at'] = time();
         redirect($return);
     } else {
-        $_SESSION['mind_pin_tries'] = ['n' => ($tries['at'] > time() - 300 ? $tries['n'] : 0) + 1, 'at' => time()];
+        pin_failed('#mind' . $uid);
         $error = "That PIN isn't right.";
     }
 }

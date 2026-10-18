@@ -163,7 +163,8 @@ function bp_handle_post(array $user, DateTimeImmutable $today): never
 {
     $uid = (int) $user['id'];
     $back = 'care.php?area=bp';
-    $save = fn (array $cols) => q('INSERT INTO bp_profiles (user_id, ' . implode(', ', array_keys($cols)) . ') VALUES (?' . str_repeat(', ?', count($cols)) . ')
+    // Column names are fixed in this file (never from input); checked anyway, as they go into the SQL.
+    $save = fn (array $cols) => array_filter(array_keys($cols), fn ($k) => !preg_match('/^[a-z_]+$/', (string) $k)) ? throw new InvalidArgumentException('Bad column') : q('INSERT INTO bp_profiles (user_id, ' . implode(', ', array_keys($cols)) . ') VALUES (?' . str_repeat(', ?', count($cols)) . ')
         ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(fn ($c) => "$c = VALUES($c)", array_keys($cols))), [$uid, ...array_values($cols)]);
     switch (post('action')) {
         case 'bp_profile':
@@ -240,7 +241,7 @@ function bp_sections(array $user, DateTimeImmutable $today): void
     $irregular = count(array_filter($readings, fn ($r) => stripos((string) $r['notes'], 'irregular') !== false));
     $sideEffects = $bpMeds ? q("SELECT n.*, m.name FROM med_notes n JOIN medications m ON m.id = n.medication_id WHERE n.user_id = ? AND n.kind = 'side_effect' AND n.medication_id IN ("
         . implode(',', array_map('intval', array_column($bpMeds, 'id'))) . ') ORDER BY n.created_at DESC LIMIT 8', [$uid])->fetchAll() : [];
-    $recentChange = q("SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'restarted') AND c.effective_date >= ?
+    $recentChange = q("SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'restarted') AND c.effective_date >= ?" . private_med_filter() . "
         ORDER BY c.effective_date DESC", [$uid, $today->modify('-21 days')->format('Y-m-d')])->fetchAll();
     $recentChange = array_values(array_filter($recentChange, fn ($c) => in_array(bp_class($c['name']), ['acei', 'arb'], true) || preg_match('/spironolactone|eplerenone/i', $c['name'])));
     $todayYmd = $today->format('Y-m-d');

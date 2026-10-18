@@ -2,6 +2,15 @@
 (function () {
   'use strict';
 
+  // Go to an address the server sent back, but only if it's on this site (never javascript: or elsewhere).
+  function goSameSite(target) {
+    try {
+      var u = new URL(String(target || ''), window.location.href);
+      if (u.origin === window.location.origin && (u.protocol === 'https:' || u.protocol === 'http:')) { window.location.assign(u.href); return; }
+    } catch (e) { /* not an address */ }
+    window.location.reload();
+  }
+
   // Remember the user's theme so pages served without it (the offline page) can use it.
   (function () {
     var root = document.documentElement;
@@ -216,7 +225,7 @@
     }).then(function (a) {
       return webauthnCall({ action: 'unlock_finish', csrf: csrf, return: btn.getAttribute('data-return'), credential: {
         id: a.id, clientDataJSON: b64.enc(a.response.clientDataJSON), authenticatorData: b64.enc(a.response.authenticatorData), signature: b64.enc(a.response.signature) } });
-    }).then(function (r) { window.location.href = r.next; });
+    }).then(function (r) { goSameSite(r.next); });
   });
   webauthnButtons('[data-webauthn-login]', false, function (btn) {
     var csrf = btn.getAttribute('data-csrf');
@@ -227,7 +236,7 @@
     }).then(function (a) {
       return webauthnCall({ action: 'login_finish', csrf: csrf, credential: {
         id: a.id, clientDataJSON: b64.enc(a.response.clientDataJSON), authenticatorData: b64.enc(a.response.authenticatorData), signature: b64.enc(a.response.signature) } });
-    }).then(function (r) { window.location.href = r.next; });
+    }).then(function (r) { goSameSite(r.next); });
   });
 
   // Sharing: quick-choice buttons fill in the permission grid of their form.
@@ -259,11 +268,7 @@
   var rememberBox = document.querySelector('[data-remember-device]');
   if (rememberBox) {
     var syncSso = function () {
-      document.querySelectorAll('a[data-sso]').forEach(function (a) {
-        var u = new URL(a.href, window.location.href);
-        if (rememberBox.checked) { u.searchParams.set('remember', '1'); } else { u.searchParams.delete('remember'); }
-        a.href = u.toString();
-      });
+      document.querySelectorAll('input[data-remember-mirror]').forEach(function (input) { input.value = rememberBox.checked ? '1' : '0'; });
     };
     rememberBox.addEventListener('change', syncSso);
     syncSso();
@@ -676,7 +681,7 @@
       fd.append('action', 'import_upload');
       fd.append('upload_id', id);
       fd.append('range', form.querySelector('[name=range]').value);
-      post(fd).then(function (d) { window.location.href = d.redirect; }).catch(fail);
+      post(fd).then(function (d) { goSameSite(d.redirect); }).catch(fail);
     }
     status.textContent = 'Uploading…';
     next();
