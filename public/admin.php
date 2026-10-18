@@ -87,6 +87,7 @@ if (is_post()) {
         redirect('admin.php#site');
     } elseif ($action === 'check_version') {
         $latest = latest_version(true);
+        changelog_releases(true); // refresh the changelog cache too, not just the update check
         flash($latest && $latest['error'] ? 'error' : 'success', $latest === null ? 'Update checking is switched off in config.php.'
             : ($latest['error'] ?? (update_available($latest) ? 'Version ' . $latest['version'] . ' is available.' : 'Pillbox is up to date.')));
         redirect('admin.php#version');
