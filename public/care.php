@@ -40,6 +40,9 @@ if (is_post()) {
     if ($areaKey === 'bp' && str_starts_with(post('action'), 'bp_')) {
         bp_handle_post($user, $today);
     }
+    if ($areaKey === 'privatehealth' && str_starts_with(post('action'), 'ph_')) {
+        privatehealth_handle_post($user, $today);
+    }
     if ($areaKey === 'allergies' && str_starts_with(post('action'), 'al_')) {
         allergies_handle_post($user, $today);
     }
@@ -646,6 +649,7 @@ render_header($area['title'], $areaKey === 'mind' ? 'mind' : 'care');
 <?php if ($areaKey === 'diabetes') { diabetes_sections($user, $today); } ?>
 <?php if ($areaKey === 'migraine') { migraine_sections($user, $today); } ?>
 <?php if ($areaKey === 'allergies') { allergies_sections($user, $today); } ?>
+<?php if ($areaKey === 'privatehealth') { privatehealth_sections($user, $today); } ?>
 <?php if ($areaKey === 'bp') { bp_sections($user, $today); } ?>
 
 <?php if ($areaKey === 'womens'): ?>

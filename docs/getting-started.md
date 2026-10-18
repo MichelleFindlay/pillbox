@@ -18,7 +18,8 @@ The first time you sign in, a short setup walks you through:
 
 1. **About you**: your name, time zone, and (optionally) date of birth and the sex on your GP record, for screening reminders.
 2. **What to use**: the Care categories and measurements you want. Everything else stays out of the way.
-3. **Reminders**: email summaries and notifications on this device.
+3. **Private health care**: if you have private medical insurance, a health cash plan or a dental plan, add it (see [Private health care](private-health.md)).
+4. **Reminders**: email summaries and notifications on this device.
 
 You can skip any step, and change everything later in **Account settings** (or run the setup again from there).
 

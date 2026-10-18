@@ -20,6 +20,8 @@ People agree to the terms and privacy policy when they sign up. Single sign-on p
 
 ## Site settings
 
+**Fill in from a policy document** (Private health care) reads uploads on this server with PHP's zlib (PDFs) and zip (Word) extensions, and needs uploads allowed up to the size of people's documents (`upload_max_filesize` and `post_max_size` in PHP; policy PDFs are usually under 2 MB). Nothing is stored.
+
 **Forgotten your password?** on the sign-in page needs email to be set up (Site settings → Email). Without it, people are told to ask you, and you can reset a password from **Admin → Manage**.
 
 How long **Remember this device** keeps a device signed in is `remember_days` under `'app'` in `config/config.php` (90 days by default; 0 turns the option off).

@@ -1,6 +1,6 @@
 <?php
 /*
- * First-login setup: about you, what to use, reminders, and (for admins) site settings.
+ * First-login setup: about you, what to use, private health care, reminders, and (for admins) site settings.
  * Each step saves as it goes; "Skip" moves on, "Skip setup" finishes. Ends on Today.
  * Can be run again from the Account page (welcome.php?again=1).
  */
@@ -11,12 +11,13 @@ $uid = (int) $user['id'];
 if (isset($user['_acting']) || $user['is_demo']) {
     redirect('index.php');
 }
-$steps = ['you' => 'About you', 'use' => 'What to use', 'reminders' => 'Reminders'] + ($user['is_admin'] ? ['site' => 'Site settings'] : []);
+$steps = ['you' => 'About you', 'use' => 'What to use', 'private' => 'Private health care', 'reminders' => 'Reminders'] + ($user['is_admin'] ? ['site' => 'Site settings'] : []);
 $keys = array_keys($steps);
 $step = isset($steps[get('step')]) ? get('step') : $keys[0];
 $next = $keys[array_search($step, $keys, true) + 1] ?? null;
 $errors = [];
 $pastePhp = null;
+$scanned = null; // plan details read from a policy document (private health care step)
 
 $finish = function () use ($uid): never {
     q('UPDATE users SET onboarded_at = UTC_TIMESTAMP() WHERE id = ?', [$uid]);
@@ -62,6 +63,30 @@ if (is_post()) {
                 sync_screening(q('SELECT * FROM users WHERE id = ?', [$uid])->fetch());
             }
             $advance();
+        case 'private':
+            if (post('scan') === '1') {
+                // "Read it": fill the form from a policy document, and show it again to check.
+                $scanned = scan_policy_from_request();
+                if (is_string($scanned)) {
+                    $errors[] = $scanned;
+                    $scanned = null;
+                }
+                break;
+            }
+            if (post('has_private') !== '1') {
+                $advance();
+            }
+            [$plan, $errors] = plan_from_post();
+            if (!$errors) {
+                save_health_plan($uid, $plan);
+                // Switch on the Care category, so it's there to come back to.
+                $areas = user_care_areas($user);
+                if (!in_array('privatehealth', $areas, true)) {
+                    q('UPDATE users SET care_areas = ? WHERE id = ?', [implode(',', [...$areas, 'privatehealth']), $uid]);
+                }
+                $advance();
+            }
+            break;
         case 'reminders':
             $email = mb_strtolower(trim(post('email')));
             if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -107,7 +132,7 @@ render_header('Welcome', 'today');
     </ol>
     <?= form_errors($errors) ?>
 
-    <form method="post" class="card stack">
+    <form method="post" class="card stack"<?= $step === 'private' ? ' enctype="multipart/form-data"' : '' ?>>
         <?= csrf_field() ?>
         <?php if ($step === 'you'): ?>
         <p>Pillbox helps you keep track of medicines, health readings, appointments and looking after yourself. A few questions to set it up for you.</p>
@@ -151,6 +176,22 @@ render_header('Welcome', 'today');
                 <?php endforeach; ?>
             </div>
         </fieldset>
+
+        <?php elseif ($step === 'private'): $hasPlan = (bool) health_plans($uid); ?>
+        <p>Private medical insurance, a health cash plan, a dental plan, or paying for some care yourself: Pillbox can keep the details to hand,
+            show what's covered and what's left this year, track claims, and mark appointments as private.</p>
+        <?php if ($hasPlan): ?><p class="small">You've already added a plan. Add another below, or press <strong>Next</strong>.</p><?php endif; ?>
+        <fieldset>
+            <legend>Do you have private health care?</legend>
+            <label class="check"><input type="radio" name="has_private" value="0" id="ph-no"<?= checked(post('has_private') !== '1') ?>> No, or not now</label>
+            <label class="check"><input type="radio" name="has_private" value="1" id="ph-yes"<?= checked(post('has_private') === '1') ?>> Yes, add it</label>
+        </fieldset>
+        <div class="stack" data-show-when="ph-yes"<?= post('has_private') === '1' ? '' : ' hidden' ?>>
+            <?php if ($scanned): ?><div class="flash flash-info" role="status"><strong>Read from your document:</strong> <?= h(implode(', ', $scanned['found'])) ?>. Check everything against the document before pressing Next.</div><?php endif; ?>
+            <details class="q-edit"><summary>Fill in from a policy document</summary><?php policy_upload_fields('', true); ?></details>
+            <?php plan_fields($scanned['plan'] ?? (is_post() && post('scan') !== '1' ? plan_from_post()[0] : null), false); ?>
+            <p class="muted small">Only the provider is needed now: you can add the rest later in Care &rarr; Private health care.</p>
+        </div>
 
         <?php elseif ($step === 'reminders'): ?>
         <p>Pillbox can remind you about doses, appointments and anything coming up.</p>

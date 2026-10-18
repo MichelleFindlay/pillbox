@@ -71,7 +71,7 @@ function render_appointment(array $a, bool $isPast, array $counts): void
             <span class="appt-dow"><?= h($local->format('D')) ?></span>
         </div>
         <div class="appt-main">
-            <a class="appt-title" href="<?= h(url('appointment.php?id=' . $a['id'])) ?>"><?= h(appointment_title($a)) ?></a>
+            <a class="appt-title" href="<?= h(url('appointment.php?id=' . $a['id'])) ?>"><?= h(appointment_title($a)) ?></a><?= $a['funding'] ? ' <span class="badge">Private</span>' : '' ?>
             <?php if ($when): ?><span class="badge badge-upcoming"><?= h($when) ?></span><?php endif; ?>
             <div class="small"><?= h($local->format('l j F Y')) ?>, <?= h($local->format('H:i')) ?>–<?= h($end->format('H:i')) ?></div>
             <div class="muted small">

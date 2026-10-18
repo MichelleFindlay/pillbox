@@ -6,6 +6,7 @@ $uid = (int) $user['id'];
 
 $id = (int) get('id');
 $appointment = $id ? (find_appointment($id, $uid) ?? not_found()) : null;
+$plans = health_plans($uid);
 
 $form = $appointment ? [
     'kind'             => $appointment['kind'],
@@ -17,11 +18,16 @@ $form = $appointment ? [
     'location'         => (string) $appointment['location'],
     'notes'            => (string) $appointment['notes'],
     'remind_minutes'   => (string) (int) $appointment['remind_minutes'],
+    'private'          => $appointment['funding'] ? '1' : '',
+    'paid_by'          => $appointment['funding'] === 'plan' ? (string) $appointment['plan_id'] : 'self',
+    'preauth'          => (string) $appointment['preauth'],
+    'cost'             => $appointment['cost'] !== null ? number_format((float) $appointment['cost'], 2, '.', '') : '',
 ] : [
     // Links can suggest the type, a title and a date (e.g. "Book" on the pregnancy timeline).
     'kind' => isset(APPOINTMENT_TYPES[get('kind')]) ? get('kind') : 'gp', 'title' => mb_substr(get('title'), 0, 150),
     'date' => parse_date(get('date')) && get('date') > local_today()->format('Y-m-d') ? get('date') : local_today()->modify('+1 day')->format('Y-m-d'), 'time' => '09:00',
     'duration_minutes' => '15', 'with_whom' => '', 'location' => '', 'notes' => '', 'remind_minutes' => '1440',
+    'private' => get('private') === '1' ? '1' : '', 'paid_by' => $plans ? (string) $plans[0]['id'] : 'self', 'preauth' => '', 'cost' => '',
 ];
 $errors = [];
 
@@ -43,7 +49,14 @@ if (is_post()) {
     if (!isset(APPOINTMENT_REMINDERS[(int) $form['remind_minutes']])) {
         $form['remind_minutes'] = '0';
     }
-    foreach (['title' => 150, 'with_whom' => 150, 'location' => 255, 'notes' => 5000] as $field => $max) {
+    // Private: through a health plan (paid_by = its id) or paying myself.
+    $plan = $form['private'] === '1' && ctype_digit($form['paid_by']) ? find_health_plan((int) $form['paid_by'], $uid) : null;
+    $funding = $form['private'] !== '1' ? null : ($plan ? 'plan' : 'self');
+    $costVal = trim(str_replace(['£', ','], '', $form['cost']));
+    if ($funding && $costVal !== '' && (!is_numeric($costVal) || (float) $costVal < 0 || (float) $costVal > 999999)) {
+        $errors[] = 'Enter the cost in pounds, or leave it empty.';
+    }
+    foreach (['title' => 150, 'with_whom' => 150, 'location' => 255, 'notes' => 5000, 'preauth' => 60] as $field => $max) {
         if (mb_strlen($form[$field]) > $max) {
             $errors[] = 'That ' . str_replace('_', ' ', $field) . " is too long (max $max characters).";
         }
@@ -51,13 +64,14 @@ if (is_post()) {
 
     if (!$errors) {
         $values = [$form['kind'], $form['title'] ?: null, $startsAt, (int) $form['duration_minutes'], $form['with_whom'] ?: null,
-            $form['location'] ?: null, $form['notes'] ?: null, (int) $form['remind_minutes'] ?: null];
+            $form['location'] ?: null, $form['notes'] ?: null, (int) $form['remind_minutes'] ?: null,
+            $funding, $plan['id'] ?? null, $funding ? (trim($form['preauth']) ?: null) : null, $funding && $costVal !== '' ? round((float) $costVal, 2) : null];
         if ($appointment) {
-            q('UPDATE appointments SET kind = ?, title = ?, starts_at = ?, duration_minutes = ?, with_whom = ?, location = ?, notes = ?, remind_minutes = ?
-               WHERE id = ? AND user_id = ?', [...$values, $appointment['id'], $uid]);
+            q('UPDATE appointments SET kind = ?, title = ?, starts_at = ?, duration_minutes = ?, with_whom = ?, location = ?, notes = ?, remind_minutes = ?,
+                 funding = ?, plan_id = ?, preauth = ?, cost = ? WHERE id = ? AND user_id = ?', [...$values, $appointment['id'], $uid]);
         } else {
-            q('INSERT INTO appointments (kind, title, starts_at, duration_minutes, with_whom, location, notes, remind_minutes, user_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
+            q('INSERT INTO appointments (kind, title, starts_at, duration_minutes, with_whom, location, notes, remind_minutes, funding, plan_id, preauth, cost, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$values, $uid]);
         }
         $label = $form['title'] ?: appointment_type_label($form['kind']);
         flash('success', $label . ' on ' . local_time($startsAt, 'l j F \a\t H:i') . ($appointment ? ' updated.' : ' added.'));
@@ -98,6 +112,17 @@ render_header($appointment ? 'Edit appointment' : 'Add appointment', 'appointmen
             <input name="with_whom" maxlength="150" value="<?= h($form['with_whom']) ?>" placeholder="e.g. Dr Patel"></label>
         <label><span>Where <span class="muted small">(optional)</span></span>
             <input name="location" maxlength="255" value="<?= h($form['location']) ?>" placeholder="e.g. Riverside Surgery, Room 4"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="private" value="1" id="appt-private"<?= checked($form['private'] === '1') ?>> Private <span class="muted small">(through private health care, or paying myself)</span></label>
+    <div class="private-fields grid-3" data-show-when="appt-private"<?= $form['private'] === '1' ? '' : ' hidden' ?>>
+        <label>Paid by
+            <select name="paid_by">
+                <?php foreach ($plans as $p): ?><option value="<?= (int) $p['id'] ?>"<?= selected($form['paid_by'] === (string) $p['id']) ?>><?= h(plan_title($p)) ?></option><?php endforeach; ?>
+                <option value="self"<?= selected($form['paid_by'] === 'self') ?>>Paying myself</option>
+            </select></label>
+        <label>Pre-authorisation number <input name="preauth" maxlength="60" autocomplete="off" value="<?= h($form['preauth']) ?>"></label>
+        <label>Cost <input name="cost" inputmode="decimal" placeholder="£" value="<?= h($form['cost']) ?>"></label>
+        <?php if (!$plans): ?><p class="muted small">Add your insurance or cash plan in <a href="<?= h(url('care.php?area=privatehealth')) ?>">Care &rarr; Private health care</a> to choose it here.</p><?php endif; ?>
     </div>
     <label><span>Notes <span class="muted small">(optional: questions to ask, things to bring, fasting, ...)</span></span>
         <textarea name="notes" rows="3" maxlength="5000"><?= h($form['notes']) ?></textarea></label>

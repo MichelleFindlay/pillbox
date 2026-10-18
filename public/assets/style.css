@@ -1515,3 +1515,14 @@ h1 .help-q { width: 1.5rem; height: 1.5rem; font-size: .9rem; }
 .docs-shot figcaption { font-size: .85rem; color: var(--text-2); margin-top: .35rem; }
 /* Sign-in page: "Remember this device", centred above Sign in. */
 .remember-device { justify-content: center; align-items: center; text-align: center; }
+
+/* Private health care (Care) */
+.plan { border-bottom: 1px solid var(--border); padding: .25rem 0 .75rem; margin-bottom: .75rem; }
+.plan:last-of-type { border-bottom: 0; }
+.plan h3 { margin: .25rem 0; }
+.cover-list { list-style: none; padding: 0; margin: .25rem 0 .5rem; display: grid; gap: .2rem; }
+.cover-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem .75rem; }
+.cover-limit meter { width: 6rem; vertical-align: middle; margin-right: .35rem; }
+.cover-grid { display: grid; grid-template-columns: 1fr 7rem; gap: .2rem .75rem; align-items: center; }
+.cover-grid .count-input { width: 100%; }
+.private-fields { border-left: 3px solid var(--border); padding-left: .75rem; }

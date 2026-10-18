@@ -36,7 +36,7 @@ function create_demo_account(): array
     return transaction(function () {
         q("INSERT INTO users (username, display_name, password_hash, auth_provider, timezone, is_demo, date_of_birth, sex, care_areas, enabled_metrics, onboarded_at)
            VALUES (?, 'Nell Whitcombe', NULL, 'local', 'Europe/London', 1, '1979-03-14', 'female', ?, ?, UTC_TIMESTAMP())",
-            ['demo-' . bin2hex(random_bytes(6)), 'dental,eyes,sleep,activity,diabetes,bloods,prescriptions,womens,menopause,thyroid,migraine,bp,neuro,allergies,emergency,screening,vaccinations',
+            ['demo-' . bin2hex(random_bytes(6)), 'dental,eyes,sleep,activity,diabetes,bloods,prescriptions,womens,menopause,thyroid,migraine,bp,neuro,allergies,privatehealth,emergency,screening,vaccinations',
                 'blood_glucose,blood_ketones,blood_pressure,weight,sleep,mood,symptom']);
         $uid = (int) db()->lastInsertId();
         seed_demo_data($uid);
@@ -130,6 +130,22 @@ function seed_demo_data(int $uid): void
         'Bring meter and pump download');
     q('INSERT INTO appointment_questions (appointment_id, question) VALUES (?, ?), (?, ?)',
         [$clinic, 'Can we look at my overnight lows?', $clinic, 'Is it time to change my pump infusion set routine?']);
+
+    // Private health care: a cash plan through work (a made-up provider), with physio and dental claims.
+    $planId = save_health_plan($uid, ['kind' => 'cash_plan', 'provider' => 'Brightwell Health', 'plan_name' => 'Level 2', 'member_number' => 'BW-4471-0932',
+        'who_covered' => 'me', 'through_employer' => 1, 'cost_amount' => 12.50, 'cost_period' => 'month', 'excess_amount' => null, 'excess_per' => 'year',
+        'renews_on' => $today->modify('+67 days')->format('Y-m-d'), 'underwriting' => null, 'six_week' => 0, 'hospital_list' => null,
+        'claims_phone' => '0800 000 0000', 'website' => null, 'covers' => 'dental,optical,therapies,gp,health_check',
+        'cover_limits' => json_encode(['dental' => 250, 'optical' => 150, 'therapies' => 400]), 'exclusions' => null,
+        'notes' => 'Pays back 100% up to each yearly limit. Claim within 6 months, in the app.']);
+    $physio = $appt('physio', 'Physio for my knee', $at($today->modify('-12 days'), '17:30'), 45, 'Sam Okafor', 'Harbourside Physio');
+    q("UPDATE appointments SET funding = 'plan', plan_id = ?, cost = 55 WHERE id = ?", [$planId, $physio]);
+    $physio2 = $appt('physio', 'Physio for my knee', $at($today->modify('+9 days'), '17:30'), 45, 'Sam Okafor', 'Harbourside Physio');
+    q("UPDATE appointments SET funding = 'plan', plan_id = ?, cost = 55 WHERE id = ?", [$planId, $physio2]);
+    foreach ([[-80, 'dental', 'Dental check-up and hygienist', 95, 95, 'paid'], [-26, 'therapies', 'Physio assessment', 65, 65, 'paid'], [-5, 'optical', 'New glasses', 189, 150, 'claimed']] as [$d, $cover, $desc, $cost, $covered, $status]) {
+        q('INSERT INTO health_claims (user_id, plan_id, treated_on, cover, description, cost, covered, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [$uid, $planId, $today->modify("$d days")->format('Y-m-d'), $cover, $desc, $cost, $covered, $status]);
+    }
     $appt('specialist', 'Neurology review', $at($today->modify('+23 days'), '14:00'), 20, 'Epilepsy specialist nurse', 'Bristol Royal Infirmary');
     $appt('gp', null, $at($today->modify('-9 days'), '09:10'), 10, 'Dr Priya Anand', 'Riverside Medical Centre, Bristol', null,
         'Thyroid blood test normal. Keep levothyroxine at 50mcg. Repeat in 12 months.');

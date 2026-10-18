@@ -223,6 +223,15 @@ const CARE_AREAS = [
                 'tip' => 'Offered every 5 years from 40 to 74 (if you do not already have heart disease, diabetes or kidney disease). Includes cholesterol, blood pressure and sometimes HbA1c.'],
         ],
     ],
+    'privatehealth' => [
+        'title' => 'Private health care', 'short' => 'Private care', 'icon' => '&#x1F3E5;', 'default' => false, 'appointment' => null,
+        'intro' => 'Your private medical insurance, health cash plan or dental plan: membership number, what it covers and costs, what is left this year, and claims.',
+        'help'  => 'Call your insurer for pre-authorisation before private treatment. In an emergency, go to A&E or call 999: private hospitals do not usually have emergency departments.',
+        'presets' => [],
+        'checks' => [
+            'ph_review' => ['label' => 'Review private health cover', 'interval' => 365, 'tip' => 'Is it still worth what it costs, and does it cover what you need? Compare before it renews.'],
+        ],
+    ],
     'prescriptions' => [
         'title' => 'Prescriptions and payments', 'short' => 'Payments', 'icon' => '&#x1F4B7;', 'default' => false, 'appointment' => null,
         'intro' => 'Prepayment and exemption certificates, and what you pay for prescriptions. (Prescriptions are free in Scotland, Wales and Northern Ireland.)',
