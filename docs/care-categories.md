@@ -73,6 +73,8 @@ Braces, supports, compression stockings, walking aids and insoles wear out, ofte
 
 NHS screening (cervical, breast, bowel and AAA), with when each is next due, worked out from your date of birth and your [body inventory](account.md#body-inventory) or the sex on your GP record. If an invitation might not arrive automatically because of your GP record, the page says so. Mark each one done when you've been screened.
 
+- **Routines**: a monthly breast self-check reminder (Touch, Look, Check), based on [CoppaFeel](https://coppafeel.org)'s approach, and a monthly testicular self-check reminder, based on [Movember](https://movember.com)'s "It's in the Bag" guide. The breast one is separate from NHS breast screening, which starts at 50.
+
 ## Vaccinations
 
 - **Checks**: flu jab (every autumn), COVID-19 booster, tetanus, and travel vaccinations, with when each is next due

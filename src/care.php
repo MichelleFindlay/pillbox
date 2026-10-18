@@ -441,7 +441,13 @@ const CARE_AREAS = [
         'title' => 'Screening', 'short' => 'Screening', 'icon' => '&#x1F50E;', 'default' => true, 'appointment' => null,
         'intro' => 'NHS screening programmes, with the next due date worked out from your date of birth and when you were last screened.',
         'help'  => "Don't wait for screening if you have symptoms: see a GP. Intervals are for England; Scotland, Wales and Northern Ireland differ slightly.",
-        'presets' => [],
+        'presets' => [
+            'breast_self_check' => ['label' => 'Breast self-check (CoppaFeel)', 'times' => ['09:00'], 'every' => 30, 'remind' => true,
+                'tip' => 'Touch, Look, Check, once a month: get to know what is normal for you. coppafeel.org has a how-to guide. '
+                       . 'NHS breast screening is separate and starts at 50: see your screening check below.'],
+            'testicular_self_check' => ['label' => 'Testicular self-check (Movember)', 'times' => ['09:00'], 'every' => 30, 'remind' => true,
+                'tip' => "A monthly feel for lumps or changes, ideally after a warm shower. See Movember's \"It's in the Bag\" guide for how."],
+        ],
         'checks' => [], // generated from the profile: see SCREENING_PROGRAMMES
     ],
     // Mind's habits and routines: run by the same code, but shown in the Mind tab, not Care.
