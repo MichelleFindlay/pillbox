@@ -70,10 +70,10 @@ try {
                 $reply(['error' => 'Set a PIN for Mind first.'], 400);
             }
             if ($purpose === 'login') {
-                if (!$user['password_hash'] || !local_login_enabled() || $user['is_demo']) {
-                    $reply(['error' => 'Add a password first.'], 400);
+                if (!can_add_login_2fa($user)) {
+                    $reply(['error' => 'Add a password, or link Microsoft or another sign-in, first.'], 400);
                 }
-                if (!verify_step_up_password($user, (string) ($input['password'] ?? ''))) {
+                if (!step_up_confirmed() && !verify_step_up_password($user, (string) ($input['password'] ?? ''))) {
                     $reply(['error' => "That's not your current password, or you've tried too many times."], 400);
                 }
             }
@@ -96,10 +96,10 @@ try {
                 $reply(['error' => 'Set a PIN for Mind first.'], 400);
             }
             if ($purpose === 'login') {
-                if (!$user['password_hash'] || !local_login_enabled()) {
-                    $reply(['error' => 'Add a password first.'], 400);
+                if (!can_add_login_2fa($user)) {
+                    $reply(['error' => 'Add a password, or link Microsoft or another sign-in, first.'], 400);
                 }
-                if (!verify_step_up_password($user, (string) ($input['password'] ?? ''))) {
+                if (!step_up_confirmed() && !verify_step_up_password($user, (string) ($input['password'] ?? ''))) {
                     $reply(['error' => "That's not your current password, or you've tried too many times."], 400);
                 }
             }

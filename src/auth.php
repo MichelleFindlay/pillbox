@@ -142,6 +142,7 @@ function login_user(array $user, ?string $method = null): void
     unset($_SESSION['csrf']);
     q('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [$user['id']]);
     track_session((int) $user['id']);
+    mark_step_up(); // a fresh sign-in is itself proof of identity: no need to ask again immediately
     // "Remember this device", ticked on the sign-in page (kept in the session through single sign-on).
     $remember = !empty($_SESSION['remember_device']);
     unset($_SESSION['remember_device']);
@@ -328,10 +329,63 @@ function verify_step_up_password(array $user, string $password): bool
     $ok = $user['password_hash'] && password_verify($password, $user['password_hash']);
     if ($ok) {
         unset($_SESSION['stepup_tries']);
+        mark_step_up();
     } else {
         $_SESSION['stepup_tries'] = ['n' => ($tries['at'] > time() - 900 ? $tries['n'] : 0) + 1, 'at' => time()];
     }
     return $ok;
+}
+
+const STEP_UP_MINUTES = 10;
+
+/** Record that this session just re-confirmed identity (password or a fresh Microsoft/OIDC sign-in). */
+function mark_step_up(): void
+{
+    $_SESSION['stepup_at'] = time();
+}
+
+/** Is there a still-fresh step-up confirmation in this session? */
+function step_up_confirmed(): bool
+{
+    return !empty($_SESSION['stepup_at']) && $_SESSION['stepup_at'] > time() - STEP_UP_MINUTES * 60;
+}
+
+/**
+ * The best way for this account to re-confirm its identity for a sensitive change (adding a new
+ * authenticator app or security key): whatever they're currently signed in with this session, if
+ * that's a password or a linked Microsoft/OIDC account; otherwise whichever of those it has.
+ * @return array{type: string, provider: ?string, label: string} type is 'password', 'entra', 'oidc' or 'none'
+ */
+function step_up_method(array $user): array
+{
+    $sessionProvider = (string) ($_SESSION['provider'] ?? '');
+    if ($sessionProvider === 'entra' && entra_enabled() && $user['entra_oid']) {
+        return ['type' => 'entra', 'provider' => null, 'label' => (string) config('entra.button_label', 'Microsoft')];
+    }
+    if (str_starts_with($sessionProvider, 'oidc:')) {
+        $key = substr($sessionProvider, 5);
+        if (($p = oidc_provider($key)) && isset(user_identities((int) $user['id'])[$key])) {
+            return ['type' => 'oidc', 'provider' => $key, 'label' => $p['name']];
+        }
+    }
+    if ($user['password_hash'] !== null && local_login_enabled()) {
+        return ['type' => 'password', 'provider' => null, 'label' => 'your password'];
+    }
+    if (entra_enabled() && $user['entra_oid']) {
+        return ['type' => 'entra', 'provider' => null, 'label' => (string) config('entra.button_label', 'Microsoft')];
+    }
+    foreach (user_identities((int) $user['id']) as $key => $identity) {
+        if ($p = oidc_provider($key)) {
+            return ['type' => 'oidc', 'provider' => $key, 'label' => $p['name']];
+        }
+    }
+    return ['type' => 'none', 'provider' => null, 'label' => ''];
+}
+
+/** Can this account add a new authenticator app or security key at all? Some way to step up, and not the demo. */
+function can_add_login_2fa(array $user): bool
+{
+    return empty($user['is_demo']) && step_up_method($user)['type'] !== 'none';
 }
 
 /**

@@ -10,7 +10,7 @@ $errors = [];
 if (is_post()) {
     require_post();
     if (in_array(post('action'), ['profile', 'password', 'sign_out_others', 'link_entra', 'unlink_entra', 'unlink_oidc', 'email_prefs', 'test_email', 'remove_security_key',
-        'totp_start', 'totp_confirm', 'totp_cancel_setup', 'totp_remove', 'totp_rename', 'totp_regenerate_codes', 'rename_security_key'], true)) {
+        'totp_start', 'totp_confirm', 'totp_cancel_setup', 'totp_remove', 'totp_rename', 'totp_regenerate_codes', 'rename_security_key', 'stepup_entra', 'stepup_oidc'], true)) {
         demo_blocked('Changing sign-in details and email');
     }
     switch (post('action')) {
@@ -198,10 +198,10 @@ if (is_post()) {
             redirect('account.php#security');
 
         case 'totp_start':
-            if (!$hasPassword || !local_login_enabled()) {
+            if (!can_add_login_2fa($user)) {
                 break;
             }
-            if (!verify_step_up_password($user, (string) ($_POST['current'] ?? ''))) {
+            if (!step_up_confirmed() && !verify_step_up_password($user, (string) ($_POST['current'] ?? ''))) {
                 flash('error', "That's not your current password, or you've tried too many times. Wait 15 minutes and try again.");
                 redirect('account.php#security');
             }
@@ -295,6 +295,22 @@ if (is_post()) {
             if (entra_enabled() && $user['auth_provider'] !== 'entra') {
                 $_SESSION['entra_link_uid'] = $uid;
                 entra_begin_login();
+            }
+            break;
+
+        case 'stepup_entra':
+            if (entra_enabled() && $user['entra_oid']) {
+                $_SESSION['entra_link_uid'] = $uid;
+                $_SESSION['stepup_resume'] = true;
+                entra_begin_login();
+            }
+            break;
+
+        case 'stepup_oidc':
+            $key = post('provider');
+            if (oidc_provider($key) && isset(user_identities($uid)[$key])) {
+                $_SESSION['stepup_resume'] = true;
+                oidc_begin($key, $uid);
             }
             break;
 
@@ -568,7 +584,7 @@ render_header('Account', 'account');
     </form>
     <?php endif; ?>
 
-    <?php if ($hasPassword && local_login_enabled()): ?>
+    <?php if (can_add_login_2fa($user)): ?>
     <h3>Authenticator apps</h3>
     <p class="muted small">Add one or more authenticator apps (Google Authenticator, Microsoft Authenticator, 1Password, &hellip;) and you're asked for a code from any of them after your password when you sign in. Add a spare (for example on a second phone) so losing one doesn't lock you out.</p>
     <?php if ($codes = $_SESSION['totp_backup_codes_shown'] ?? null): unset($_SESSION['totp_backup_codes_shown']);
@@ -619,12 +635,21 @@ render_header('Account', 'account');
         <?= csrf_field() ?><input type="hidden" name="action" value="totp_cancel_setup"><input type="hidden" name="id" value="<?= (int) $pendingTotp['id'] ?>">
         <button class="btn-link small" type="submit">Cancel</button>
     </form>
+    <?php else: $stepUpMethod = step_up_method($user); ?>
+    <?php if (!step_up_confirmed() && in_array($stepUpMethod['type'], ['entra', 'oidc'], true)): ?>
+    <p class="muted small">Confirm it's you to <?= $totpApps ? 'add another authenticator app' : 'set up an authenticator app' ?>.</p>
+    <form method="post">
+        <?= csrf_field() ?><input type="hidden" name="action" value="stepup_<?= $stepUpMethod['type'] ?>">
+        <?php if ($stepUpMethod['provider']): ?><input type="hidden" name="provider" value="<?= h($stepUpMethod['provider']) ?>"><?php endif; ?>
+        <button class="btn btn-small" type="submit">Confirm with <?= h($stepUpMethod['label']) ?></button>
+    </form>
     <?php else: ?>
     <form method="post" class="inline-form">
         <?= csrf_field() ?><input type="hidden" name="action" value="totp_start">
-        <label>Current password <input type="password" name="current" autocomplete="current-password" required></label>
+        <?php if (!step_up_confirmed()): ?><label>Current password <input type="password" name="current" autocomplete="current-password" required></label><?php endif; ?>
         <button class="btn btn-small" type="submit"><?= $totpApps ? 'Add another authenticator app' : 'Set up an authenticator app' ?></button>
     </form>
+    <?php endif; ?>
     <?php endif; ?>
 
     <?php $keys = q("SELECT * FROM webauthn_credentials WHERE user_id = ? AND purpose = 'login' ORDER BY id", [$uid])->fetchAll(); ?>
@@ -646,14 +671,26 @@ render_header('Account', 'account');
         <?php endforeach; ?>
     </ul>
     <?php endif; ?>
+    <?php $stepUpMethod = step_up_method($user); ?>
+    <?php if (!step_up_confirmed() && in_array($stepUpMethod['type'], ['entra', 'oidc'], true)): ?>
+    <p class="muted small">Confirm it's you to add a security key.</p>
+    <form method="post">
+        <?= csrf_field() ?><input type="hidden" name="action" value="stepup_<?= $stepUpMethod['type'] ?>">
+        <?php if ($stepUpMethod['provider']): ?><input type="hidden" name="provider" value="<?= h($stepUpMethod['provider']) ?>"><?php endif; ?>
+        <button class="btn btn-small" type="submit">Confirm with <?= h($stepUpMethod['label']) ?></button>
+    </form>
+    <?php else: ?>
     <p class="inline-actions">
         <label class="sr" for="security-key-label">Nickname for this key</label>
         <input id="security-key-label" type="text" hidden data-webauthn-label placeholder="Nickname (e.g. YubiKey 5C)" maxlength="100" autocomplete="off">
+        <?php if (!step_up_confirmed()): ?>
         <label class="sr" for="security-key-password">Current password</label>
         <input id="security-key-password" type="password" hidden data-webauthn-password placeholder="Current password" autocomplete="current-password">
+        <?php endif; ?>
         <button class="btn btn-small" type="button" hidden data-webauthn-register-key data-purpose="login" data-csrf="<?= h(csrf_token()) ?>" data-label="Security key">Add a security key</button>
         <span class="small warn" data-webauthn-status></span>
     </p>
+    <?php endif; ?>
     <?php endif; ?>
 
     <?php $devices = q('SELECT * FROM remembered_devices WHERE user_id = ? AND expires_at > UTC_TIMESTAMP() ORDER BY last_used_at DESC', [$uid])->fetchAll(); ?>
