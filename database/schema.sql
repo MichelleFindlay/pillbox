@@ -119,6 +119,21 @@ CREATE TABLE IF NOT EXISTS remembered_devices (
     CONSTRAINT fk_device_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Every device currently signed in (Account > Password & security, "Active sessions"), separate
+-- from remembered_devices (which is only the long-lived "stay signed in" cookie). A row is made
+-- at sign-in and removed at sign-out; removing someone else's row here signs that session out.
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id         INT UNSIGNED NOT NULL,
+    label           VARCHAR(100)  NOT NULL,
+    ip              VARCHAR(45)   NULL,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_active_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_user_sessions_user (user_id),
+    CONSTRAINT fk_user_sessions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS login_attempts (
     id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
     ip            VARCHAR(45)  NOT NULL,

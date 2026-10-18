@@ -181,6 +181,11 @@ if (is_post()) {
             flash('success', 'You have been signed out on all other devices.');
             redirect('account.php#security');
 
+        case 'forget_session':
+            q('DELETE FROM user_sessions WHERE id = ? AND user_id = ? AND id <> ?', [(int) post('id'), $uid, (int) ($_SESSION['session_row_id'] ?? 0)]);
+            flash('success', 'That session has been signed out.');
+            redirect('account.php#security');
+
         case 'remove_security_key':
             q("DELETE FROM webauthn_credentials WHERE id = ? AND user_id = ? AND purpose = 'login'", [(int) post('id'), $uid]);
             flash('success', 'Security key removed.');
@@ -666,6 +671,24 @@ render_header('Account', 'account');
         <?php endforeach; ?>
     </ul>
     <?php endif; ?>
+    <?php endif; ?>
+
+    <?php $sessions = q('SELECT * FROM user_sessions WHERE user_id = ? ORDER BY last_active_at DESC', [$uid])->fetchAll(); ?>
+    <h3>Active sessions</h3>
+    <p class="muted small">Every device signed in right now. Different from <strong>Remembered devices</strong> above: a session here is open at this moment; a remembered device can sign itself back in later without a password.</p>
+    <?php if (!$sessions): ?>
+    <p class="muted small">None found.</p>
+    <?php else: ?>
+    <ul class="plain">
+        <?php foreach ($sessions as $s): $here = (int) $s['id'] === (int) ($_SESSION['session_row_id'] ?? 0); ?>
+        <li class="logline"><span><strong><?= h($s['label']) ?></strong><?= $here ? ' <span class="badge">This device</span>' : '' ?>
+            <br><span class="muted small">Signed in <?= h(local_time($s['created_at'], 'j M Y')) ?> · active <?= h(local_time($s['last_active_at'], 'j M Y, H:i')) ?></span></span>
+            <?php if (!$here): ?>
+            <form method="post" data-confirm="Sign out this session?"><?= csrf_field() ?><input type="hidden" name="action" value="forget_session"><input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+                <button class="btn btn-small" type="submit">Sign out</button></form>
+            <?php endif; ?></li>
+        <?php endforeach; ?>
+    </ul>
     <?php endif; ?>
 
     <h3>Other devices</h3>

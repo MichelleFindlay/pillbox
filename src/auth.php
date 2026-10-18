@@ -28,6 +28,10 @@ function current_user(): ?array
             if ($user !== null && (int) $user['session_version'] !== (int) ($_SESSION['sv'] ?? 0)) {
                 $user = null;
             }
+            // Signed out individually, from the "Active sessions" list on another device?
+            if ($user !== null && !empty($_SESSION['session_row_id']) && !touch_session((int) $_SESSION['session_row_id'])) {
+                $user = null;
+            }
             if ($user === null) {
                 logout_session();
             } elseif (!empty($_SESSION['acting_for'])) {
@@ -137,6 +141,7 @@ function login_user(array $user, ?string $method = null): void
     $_SESSION['login_at'] = time();
     unset($_SESSION['csrf']);
     q('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [$user['id']]);
+    track_session((int) $user['id']);
     // "Remember this device", ticked on the sign-in page (kept in the session through single sign-on).
     $remember = !empty($_SESSION['remember_device']);
     unset($_SESSION['remember_device']);
@@ -216,6 +221,7 @@ function remembered_device_sign_in(): void
     $_SESSION['sv'] = (int) $device['session_version'];
     $_SESSION['login_at'] = time();
     $_SESSION['device_id'] = (int) $device['id'];
+    track_session((int) $device['user_id']);
     $expires = time() + remember_days() * 86400;
     q('UPDATE remembered_devices SET last_used_at = UTC_TIMESTAMP(), expires_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', $expires), $device['id']]);
     remember_cookie($cookie, $expires);
@@ -231,6 +237,29 @@ function forget_this_device(): void
     }
 }
 
+/* ---------- Active sessions ---------- */
+
+/** Record this sign-in for the "Active sessions" list (Account > Password & security). */
+function track_session(int $userId): void
+{
+    q('INSERT INTO user_sessions (user_id, label, ip) VALUES (?, ?, ?)',
+        [$userId, device_label((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), client_ip()]);
+    $_SESSION['session_row_id'] = (int) db()->lastInsertId();
+}
+
+/**
+ * Keep a session's "last active" time fresh, and check it hasn't been individually signed out
+ * from another device's "Active sessions" list. @return bool still valid
+ */
+function touch_session(int $sessionRowId): bool
+{
+    $exists = (bool) q('SELECT 1 FROM user_sessions WHERE id = ?', [$sessionRowId])->fetch();
+    if ($exists) {
+        q('UPDATE user_sessions SET last_active_at = UTC_TIMESTAMP() WHERE id = ? AND last_active_at < UTC_TIMESTAMP() - INTERVAL 2 MINUTE', [$sessionRowId]);
+    }
+    return $exists;
+}
+
 function finish_login_redirect(): never
 {
     $target = safe_return($_SESSION['after_login'] ?? null);
@@ -240,6 +269,9 @@ function finish_login_redirect(): never
 
 function logout_session(): void
 {
+    if (!empty($_SESSION['session_row_id'])) {
+        q('DELETE FROM user_sessions WHERE id = ?', [(int) $_SESSION['session_row_id']]);
+    }
     $_SESSION = [];
     session_regenerate_id(true);
 }
@@ -421,6 +453,7 @@ function bump_session_version(int $userId, bool $keepCurrent): void
     q('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$userId]);
     // Remembered devices too (except this one, if it stays signed in).
     q('DELETE FROM remembered_devices WHERE user_id = ? AND id <> ?', [$userId, $keepCurrent ? (int) ($_SESSION['device_id'] ?? 0) : 0]);
+    q('DELETE FROM user_sessions WHERE user_id = ? AND id <> ?', [$userId, $keepCurrent ? (int) ($_SESSION['session_row_id'] ?? 0) : 0]);
     if ($keepCurrent) {
         session_regenerate_id(true);
         $_SESSION['sv'] = (int) q('SELECT session_version FROM users WHERE id = ?', [$userId])->fetchColumn();
