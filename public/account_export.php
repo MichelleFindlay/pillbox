@@ -59,6 +59,8 @@ $export = [
     'headaches'       => q('SELECT e.started_at, e.ended_at, e.severity, e.location, e.migraine, e.aura, e.symptoms, e.triggers, e.notes,
                               (SELECT GROUP_CONCAT(CONCAT(m.name, " at ", m.taken_at, IFNULL(CONCAT(" helped ", m.helped), "")) SEPARATOR "; ") FROM episode_meds m WHERE m.episode_id = e.id) AS medicines
                           FROM headache_episodes e WHERE e.user_id = ? ORDER BY e.started_at', [$uid])->fetchAll(),
+    'private_health_plans' => q('SELECT kind, provider, plan_name, member_number, who_covered, through_employer, cost_amount, cost_period, excess_amount, excess_per, renews_on, underwriting, six_week, hospital_list, claims_phone, website, covers, cover_limits, exclusions, notes, is_active FROM health_plans WHERE user_id = ? ORDER BY id', [$uid])->fetchAll(),
+    'private_treatment_and_claims' => q('SELECT treated_on, cover, description, cost, covered, status, reference, notes FROM health_claims WHERE user_id = ? ORDER BY treated_on', [$uid])->fetchAll(),
     'allergies'       => q('SELECT allergen, category, drug_class, kind, reactions, severity, confirmed, since, notes, status, resolved_on, resolved_note FROM allergies WHERE user_id = ? ORDER BY id', [$uid])->fetchAll(),
     'allergy_settings' => q('SELECT none_known, none_known_on, aai, aai_brand, aai_where FROM allergy_profiles WHERE user_id = ?', [$uid])->fetch() ?: null,
     'weather_town'    => q('SELECT name, latitude, longitude FROM weather_places WHERE user_id = ?', [$uid])->fetch() ?: null,

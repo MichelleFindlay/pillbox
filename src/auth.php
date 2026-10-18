@@ -28,6 +28,10 @@ function current_user(): ?array
             if ($user !== null && (int) $user['session_version'] !== (int) ($_SESSION['sv'] ?? 0)) {
                 $user = null;
             }
+            // Signed out individually, from the "Active sessions" list on another device?
+            if ($user !== null && !empty($_SESSION['session_row_id']) && !touch_session((int) $_SESSION['session_row_id'])) {
+                $user = null;
+            }
             if ($user === null) {
                 logout_session();
             } elseif (!empty($_SESSION['acting_for'])) {
@@ -137,6 +141,8 @@ function login_user(array $user, ?string $method = null): void
     $_SESSION['login_at'] = time();
     unset($_SESSION['csrf']);
     q('UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?', [$user['id']]);
+    track_session((int) $user['id']);
+    mark_step_up(); // a fresh sign-in is itself proof of identity: no need to ask again immediately
     // "Remember this device", ticked on the sign-in page (kept in the session through single sign-on).
     $remember = !empty($_SESSION['remember_device']);
     unset($_SESSION['remember_device']);
@@ -216,6 +222,7 @@ function remembered_device_sign_in(): void
     $_SESSION['sv'] = (int) $device['session_version'];
     $_SESSION['login_at'] = time();
     $_SESSION['device_id'] = (int) $device['id'];
+    track_session((int) $device['user_id']);
     $expires = time() + remember_days() * 86400;
     q('UPDATE remembered_devices SET last_used_at = UTC_TIMESTAMP(), expires_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', $expires), $device['id']]);
     remember_cookie($cookie, $expires);
@@ -231,6 +238,53 @@ function forget_this_device(): void
     }
 }
 
+/* ---------- Active sessions ---------- */
+
+/** Record this sign-in for the "Active sessions" list (Account > Password & security). */
+function track_session(int $userId): void
+{
+    $ip = client_ip();
+    q('INSERT INTO user_sessions (user_id, label, ip, location) VALUES (?, ?, ?, ?)',
+        [$userId, device_label((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), $ip, geoip_lookup($ip)]);
+    $_SESSION['session_row_id'] = (int) db()->lastInsertId();
+}
+
+/**
+ * Approximate "City, Country" for an IP address, if config 'app.geoip_lookup' is turned on:
+ * it's off by default, since it sends the IP address to a third party (ipapi.co) that Pillbox
+ * otherwise never shares anything with. Never looks up a private/local address. Fails silently
+ * (a slow or unreachable lookup should never hold up signing in).
+ */
+function geoip_lookup(string $ip): ?string
+{
+    if (!config('app.geoip_lookup', false) || !filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+        return null;
+    }
+    $ch = curl_init('https://ipapi.co/' . rawurlencode($ip) . '/json/');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 3, CURLOPT_CONNECTTIMEOUT => 2,
+        CURLOPT_HTTPHEADER => ['User-Agent: Pillbox/' . pillbox_version()]]);
+    $body = curl_exec($ch);
+    $data = is_string($body) ? json_decode($body, true) : null;
+    if (!is_array($data) || !empty($data['error']) || empty($data['city'])) {
+        return null;
+    }
+    $parts = array_filter([(string) $data['city'], (string) ($data['country_code'] ?? $data['country_name'] ?? '')]);
+    return $parts ? implode(', ', $parts) : null;
+}
+
+/**
+ * Keep a session's "last active" time fresh, and check it hasn't been individually signed out
+ * from another device's "Active sessions" list. @return bool still valid
+ */
+function touch_session(int $sessionRowId): bool
+{
+    $exists = (bool) q('SELECT 1 FROM user_sessions WHERE id = ?', [$sessionRowId])->fetch();
+    if ($exists) {
+        q('UPDATE user_sessions SET last_active_at = UTC_TIMESTAMP() WHERE id = ? AND last_active_at < UTC_TIMESTAMP() - INTERVAL 2 MINUTE', [$sessionRowId]);
+    }
+    return $exists;
+}
+
 function finish_login_redirect(): never
 {
     $target = safe_return($_SESSION['after_login'] ?? null);
@@ -240,6 +294,9 @@ function finish_login_redirect(): never
 
 function logout_session(): void
 {
+    if (!empty($_SESSION['session_row_id'])) {
+        q('DELETE FROM user_sessions WHERE id = ?', [(int) $_SESSION['session_row_id']]);
+    }
     $_SESSION = [];
     session_regenerate_id(true);
 }
@@ -255,6 +312,80 @@ function login_is_throttled(string $username): bool
         [$username, client_ip(), LOGIN_WINDOW_MINUTES, $username, client_ip()]
     )->fetch();
     return (int) $row['by_user'] >= LOGIN_MAX_FAILURES || (int) $row['by_ip'] >= LOGIN_MAX_FAILURES * 3;
+}
+
+/**
+ * Re-confirm the current password before a sensitive change (adding a new authenticator app or
+ * security key): an active session alone isn't enough, in case it was hijacked or left open on
+ * a shared device. Throttled separately from sign-in attempts, since the account is already
+ * authenticated here.
+ */
+function verify_step_up_password(array $user, string $password): bool
+{
+    $tries = $_SESSION['stepup_tries'] ?? ['n' => 0, 'at' => 0];
+    if ($tries['n'] >= 5 && $tries['at'] > time() - 900) {
+        return false;
+    }
+    $ok = $user['password_hash'] && password_verify($password, $user['password_hash']);
+    if ($ok) {
+        unset($_SESSION['stepup_tries']);
+        mark_step_up();
+    } else {
+        $_SESSION['stepup_tries'] = ['n' => ($tries['at'] > time() - 900 ? $tries['n'] : 0) + 1, 'at' => time()];
+    }
+    return $ok;
+}
+
+const STEP_UP_MINUTES = 10;
+
+/** Record that this session just re-confirmed identity (password or a fresh Microsoft/OIDC sign-in). */
+function mark_step_up(): void
+{
+    $_SESSION['stepup_at'] = time();
+}
+
+/** Is there a still-fresh step-up confirmation in this session? */
+function step_up_confirmed(): bool
+{
+    return !empty($_SESSION['stepup_at']) && $_SESSION['stepup_at'] > time() - STEP_UP_MINUTES * 60;
+}
+
+/**
+ * The best way for this account to re-confirm its identity for a sensitive change (adding a new
+ * authenticator app or security key): whatever they're currently signed in with this session, if
+ * that's a password or a linked Microsoft/OIDC account; otherwise whichever of those it has.
+ * @return array{type: string, provider: ?string, label: string} type is 'password', 'entra', 'oidc' or 'none'
+ */
+function step_up_method(array $user): array
+{
+    $sessionProvider = (string) ($_SESSION['provider'] ?? '');
+    if ($sessionProvider === 'entra' && entra_enabled() && $user['entra_oid']) {
+        return ['type' => 'entra', 'provider' => null, 'label' => (string) config('entra.button_label', 'Microsoft')];
+    }
+    if (str_starts_with($sessionProvider, 'oidc:')) {
+        $key = substr($sessionProvider, 5);
+        if (($p = oidc_provider($key)) && isset(user_identities((int) $user['id'])[$key])) {
+            return ['type' => 'oidc', 'provider' => $key, 'label' => $p['name']];
+        }
+    }
+    if ($user['password_hash'] !== null && local_login_enabled()) {
+        return ['type' => 'password', 'provider' => null, 'label' => 'your password'];
+    }
+    if (entra_enabled() && $user['entra_oid']) {
+        return ['type' => 'entra', 'provider' => null, 'label' => (string) config('entra.button_label', 'Microsoft')];
+    }
+    foreach (user_identities((int) $user['id']) as $key => $identity) {
+        if ($p = oidc_provider($key)) {
+            return ['type' => 'oidc', 'provider' => $key, 'label' => $p['name']];
+        }
+    }
+    return ['type' => 'none', 'provider' => null, 'label' => ''];
+}
+
+/** Can this account add a new authenticator app or security key at all? Some way to step up, and not the demo. */
+function can_add_login_2fa(array $user): bool
+{
+    return empty($user['is_demo']) && step_up_method($user)['type'] !== 'none';
 }
 
 /**
@@ -400,6 +531,7 @@ function bump_session_version(int $userId, bool $keepCurrent): void
     q('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$userId]);
     // Remembered devices too (except this one, if it stays signed in).
     q('DELETE FROM remembered_devices WHERE user_id = ? AND id <> ?', [$userId, $keepCurrent ? (int) ($_SESSION['device_id'] ?? 0) : 0]);
+    q('DELETE FROM user_sessions WHERE user_id = ? AND id <> ?', [$userId, $keepCurrent ? (int) ($_SESSION['session_row_id'] ?? 0) : 0]);
     if ($keepCurrent) {
         session_regenerate_id(true);
         $_SESSION['sv'] = (int) q('SELECT session_version FROM users WHERE id = ?', [$userId])->fetchColumn();

@@ -335,7 +335,14 @@ function read_apple_health_export(string $path, HealthImporter $importer): void
         throw new RuntimeException("That file couldn't be read as an Apple Health export.");
     }
     $sawHealthData = false;
+    // A real export (even a large one) reads in well under this; bounds how long a crafted,
+    // highly-compressed export.xml (a "zip bomb") can tie up the server decompressing it.
+    $deadline = time() + 300;
+    $seen = 0;
     while (@$reader->read()) {
+        if (++$seen % 5000 === 0 && time() > $deadline) {
+            throw new RuntimeException('That export is taking too long to read. Try a smaller date range, or ask whoever runs this Pillbox for help.');
+        }
         if ($reader->nodeType !== XMLReader::ELEMENT) {
             continue;
         }

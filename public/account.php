@@ -9,7 +9,8 @@ $errors = [];
 
 if (is_post()) {
     require_post();
-    if (in_array(post('action'), ['profile', 'password', 'sign_out_others', 'link_entra', 'unlink_entra', 'unlink_oidc', 'email_prefs', 'test_email'], true)) {
+    if (in_array(post('action'), ['profile', 'password', 'sign_out_others', 'link_entra', 'unlink_entra', 'unlink_oidc', 'email_prefs', 'test_email', 'remove_security_key',
+        'totp_start', 'totp_confirm', 'totp_cancel_setup', 'totp_remove', 'totp_rename', 'totp_regenerate_codes', 'rename_security_key', 'stepup_entra', 'stepup_oidc'], true)) {
         demo_blocked('Changing sign-in details and email');
     }
     switch (post('action')) {
@@ -97,6 +98,8 @@ if (is_post()) {
             } elseif (!$file || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
                 flash('error', $file && in_array($file['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
                     ? 'That file is too big for this server to accept.' : 'Choose the backup file to import.');
+            } elseif ($file['size'] > BACKUP_MAX_UPLOAD) {
+                flash('error', 'That backup file is too big (over ' . (int) (BACKUP_MAX_UPLOAD / 1024 / 1024) . ' MB).');
             } else {
                 $backup = backup_from_file(json_decode((string) file_get_contents($file['tmp_name']), true));
                 if (is_string($backup)) {
@@ -178,6 +181,87 @@ if (is_post()) {
             flash('success', 'You have been signed out on all other devices.');
             redirect('account.php#security');
 
+        case 'forget_session':
+            q('DELETE FROM user_sessions WHERE id = ? AND user_id = ? AND id <> ?', [(int) post('id'), $uid, (int) ($_SESSION['session_row_id'] ?? 0)]);
+            flash('success', 'That session has been signed out.');
+            redirect('account.php#security');
+
+        case 'remove_security_key':
+            q("DELETE FROM webauthn_credentials WHERE id = ? AND user_id = ? AND purpose = 'login'", [(int) post('id'), $uid]);
+            flash('success', 'Security key removed.');
+            redirect('account.php#security');
+
+        case 'rename_security_key':
+            if ($label = trim(mb_substr((string) post('label'), 0, 100))) {
+                q("UPDATE webauthn_credentials SET label = ? WHERE id = ? AND user_id = ? AND purpose = 'login'", [$label, (int) post('id'), $uid]);
+            }
+            redirect('account.php#security');
+
+        case 'totp_start':
+            if (!can_add_login_2fa($user)) {
+                break;
+            }
+            if (!step_up_confirmed() && !verify_step_up_password($user, (string) ($_POST['current'] ?? ''))) {
+                flash('error', "That's not your current password, or you've tried too many times. Wait 15 minutes and try again.");
+                redirect('account.php#security');
+            }
+            // Only one setup in progress at a time: drop any other unconfirmed one first.
+            q('DELETE FROM totp_credentials WHERE user_id = ? AND confirmed_at IS NULL', [$uid]);
+            q('INSERT INTO totp_credentials (user_id, secret, label) VALUES (?, ?, ?)', [$uid, seal(totp_generate_secret()), 'Authenticator app']);
+            redirect('account.php#security');
+
+        case 'totp_confirm':
+            $pendingCred = totp_pending_credential($uid, (int) post('id'));
+            if (!$pendingCred) {
+                flash('error', 'Start setting up an authenticator app first.');
+            } elseif (!totp_code_matches($pendingCred['secret'], post('code'))) {
+                flash('error', "That code isn't right. Check the time on your phone is correct, and try again.");
+            } else {
+                $label = trim(mb_substr((string) post('label'), 0, 100)) ?: 'Authenticator app';
+                $hadAny = has_totp_enabled($uid);
+                q('UPDATE totp_credentials SET confirmed_at = UTC_TIMESTAMP(), label = ? WHERE id = ?', [$label, $pendingCred['id']]);
+                bump_session_version($uid, true);
+                if ($hadAny) {
+                    flash('success', 'Authenticator app added. Any other devices have been signed out.');
+                } else {
+                    $codes = totp_generate_backup_codes();
+                    q('UPDATE users SET totp_backup_codes = ? WHERE id = ?', [totp_hash_backup_codes($codes), $uid]);
+                    $_SESSION['totp_backup_codes_shown'] = $codes;
+                    flash('success', 'Authenticator app added. Save your backup codes somewhere safe &mdash; any other devices have been signed out.');
+                }
+            }
+            redirect('account.php#security');
+
+        case 'totp_cancel_setup':
+            q('DELETE FROM totp_credentials WHERE id = ? AND user_id = ? AND confirmed_at IS NULL', [(int) post('id'), $uid]);
+            redirect('account.php#security');
+
+        case 'totp_rename':
+            if ($label = trim(mb_substr((string) post('label'), 0, 100))) {
+                q('UPDATE totp_credentials SET label = ? WHERE id = ? AND user_id = ? AND confirmed_at IS NOT NULL', [$label, (int) post('id'), $uid]);
+            }
+            redirect('account.php#security');
+
+        case 'totp_remove':
+            q('DELETE FROM totp_credentials WHERE id = ? AND user_id = ? AND confirmed_at IS NOT NULL', [(int) post('id'), $uid]);
+            if (has_totp_enabled($uid)) {
+                flash('success', 'Authenticator app removed.');
+            } else {
+                // No authenticator app left: the backup codes have nothing left to back up.
+                q('UPDATE users SET totp_backup_codes = NULL WHERE id = ?', [$uid]);
+                flash('success', "Authenticator app removed. Your backup codes no longer work either, since there's nothing left for them to back up.");
+            }
+            redirect('account.php#security');
+
+        case 'totp_regenerate_codes':
+            if (has_totp_enabled($uid)) {
+                $codes = totp_generate_backup_codes();
+                q('UPDATE users SET totp_backup_codes = ? WHERE id = ?', [totp_hash_backup_codes($codes), $uid]);
+                $_SESSION['totp_backup_codes_shown'] = $codes;
+                flash('success', 'New backup codes generated. Your old codes no longer work.');
+            }
+            redirect('account.php#security');
+
         case 'metrics':
             $builtin = builtin_metrics();
             $chosen = array_values(array_filter((array) ($_POST['metrics'] ?? []), fn ($k) => is_string($k) && isset($builtin[$k])));
@@ -211,6 +295,22 @@ if (is_post()) {
             if (entra_enabled() && $user['auth_provider'] !== 'entra') {
                 $_SESSION['entra_link_uid'] = $uid;
                 entra_begin_login();
+            }
+            break;
+
+        case 'stepup_entra':
+            if (entra_enabled() && $user['entra_oid']) {
+                $_SESSION['entra_link_uid'] = $uid;
+                $_SESSION['stepup_resume'] = true;
+                entra_begin_login();
+            }
+            break;
+
+        case 'stepup_oidc':
+            $key = post('provider');
+            if (oidc_provider($key) && isset(user_identities($uid)[$key])) {
+                $_SESSION['stepup_resume'] = true;
+                oidc_begin($key, $uid);
             }
             break;
 
@@ -484,6 +584,115 @@ render_header('Account', 'account');
     </form>
     <?php endif; ?>
 
+    <?php if (can_add_login_2fa($user)): ?>
+    <h3>Authenticator apps</h3>
+    <p class="muted small">Add one or more authenticator apps (Google Authenticator, Microsoft Authenticator, 1Password, &hellip;) and you're asked for a code from any of them after your password when you sign in. Add a spare (for example on a second phone) so losing one doesn't lock you out.</p>
+    <?php if ($codes = $_SESSION['totp_backup_codes_shown'] ?? null): unset($_SESSION['totp_backup_codes_shown']);
+        $codesFile = (string) config('app.name', 'Pillbox') . " backup codes for " . $user['display_name'] . "\n"
+            . "Generated " . gmdate('j F Y') . ". Each code works once, if you lose access to your authenticator apps.\n\n" . implode("\n", $codes) . "\n"; ?>
+    <div class="flash flash-success">
+        <p>Save these backup codes somewhere safe &mdash; each works once, if you lose access to all your authenticator apps. They won't be shown again.</p>
+        <ul class="plain grid-2 backup-codes"><?php foreach ($codes as $c): ?><li><code><?= h($c) ?></code></li><?php endforeach; ?></ul>
+        <p><a class="btn btn-small" download="<?= h(strtolower(str_replace(' ', '-', (string) config('app.name', 'Pillbox')))) ?>-backup-codes.txt"
+            href="data:text/plain;charset=utf-8,<?= rawurlencode($codesFile) ?>">Download backup codes</a></p>
+    </div>
+    <?php endif; ?>
+
+    <?php $totpApps = totp_credentials($uid); ?>
+    <?php if ($totpApps): ?>
+    <ul class="plain">
+        <?php foreach ($totpApps as $t): ?>
+        <li class="logline"><span><strong><?= h($t['label']) ?></strong>
+            <br><span class="muted small">Added <?= h(local_time($t['created_at'], 'j M Y')) ?><?= $t['last_used_at'] ? ' · last used ' . h(local_time($t['last_used_at'], 'j M Y, H:i')) : '' ?></span></span>
+            <span class="inline-actions">
+                <details class="q-edit"><summary class="btn btn-small">Rename</summary>
+                    <form method="post" class="inline-form"><?= csrf_field() ?><input type="hidden" name="action" value="totp_rename"><input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
+                        <input name="label" value="<?= h($t['label']) ?>" maxlength="100" required><button class="btn btn-small" type="submit">Save</button></form>
+                </details>
+                <form method="post" data-confirm="Remove this authenticator app? You'll no longer be able to sign in with codes from it."><?= csrf_field() ?><input type="hidden" name="action" value="totp_remove"><input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
+                    <button class="btn btn-small" type="submit">Remove</button></form>
+            </span></li>
+        <?php endforeach; ?>
+    </ul>
+    <p class="inline-actions">
+        <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="totp_regenerate_codes">
+            <button class="btn btn-small" type="submit">Generate new backup codes</button></form>
+    </p>
+    <?php endif; ?>
+
+    <?php $pendingTotp = totp_pending_credential($uid); ?>
+    <?php if ($pendingTotp): ?>
+    <p class="muted small">Scan this with your authenticator app, then enter the 6-digit code it shows to confirm.</p>
+    <?= totp_qr_svg(totp_provisioning_uri($pendingTotp['secret'], (string) ($user['username'] ?: $user['email']), (string) config('app.name', 'Pillbox'))) ?>
+    <p class="muted small">Can't scan it? Enter this key instead: <code><?= h(trim(chunk_split($pendingTotp['secret'], 4, ' '))) ?></code></p>
+    <form method="post" class="stack narrow">
+        <?= csrf_field() ?><input type="hidden" name="action" value="totp_confirm"><input type="hidden" name="id" value="<?= (int) $pendingTotp['id'] ?>">
+        <label>Nickname <span class="muted small">(optional, e.g. "Phone")</span> <input name="label" maxlength="100" placeholder="Authenticator app"></label>
+        <label>6-digit code <input name="code" inputmode="numeric" autocomplete="one-time-code" required autofocus></label>
+        <button class="btn btn-primary" type="submit">Confirm</button>
+    </form>
+    <form method="post">
+        <?= csrf_field() ?><input type="hidden" name="action" value="totp_cancel_setup"><input type="hidden" name="id" value="<?= (int) $pendingTotp['id'] ?>">
+        <button class="btn-link small" type="submit">Cancel</button>
+    </form>
+    <?php else: $stepUpMethod = step_up_method($user); ?>
+    <?php if (!step_up_confirmed() && in_array($stepUpMethod['type'], ['entra', 'oidc'], true)): ?>
+    <p class="muted small">Confirm it's you to <?= $totpApps ? 'add another authenticator app' : 'set up an authenticator app' ?>.</p>
+    <form method="post">
+        <?= csrf_field() ?><input type="hidden" name="action" value="stepup_<?= $stepUpMethod['type'] ?>">
+        <?php if ($stepUpMethod['provider']): ?><input type="hidden" name="provider" value="<?= h($stepUpMethod['provider']) ?>"><?php endif; ?>
+        <button class="btn btn-small" type="submit">Confirm with <?= h($stepUpMethod['label']) ?></button>
+    </form>
+    <?php else: ?>
+    <form method="post" class="inline-form">
+        <?= csrf_field() ?><input type="hidden" name="action" value="totp_start">
+        <?php if (!step_up_confirmed()): ?><label>Current password <input type="password" name="current" autocomplete="current-password" required></label><?php endif; ?>
+        <button class="btn btn-small" type="submit"><?= $totpApps ? 'Add another authenticator app' : 'Set up an authenticator app' ?></button>
+    </form>
+    <?php endif; ?>
+    <?php endif; ?>
+
+    <?php $keys = q("SELECT * FROM webauthn_credentials WHERE user_id = ? AND purpose = 'login' ORDER BY id", [$uid])->fetchAll(); ?>
+    <h3>Security keys</h3>
+    <p class="muted small">Add a security key (e.g. a YubiKey) and it's asked for after your password when you sign in, as well as your username and password.</p>
+    <?php if ($keys): ?>
+    <ul class="plain">
+        <?php foreach ($keys as $k): ?>
+        <li class="logline"><span><strong><?= h($k['label']) ?></strong>
+            <br><span class="muted small">Added <?= h(local_time($k['created_at'], 'j M Y')) ?><?= $k['last_used_at'] ? ' · last used ' . h(local_time($k['last_used_at'], 'j M Y, H:i')) : '' ?></span></span>
+            <span class="inline-actions">
+                <details class="q-edit"><summary class="btn btn-small">Rename</summary>
+                    <form method="post" class="inline-form"><?= csrf_field() ?><input type="hidden" name="action" value="rename_security_key"><input type="hidden" name="id" value="<?= (int) $k['id'] ?>">
+                        <input name="label" value="<?= h($k['label']) ?>" maxlength="100" required><button class="btn btn-small" type="submit">Save</button></form>
+                </details>
+                <form method="post" data-confirm="Remove this security key? You'll be able to sign in with just your password again."><?= csrf_field() ?><input type="hidden" name="action" value="remove_security_key"><input type="hidden" name="id" value="<?= (int) $k['id'] ?>">
+                    <button class="btn btn-small" type="submit">Remove</button></form>
+            </span></li>
+        <?php endforeach; ?>
+    </ul>
+    <?php endif; ?>
+    <?php $stepUpMethod = step_up_method($user); ?>
+    <?php if (!step_up_confirmed() && in_array($stepUpMethod['type'], ['entra', 'oidc'], true)): ?>
+    <p class="muted small">Confirm it's you to add a security key.</p>
+    <form method="post">
+        <?= csrf_field() ?><input type="hidden" name="action" value="stepup_<?= $stepUpMethod['type'] ?>">
+        <?php if ($stepUpMethod['provider']): ?><input type="hidden" name="provider" value="<?= h($stepUpMethod['provider']) ?>"><?php endif; ?>
+        <button class="btn btn-small" type="submit">Confirm with <?= h($stepUpMethod['label']) ?></button>
+    </form>
+    <?php else: ?>
+    <p class="inline-actions">
+        <label class="sr" for="security-key-label">Nickname for this key</label>
+        <input id="security-key-label" type="text" hidden data-webauthn-label placeholder="Nickname (e.g. YubiKey 5C)" maxlength="100" autocomplete="off">
+        <?php if (!step_up_confirmed()): ?>
+        <label class="sr" for="security-key-password">Current password</label>
+        <input id="security-key-password" type="password" hidden data-webauthn-password placeholder="Current password" autocomplete="current-password">
+        <?php endif; ?>
+        <button class="btn btn-small" type="button" hidden data-webauthn-register-key data-purpose="login" data-csrf="<?= h(csrf_token()) ?>" data-label="Security key">Add a security key</button>
+        <span class="small warn" data-webauthn-status></span>
+    </p>
+    <?php endif; ?>
+    <?php endif; ?>
+
     <?php $devices = q('SELECT * FROM remembered_devices WHERE user_id = ? AND expires_at > UTC_TIMESTAMP() ORDER BY last_used_at DESC', [$uid])->fetchAll(); ?>
     <?php if ($devices || remember_days() > 0): ?>
     <h3>Remembered devices</h3>
@@ -499,6 +708,25 @@ render_header('Account', 'account');
         <?php endforeach; ?>
     </ul>
     <?php endif; ?>
+    <?php endif; ?>
+
+    <?php $sessions = q('SELECT * FROM user_sessions WHERE user_id = ? ORDER BY last_active_at DESC', [$uid])->fetchAll(); ?>
+    <h3>Active sessions</h3>
+    <p class="muted small">Every device signed in right now. Different from <strong>Remembered devices</strong> above: a session here is open at this moment; a remembered device can sign itself back in later without a password.</p>
+    <?php if (!$sessions): ?>
+    <p class="muted small">None found.</p>
+    <?php else: ?>
+    <ul class="plain">
+        <?php foreach ($sessions as $s): $here = (int) $s['id'] === (int) ($_SESSION['session_row_id'] ?? 0); ?>
+        <li class="logline"><span><strong><?= h($s['label']) ?></strong><?= $here ? ' <span class="badge">This device</span>' : '' ?>
+            <br><span class="muted small">Signed in <?= h(local_time($s['created_at'], 'j M Y')) ?> · active <?= h(local_time($s['last_active_at'], 'j M Y, H:i')) ?></span>
+            <?php if ($s['ip']): ?><br><span class="muted small"><?= h($s['ip']) ?><?= $s['location'] ? ' · ' . h($s['location']) : '' ?></span><?php endif; ?></span>
+            <?php if (!$here): ?>
+            <form method="post" data-confirm="Sign out this session?"><?= csrf_field() ?><input type="hidden" name="action" value="forget_session"><input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+                <button class="btn btn-small" type="submit">Sign out</button></form>
+            <?php endif; ?></li>
+        <?php endforeach; ?>
+    </ul>
     <?php endif; ?>
 
     <h3>Other devices</h3>

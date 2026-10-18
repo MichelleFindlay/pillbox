@@ -118,6 +118,9 @@ function bp_contraception_warning(array $user, array $meds): ?string
 /** Import a monitor's CSV export (Omron and others): date, time, systolic, diastolic, pulse, irregular. */
 function import_bp_csv(int $userId, string $path, DateTimeZone $tz): array|string
 {
+    if (filesize($path) > 5 * 1024 * 1024) {
+        return 'That file is too big (over 5 MB) to be a blood pressure export.';
+    }
     $rows = csv_records($path);
     if (!$rows) {
         return "That file doesn't look like a CSV export from a blood pressure monitor.";

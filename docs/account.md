@@ -37,6 +37,13 @@ See [Display and accessibility](accessibility.md) and [Privacy and security](pri
 
 Change your password, link a Microsoft or other sign-in, and **sign out everywhere else**. Add an email address under **Profile** so you can reset your password yourself if you forget it.
 
+**Two-factor sign-in**: if you have a password, or sign in with Microsoft or another linked account, add either of these and it's asked for as well each time you sign in. Adding one asks you to confirm it's you first &mdash; with your password, or by signing in again with Microsoft/your linked account, whichever you used to get here.
+
+- **Authenticator apps**: scan the QR code with an app like Google Authenticator, Microsoft Authenticator or 1Password, confirm it with the 6-digit code it shows you, and save the backup codes shown afterwards somewhere safe &mdash; each works once, if you lose access to all of them. Add more than one (for example a spare on a second phone) so losing one doesn't lock you out &mdash; a code from any of them is accepted. **Generate new backup codes** replaces them (the old ones stop working); **Remove** one to stop codes from it being accepted (removing the last one also clears the backup codes, since there'd be nothing left for them to back up).
+- **Security keys**: add a hardware security key (e.g. a YubiKey). Add more than one (for example a spare, kept somewhere safe) so losing one doesn't lock you out. **Remove** a key to stop it being asked for.
+
+With either set up, signing in asks for it after your password, on a page where you can also switch to the other method (if you've set up both) or a backup code.
+
 **Remembered devices** lists the phones and computers you ticked **Remember this device** on, with when each was last used. **Forget** one if it's lost or no longer yours. Signing out on a device, changing your password, or **sign out everywhere else** forgets remembered devices too.
 
 ## Your data

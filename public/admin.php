@@ -304,7 +304,7 @@ render_header('Admin', 'admin');
         <button class="btn btn-primary" type="submit">Add user</button>
     </form>
 </section>
-<?php $latest = latest_version(); $repoUrl = github_repo_url(); ?>
+<?php $latest = latest_version(); ?>
 <section class="card" id="site">
     <h2>Site settings</h2>
     <p class="muted small">Saved in <code>config/settings.php</code>, which overrides <code>config/config.php</code>. Database and sign-in settings stay in config.php.</p>
@@ -341,6 +341,8 @@ render_header('Admin', 'admin');
             Update checking is off (<code>update_check</code> or <code>github_repo</code> in config.php).
         <?php elseif (update_available($latest)): ?>
             <strong>Version <?= h($latest['version']) ?> is available</strong><?= $latest['published_at'] ? ' (released ' . h(date('j M Y', strtotime($latest['published_at']))) . ')' : '' ?>.
+        <?php elseif (version_is_dev($latest)): ?>
+            <span class="dev-badge">Development version</span> &mdash; ahead of the latest release (<?= h($latest['version']) ?>).
         <?php elseif ($latest['version'] !== null): ?>
             It's up to date (latest release: <?= h($latest['version']) ?>).
         <?php else: ?>
@@ -379,8 +381,33 @@ render_header('Admin', 'admin');
     <?php endif; ?>
     <span class="inline-actions">
         <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="check_version"><button class="btn btn-small" type="submit">Check now</button></form>
-        <?php if (!empty($latest['url'])): ?><a class="btn btn-small" href="<?= h($latest['url']) ?>" target="_blank" rel="noopener">Release notes<?= $latest['name'] ? ': ' . h($latest['name']) : '' ?></a><?php endif; ?>
-        <?php if ($repoUrl): ?><a class="btn btn-small" href="<?= h($repoUrl . '/releases') ?>" target="_blank" rel="noopener">All releases</a><?php endif; ?>
     </span>
+    <?php if ($changelog = changelog_releases()): ?>
+    <details class="q-edit"><summary>Changelog<?= $changelog['releases'] ? ' (' . count($changelog['releases']) . ' releases)' : '' ?></summary>
+        <?php if ($changelog['error'] && !$changelog['releases']): ?>
+        <p class="warn small"><?= h($changelog['error']) ?></p>
+        <?php elseif (!$changelog['releases']): ?>
+        <p class="muted small">No releases have been published yet.</p>
+        <?php else: ?>
+        <?php if ($changelog['error']): ?><p class="warn small">That check failed (<?= h($changelog['error']) ?>), so this is the last changelog found.</p><?php endif; ?>
+        <?php foreach ($changelog['releases'] as $release): ?>
+        <div class="changelog-entry">
+            <h3><?= h($release['version']) ?><?= $release['name'] && $release['name'] !== $release['tag'] ? ': ' . h($release['name']) : '' ?>
+                <?php if ($release['published_at']): ?><span class="muted small"><?= h(date('j M Y', strtotime($release['published_at']))) ?></span><?php endif; ?></h3>
+            <?= docs_render($release['body'])[1] ?>
+        </div>
+        <?php endforeach; ?>
+        <?php endif; ?>
+    </details>
+    <?php endif; ?>
+    <details class="q-edit"><summary>Licenses</summary>
+        <ul class="plain">
+            <?php foreach (software_licenses() as $lic): ?>
+            <li class="logline"><span><strong><?= h($lic['name']) ?></strong> &mdash; <?= h($lic['license']) ?>
+                <?php if ($lic['note']): ?><br><span class="muted small"><?= h($lic['note']) ?></span><?php endif; ?></span>
+                <a class="btn btn-small" href="<?= h(url('license.php?which=' . urlencode($lic['key']))) ?>">View license</a></li>
+            <?php endforeach; ?>
+        </ul>
+    </details>
 </section>
 <?php render_footer();

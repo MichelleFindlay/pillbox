@@ -2,6 +2,8 @@
 
 The calendar icon in the top bar opens **Appointments**. Add the date, time, type (GP, specialist, hospital, dentist, blood test, scan, antenatal, gender identity clinic and more), who it's with, where, notes and a reminder. The next two weeks also show on Today.
 
+Tick **Private** for an appointment paid through private health care or by you, and choose which plan, the insurer's pre-authorisation number and the cost. Private appointments are marked in the list, the details (with your membership number) print on the appointment sheet, and afterwards you can record what you claimed back. See [Private health care](private-health.md).
+
 ## Preparing
 
 Tap an appointment to open it:

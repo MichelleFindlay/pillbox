@@ -13,7 +13,7 @@ const DOCS_DIR = APP_ROOT . '/docs';
 
 // Care categories and the documentation page for each.
 const CARE_DOC_PAGES = ['pregnancy' => 'pregnancy', 'pathway' => 'pregnancy-options', 'womens' => 'periods', 'menopause' => 'menopause', 'thyroid' => 'thyroid',
-    'diabetes' => 'diabetes', 'bp' => 'blood-pressure', 'migraine' => 'migraine', 'neuro' => 'adhd-autism', 'gender' => 'gender-affirming-care', 'bloods' => 'blood-tests', 'allergies' => 'allergies'];
+    'diabetes' => 'diabetes', 'bp' => 'blood-pressure', 'migraine' => 'migraine', 'neuro' => 'adhd-autism', 'gender' => 'gender-affirming-care', 'bloods' => 'blood-tests', 'allergies' => 'allergies', 'privatehealth' => 'private-health'];
 // Everything else is a section of care-categories.md, headed with the category's title.
 
 /** The "?" link to a documentation page (and section). */

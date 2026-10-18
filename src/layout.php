@@ -121,7 +121,7 @@ function render_header(string $title, string $active = ''): void
 <?php endif; ?>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="<?= h($disguise['name'] ?? config('app.name')) ?>">
 <link rel="stylesheet" href="<?= h(asset('assets/style.css')) ?>">
 <script src="<?= h(asset('assets/app.js')) ?>" defer></script>
@@ -209,6 +209,8 @@ function render_footer(): void
         <?php if ($latest !== null): ?>
             <?php if (update_available($latest)): ?>
             <a class="update-badge" href="<?= h(url('admin.php#version')) ?>">Update available: <?= h($latest['version']) ?></a>
+            <?php elseif (version_is_dev($latest)): ?>
+            <a class="dev-badge" href="<?= h(url('admin.php#version')) ?>" title="Ahead of the latest release, <?= h($latest['version']) ?>">Development version</a>
             <?php elseif ($latest['version'] !== null): ?>
             <span title="Checked <?= h(local_time(gmdate('Y-m-d H:i:s', $latest['checked_at']), 'j M H:i')) ?>">&#10003; Up to date</span>
             <?php else: ?>

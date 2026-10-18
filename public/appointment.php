@@ -17,8 +17,10 @@ if (is_post()) {
     switch (post('action')) {
         case 'add_question':
             $text = mb_substr(post('question'), 0, 500);
-            // A question from the Mind running list is now on this appointment.
-            q("UPDATE mind_notes SET done = 1, appointment_id = ? WHERE user_id = ? AND kind = 'question' AND done = 0 AND text = ?", [$a['id'], $user['id'], $text]);
+            if (share_can('mind', 'edit')) {
+                // A question from the Mind running list is now on this appointment.
+                q("UPDATE mind_notes SET done = 1, appointment_id = ? WHERE user_id = ? AND kind = 'question' AND done = 0 AND text = ?", [$a['id'], $user['id'], $text]);
+            }
             if ($text !== '') {
                 q('INSERT INTO appointment_questions (appointment_id, question) VALUES (?, ?)', [$a['id'], $text]);
             }
@@ -41,6 +43,9 @@ if (is_post()) {
             }
             redirect($self . '#questions');
         case 'add_action':
+            if (!share_can('mind', 'edit')) {
+                not_found();
+            }
             $text = trim(mb_substr(post('text'), 0, 500));
             $due = parse_date(post('due_date'));
             if ($text !== '') {
@@ -49,9 +54,15 @@ if (is_post()) {
             }
             redirect($self . '#actions');
         case 'toggle_action':
+            if (!share_can('mind', 'edit')) {
+                not_found();
+            }
             q("UPDATE mind_notes SET done = 1 - done WHERE id = ? AND user_id = ? AND kind = 'action'", [(int) post('note_id'), $uid]);
             redirect($self . '#actions');
         case 'delete_action':
+            if (!share_can('mind', 'edit')) {
+                not_found();
+            }
             q("DELETE FROM mind_notes WHERE id = ? AND user_id = ? AND kind = 'action'", [(int) post('note_id'), $uid]);
             redirect($self . '#actions');
         case 'save_outcome':
@@ -88,6 +99,10 @@ render_header(appointment_title($a), 'appointments');
         $a['with_whom'] ? 'with ' . $a['with_whom'] : '',
         (string) $a['location'],
     ]))) ?></p>
+    <?php if ($a['funding']): $plan = $a['plan_id'] ? find_health_plan((int) $a['plan_id'], $uid) : null; ?>
+    <p><span class="badge">Private</span> <?= h(substr(appointment_funding_text($a, $plan), strlen('Private · '))) ?>
+        <?php if ($plan && $plan['claims_phone']): ?><br><span class="small">Claims and pre-authorisation: <a href="tel:<?= h(preg_replace('/[^0-9+]/', '', $plan['claims_phone'])) ?>"><?= h($plan['claims_phone']) ?></a></span><?php endif; ?></p>
+    <?php endif; ?>
     <p class="print-only small">Patient: <?= h($user['display_name']) ?></p>
     <?php if ($a['notes']): ?>
     <h2>Before the appointment</h2>
@@ -115,6 +130,21 @@ render_header(appointment_title($a), 'appointments');
     </div>
     <?php endif; ?>
 </section>
+
+<?php if ($a['funding'] && share_area_allowed('privatehealth')): $claims = q('SELECT * FROM health_claims WHERE user_id = ? AND appointment_id = ?', [$uid, $a['id']])->fetchAll(); ?>
+<section class="card no-print" id="private">
+    <h2>Private treatment</h2>
+    <?php if ($a['funding'] === 'plan' && !$a['preauth'] && !$isPast && (($plan ?? null)['kind'] ?? '') === 'insurance'): ?><p class="warn small">No pre-authorisation number yet: most insurers need you to call them before treatment, or they may not pay.</p><?php endif; ?>
+    <?php foreach ($claims as $c): ?>
+    <p class="small"><strong><?= h(CLAIM_STATUSES[$c['status']] ?? '') ?></strong><?= $c['cost'] !== null ? ' · cost ' . money((float) $c['cost']) : '' ?><?= $c['covered'] !== null ? ' · plan pays ' . money((float) $c['covered']) : '' ?>
+        · <a href="<?= h(url('care.php?area=privatehealth#ph-claims')) ?>">See all claims</a></p>
+    <?php endforeach; ?>
+    <?php if (!$claims && $isPast && share_can('care', 'edit')): ?>
+    <p class="small">Record what it cost and what you've claimed, so you can see what's left on your plan.</p>
+    <?php claim_form(null, health_plans($uid, false), $a, 'appointment.php?id=' . $a['id'] . '#private'); ?>
+    <?php elseif (!$claims): ?><p class="muted small">After the appointment, record what it cost and what you claim back here.</p><?php endif; ?>
+</section>
+<?php endif; ?>
 
 <section class="card" id="questions">
     <h2>Questions to ask <?php if ($questions): ?><span class="muted small">(<?= count(array_filter($questions, fn ($q) => $q['done'])) ?> of <?= count($questions) ?> asked)</span><?php endif; ?></h2>

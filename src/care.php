@@ -223,6 +223,15 @@ const CARE_AREAS = [
                 'tip' => 'Offered every 5 years from 40 to 74 (if you do not already have heart disease, diabetes or kidney disease). Includes cholesterol, blood pressure and sometimes HbA1c.'],
         ],
     ],
+    'privatehealth' => [
+        'title' => 'Private health care', 'short' => 'Private care', 'icon' => '&#x1F3E5;', 'default' => false, 'appointment' => null,
+        'intro' => 'Your private medical insurance, health cash plan or dental plan: membership number, what it covers and costs, what is left this year, and claims.',
+        'help'  => 'Call your insurer for pre-authorisation before private treatment. In an emergency, go to A&E or call 999: private hospitals do not usually have emergency departments.',
+        'presets' => [],
+        'checks' => [
+            'ph_review' => ['label' => 'Review private health cover', 'interval' => 365, 'tip' => 'Is it still worth what it costs, and does it cover what you need? Compare before it renews.'],
+        ],
+    ],
     'prescriptions' => [
         'title' => 'Prescriptions and payments', 'short' => 'Payments', 'icon' => '&#x1F4B7;', 'default' => false, 'appointment' => null,
         'intro' => 'Prepayment and exemption certificates, and what you pay for prescriptions. (Prescriptions are free in Scotland, Wales and Northern Ireland.)',
@@ -441,7 +450,13 @@ const CARE_AREAS = [
         'title' => 'Screening', 'short' => 'Screening', 'icon' => '&#x1F50E;', 'default' => true, 'appointment' => null,
         'intro' => 'NHS screening programmes, with the next due date worked out from your date of birth and when you were last screened.',
         'help'  => "Don't wait for screening if you have symptoms: see a GP. Intervals are for England; Scotland, Wales and Northern Ireland differ slightly.",
-        'presets' => [],
+        'presets' => [
+            'breast_self_check' => ['label' => 'Breast self-check (CoppaFeel)', 'times' => ['09:00'], 'every' => 30, 'remind' => true,
+                'tip' => 'Touch, Look, Check, once a month: get to know what is normal for you. coppafeel.org has a how-to guide. '
+                       . 'NHS breast screening is separate and starts at 50: see your screening check below.'],
+            'testicular_check' => ['label' => 'Testicular self-check (Movember)', 'times' => ['09:00'], 'every' => 30, 'remind' => true,
+                'tip' => "A monthly feel for lumps or changes, ideally after a warm shower. See Movember's \"It's in the Bag\" guide for how."],
+        ],
         'checks' => [], // generated from the profile: see SCREENING_PROGRAMMES
     ],
     // Mind's habits and routines: run by the same code, but shown in the Mind tab, not Care.

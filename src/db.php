@@ -116,6 +116,7 @@ function ensure_schema(): void
         ['medication_schedules', 'cycle_phase', 'ALTER TABLE medication_schedules ADD COLUMN cycle_phase VARCHAR(10) NULL AFTER anchor_date'],
         ['weather_days', 'pollen_grass', 'ALTER TABLE weather_days ADD COLUMN pollen_grass SMALLINT UNSIGNED NULL AFTER rain, ADD COLUMN pollen_tree SMALLINT UNSIGNED NULL AFTER pollen_grass, ADD COLUMN pollen_weed SMALLINT UNSIGNED NULL AFTER pollen_tree'],
         ['medication_schedules', 'cycle_length', 'ALTER TABLE medication_schedules ADD COLUMN cycle_length SMALLINT UNSIGNED NULL AFTER cycle_phase, ADD COLUMN cycle_from SMALLINT UNSIGNED NULL AFTER cycle_length, ADD COLUMN cycle_to SMALLINT UNSIGNED NULL AFTER cycle_from'],
+        ['appointments', 'funding', 'ALTER TABLE appointments ADD COLUMN funding VARCHAR(8) NULL AFTER reminder_emailed_at, ADD COLUMN plan_id INT UNSIGNED NULL AFTER funding, ADD COLUMN preauth VARCHAR(60) NULL AFTER plan_id, ADD COLUMN cost DECIMAL(8,2) NULL AFTER preauth'],
         ['medications', 'min_interval_minutes', 'ALTER TABLE medications ADD COLUMN min_interval_minutes SMALLINT UNSIGNED NULL AFTER prn_max_daily'],
         ['medications', 'is_private', 'ALTER TABLE medications ADD COLUMN is_private TINYINT(1) NOT NULL DEFAULT 0 AFTER supply_price'],
         ['medications', 'is_supplement', 'ALTER TABLE medications ADD COLUMN is_supplement TINYINT(1) NOT NULL DEFAULT 0 AFTER supply_price'],
@@ -129,6 +130,9 @@ function ensure_schema(): void
         ['users', 'pending_approval', "ALTER TABLE users ADD COLUMN pending_approval TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active,
                                        ADD COLUMN signup_method VARCHAR(60) NULL AFTER pending_approval"],
         ['users', 'care_prompt_hidden', 'ALTER TABLE users ADD COLUMN care_prompt_hidden TINYINT(1) NOT NULL DEFAULT 0 AFTER health_sync_token'],
+        ['webauthn_credentials', 'purpose', "ALTER TABLE webauthn_credentials ADD COLUMN purpose VARCHAR(10) NOT NULL DEFAULT 'mind' AFTER label"],
+        ['users', 'totp_backup_codes', 'ALTER TABLE users ADD COLUMN totp_backup_codes TEXT NULL AFTER password_hash'],
+        ['user_sessions', 'location', 'ALTER TABLE user_sessions ADD COLUMN location VARCHAR(150) NULL AFTER ip'],
     ];
     foreach ($upgrades as [$table, $column, $alter]) {
         if (isset($columns[$table]) && !isset($columns[$table][$column])) {

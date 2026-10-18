@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(grep -n 'breast_self_check\\\\|mole_check\\\\|kind ===\\\\|match \\($kind\\\\|KIND_ICON\\\\|preset.*icon\\\\|icons\\\\[' /home/mf/Documents/GitHub/pillbox/public/care.php /home/mf/Documents/GitHub/pillbox/src/care.php)",
+      "Bash(php -r ' *)",
+      "Bash(awk -F: '{print length\\($2\\), $0}')",
+      "Bash(git fetch *)",
+      "Bash(git reset *)"
+    ]
+  }
+}

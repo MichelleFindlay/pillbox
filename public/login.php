@@ -20,6 +20,11 @@ if (is_post() && local_login_enabled()) {
     $username = post('username');
     $result = attempt_local_login($username, (string) ($_POST['password'] ?? ''));
     if (is_array($result)) {
+        if (has_totp_enabled((int) $result['id']) || has_login_security_key((int) $result['id'])) {
+            session_regenerate_id(true);
+            $_SESSION['pending_2fa'] = ['uid' => (int) $result['id'], 'at' => time(), 'remember' => post('remember') === '1'];
+            redirect('login_2fa.php');
+        }
         $_SESSION['remember_device'] = post('remember') === '1';
         login_user($result);
         finish_login_redirect();

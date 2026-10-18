@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     email            VARCHAR(255)  NULL,
     display_name     VARCHAR(150)  NOT NULL,
     password_hash    VARCHAR(255)  NULL,
+    totp_backup_codes TEXT         NULL,     -- JSON: [{hash, used_at}], one-time codes for a lost authenticator; shared by all of totp_credentials
     auth_provider    ENUM('local','entra','oidc') NOT NULL DEFAULT 'local',
     entra_oid        CHAR(36)      NULL,
     entra_tid        CHAR(36)      NULL,
@@ -116,6 +117,22 @@ CREATE TABLE IF NOT EXISTS remembered_devices (
     UNIQUE KEY uq_device_selector (selector),
     KEY ix_device_user (user_id),
     CONSTRAINT fk_device_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Every device currently signed in (Account > Password & security, "Active sessions"), separate
+-- from remembered_devices (which is only the long-lived "stay signed in" cookie). A row is made
+-- at sign-in and removed at sign-out; removing someone else's row here signs that session out.
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id         INT UNSIGNED NOT NULL,
+    label           VARCHAR(100)  NOT NULL,
+    ip              VARCHAR(45)   NULL,
+    location        VARCHAR(150)  NULL,                    -- approximate city/country (config 'geoip_lookup')
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_active_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_user_sessions_user (user_id),
+    CONSTRAINT fk_user_sessions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS login_attempts (
@@ -228,6 +245,10 @@ CREATE TABLE IF NOT EXISTS appointments (
     outcome_notes     TEXT          NULL,          -- after: what was decided, next steps
     remind_minutes    INT UNSIGNED  NULL,          -- reminder before the appointment, for calendar apps
     reminder_emailed_at DATETIME    NULL,
+    funding           VARCHAR(8)    NULL,          -- NULL: NHS; 'plan': private health care (plan_id); 'self': paying myself
+    plan_id           INT UNSIGNED  NULL,          -- health_plans.id
+    preauth           VARCHAR(60)   NULL,          -- the insurer's pre-authorisation number
+    cost              DECIMAL(8,2)  NULL,          -- what it costs (or the insurer was quoted)
     created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -585,7 +606,9 @@ CREATE TABLE IF NOT EXISTS data_shares (
     CONSTRAINT fk_share_grantee FOREIGN KEY (grantee_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Fingerprint / face unlock (WebAuthn platform authenticators) for the Mind PIN.
+-- WebAuthn credentials: 'mind' (fingerprint/face/device PIN, platform authenticators only) to
+-- unlock the Mind PIN, or 'login' (any authenticator, including security keys like a YubiKey)
+-- as a second step after the account password.
 CREATE TABLE IF NOT EXISTS webauthn_credentials (
     id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
     user_id        INT UNSIGNED NOT NULL,
@@ -593,11 +616,30 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
     public_key     TEXT          NOT NULL,                 -- PEM
     sign_count     INT UNSIGNED  NOT NULL DEFAULT 0,
     label          VARCHAR(100)  NOT NULL,
+    purpose        VARCHAR(10)   NOT NULL DEFAULT 'mind',   -- 'mind' or 'login'
     created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at   DATETIME      NULL,
     PRIMARY KEY (id),
     KEY ix_webauthn_user (user_id),
     CONSTRAINT fk_webauthn_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Authenticator apps (TOTP) for two-factor sign-in. More than one is allowed per account (e.g.
+-- a phone and a spare), tried in turn against a 6-digit code. confirmed_at is NULL while a
+-- newly-added one is still waiting for its first code. Backup codes are shared across all of
+-- an account's authenticator apps (users.totp_backup_codes), not stored per-row here.
+CREATE TABLE IF NOT EXISTS totp_credentials (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id        INT UNSIGNED NOT NULL,
+    secret         TEXT          NOT NULL,                 -- base32, encrypted with storage/app.key (see seal()/unseal())
+    label          VARCHAR(100)  NOT NULL,
+    confirmed_at   DATETIME      NULL,
+    last_step      BIGINT UNSIGNED NULL,                   -- last accepted 30-second time step, so a code can't be replayed
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at   DATETIME      NULL,
+    PRIMARY KEY (id),
+    KEY ix_totp_user (user_id),
+    CONSTRAINT fk_totp_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- What someone with shared access changed, for the owner to see.
@@ -1015,6 +1057,59 @@ CREATE TABLE IF NOT EXISTS episode_meds (
     PRIMARY KEY (id),
     KEY ix_episode_meds (episode_id),
     CONSTRAINT fk_episode_meds FOREIGN KEY (episode_id) REFERENCES headache_episodes (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Private health care (Care): insurance, cash plans, dental plans or self-pay. covers: comma list of
+-- PLAN_COVERS keys; cover_limits: JSON {cover: £ a year} (e.g. a cash plan's dental limit).
+CREATE TABLE IF NOT EXISTS health_plans (
+    id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id          INT UNSIGNED NOT NULL,
+    kind             VARCHAR(12)   NOT NULL DEFAULT 'insurance',
+    provider         VARCHAR(100)  NOT NULL,
+    plan_name        VARCHAR(100)  NULL,
+    member_number    VARCHAR(60)   NULL,
+    who_covered      VARCHAR(200)  NULL,
+    through_employer TINYINT(1)    NOT NULL DEFAULT 0,
+    cost_amount      DECIMAL(8,2)  NULL,
+    cost_period      VARCHAR(6)    NOT NULL DEFAULT 'month',   -- month | year
+    excess_amount    DECIMAL(8,2)  NULL,
+    excess_per       VARCHAR(6)    NOT NULL DEFAULT 'year',    -- year | claim
+    renews_on        DATE          NULL,
+    underwriting     VARCHAR(10)   NULL,                       -- moratorium | fmu | cpme | mhd
+    six_week         TINYINT(1)    NOT NULL DEFAULT 0,
+    hospital_list    VARCHAR(100)  NULL,
+    claims_phone     VARCHAR(40)   NULL,
+    website          VARCHAR(200)  NULL,
+    covers           VARCHAR(300)  NULL,
+    cover_limits     TEXT          NULL,
+    exclusions       TEXT          NULL,
+    notes            TEXT          NULL,
+    is_active        TINYINT(1)    NOT NULL DEFAULT 1,
+    created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_plans_user (user_id),
+    CONSTRAINT fk_plans_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Treatment paid for privately, and claims: cost (what it cost), covered (what the plan paid or will pay).
+-- status: to_claim | claimed | paid | rejected | direct (the insurer paid the hospital) | self (not claimable).
+CREATE TABLE IF NOT EXISTS health_claims (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id         INT UNSIGNED NOT NULL,
+    plan_id         INT UNSIGNED  NULL,
+    appointment_id  INT UNSIGNED  NULL,
+    treated_on      DATE          NOT NULL,
+    cover           VARCHAR(20)   NULL,
+    description     VARCHAR(200)  NOT NULL,
+    cost            DECIMAL(8,2)  NULL,
+    covered         DECIMAL(8,2)  NULL,
+    status          VARCHAR(10)   NOT NULL DEFAULT 'to_claim',
+    reference       VARCHAR(60)   NULL,
+    notes           VARCHAR(500)  NULL,
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY ix_claims_user (user_id, treated_on),
+    CONSTRAINT fk_claims_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Allergies (Care): allergies, intolerances and side effects. drug_class: a medicine group to check

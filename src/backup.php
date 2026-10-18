@@ -10,6 +10,7 @@ declare(strict_types=1);
  */
 
 const BACKUP_FORMAT = 1;
+const BACKUP_MAX_UPLOAD = 50 * 1024 * 1024; // 50 MB: generous for one account's data as JSON
 
 // Settings (columns of users) that are backed up and restored.
 const BACKUP_SETTINGS = ['timezone', 'enabled_metrics', 'theme', 'color_mode', 'care_areas', 'date_of_birth', 'sex', 'screening_programmes',
@@ -24,7 +25,9 @@ const BACKUP_TABLES = [
     'medications'           => ['owner' => 'user_id', 'links' => []],
     'medication_schedules'  => ['owner' => ['medication_id', 'medications'], 'links' => ['medication_id' => 'medications']],
     'custom_metrics'        => ['owner' => 'user_id', 'links' => []],
-    'appointments'          => ['owner' => 'user_id', 'links' => []],
+    'health_plans'          => ['owner' => 'user_id', 'links' => []],
+    'appointments'          => ['owner' => 'user_id', 'links' => ['plan_id' => 'health_plans']],
+    'health_claims'         => ['owner' => 'user_id', 'links' => ['plan_id' => 'health_plans', 'appointment_id' => 'appointments']],
     'appointment_questions' => ['owner' => ['appointment_id', 'appointments'], 'links' => ['appointment_id' => 'appointments']],
     'dose_logs'             => ['owner' => 'user_id', 'links' => ['medication_id' => 'medications', 'schedule_id' => 'medication_schedules']],
     'medication_changes'    => ['owner' => 'user_id', 'links' => ['medication_id' => 'medications']],

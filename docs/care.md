@@ -4,7 +4,7 @@ The **Care** tab is for looking after yourself beyond medicines. Switch categori
 
 ![Care: what's coming up, and the categories switched on](images/care.png)
 
-Categories include dental, eyes, sleep, activity and rehab, respiratory, allergies, diabetes, blood pressure, thyroid, migraine, blood tests, prescriptions and payments, feet, periods and contraception, menopause, pregnancy, hearing, skin, mobility, emergency and first aid, sharps and disposal, screening, vaccinations, ADHD and autism, and gender-affirming care. Some appear only if they fit your [body inventory](account.md#body-inventory).
+Categories include dental, eyes, sleep, activity and rehab, respiratory, allergies, private health care, diabetes, blood pressure, thyroid, migraine, blood tests, prescriptions and payments, feet, periods and contraception, menopause, pregnancy, hearing, skin, mobility, emergency and first aid, sharps and disposal, screening, vaccinations, ADHD and autism, and gender-affirming care. Some appear only if they fit your [body inventory](account.md#body-inventory).
 
 ## Routines
 
