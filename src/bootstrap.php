@@ -49,6 +49,7 @@ require APP_ROOT . '/src/docs.php';
 require APP_ROOT . '/src/mind.php';
 require APP_ROOT . '/src/mailer.php';
 require APP_ROOT . '/src/webauthn.php';
+require APP_ROOT . '/src/totp.php';
 require APP_ROOT . '/src/demo.php';
 require APP_ROOT . '/src/sharing.php';
 require APP_ROOT . '/src/backup.php';

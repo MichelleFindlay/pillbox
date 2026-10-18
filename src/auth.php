@@ -258,6 +258,27 @@ function login_is_throttled(string $username): bool
 }
 
 /**
+ * Re-confirm the current password before a sensitive change (adding a new authenticator app or
+ * security key): an active session alone isn't enough, in case it was hijacked or left open on
+ * a shared device. Throttled separately from sign-in attempts, since the account is already
+ * authenticated here.
+ */
+function verify_step_up_password(array $user, string $password): bool
+{
+    $tries = $_SESSION['stepup_tries'] ?? ['n' => 0, 'at' => 0];
+    if ($tries['n'] >= 5 && $tries['at'] > time() - 900) {
+        return false;
+    }
+    $ok = $user['password_hash'] && password_verify($password, $user['password_hash']);
+    if ($ok) {
+        unset($_SESSION['stepup_tries']);
+    } else {
+        $_SESSION['stepup_tries'] = ['n' => ($tries['at'] > time() - 900 ? $tries['n'] : 0) + 1, 'at' => time()];
+    }
+    return $ok;
+}
+
+/**
  * Check a local username/password. Returns the user row on success or an error message.
  */
 function attempt_local_login(string $username, string $password): array|string

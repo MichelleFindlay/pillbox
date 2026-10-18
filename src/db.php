@@ -130,6 +130,8 @@ function ensure_schema(): void
         ['users', 'pending_approval', "ALTER TABLE users ADD COLUMN pending_approval TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active,
                                        ADD COLUMN signup_method VARCHAR(60) NULL AFTER pending_approval"],
         ['users', 'care_prompt_hidden', 'ALTER TABLE users ADD COLUMN care_prompt_hidden TINYINT(1) NOT NULL DEFAULT 0 AFTER health_sync_token'],
+        ['webauthn_credentials', 'purpose', "ALTER TABLE webauthn_credentials ADD COLUMN purpose VARCHAR(10) NOT NULL DEFAULT 'mind' AFTER label"],
+        ['users', 'totp_backup_codes', 'ALTER TABLE users ADD COLUMN totp_backup_codes TEXT NULL AFTER password_hash'],
     ];
     foreach ($upgrades as [$table, $column, $alter]) {
         if (isset($columns[$table]) && !isset($columns[$table][$column])) {

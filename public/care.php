@@ -34,6 +34,10 @@ if (is_post()) {
     $task = post('id') !== '' ? find_care_task((int) post('id'), $uid) : null;
     $check = post('check_id') !== '' ? find_health_check((int) post('check_id'), $uid) : null;
     $back = safe_return(post('return'), $self);
+    // Changing anything in Mind (habits, checks) needs Mind's own 'edit' permission, not just Care's.
+    if (($task['area'] ?? $check['area'] ?? $areaKey) === 'mind' && !share_can('mind', 'edit')) {
+        not_found();
+    }
     if ($areaKey === 'menopause' && str_starts_with(post('action'), 'meno_')) {
         menopause_handle_post($user, $today);
     }
@@ -71,7 +75,7 @@ if (is_post()) {
             $slot = (int) post('slot');
             // Any day in the last year (History can tick past days), in a category that's shared.
             if (!$task || !$day || $day > $today || $day < $today->modify('-366 days') || !care_due($task, $day) || !isset(care_times($task)[$slot])
-                || !share_area_allowed($task['area']) || ($task['area'] === 'mind' && !share_can('mind', 'edit'))) {
+                || !share_area_allowed($task['area'])) {
                 not_found();
             }
             if (post('done') === '1') {

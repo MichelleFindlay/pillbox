@@ -445,11 +445,26 @@ function upload_csv_files(string $path, string $originalName, string $pattern): 
         if ($zip->open($path) !== true) {
             throw new RuntimeException("That zip file couldn't be opened.");
         }
+        $maxBytes = 50 * 1024 * 1024;
         $out = [];
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $name = (string) $zip->getNameIndex($i);
-            if (preg_match($pattern, basename($name)) && $zip->statIndex($i)['size'] < 50 * 1024 * 1024) {
-                $out[$name] = (string) $zip->getFromIndex($i);
+            if (!preg_match($pattern, basename($name))) {
+                continue;
+            }
+            // Read the decompressed stream with a hard cap, rather than trusting the zip's own
+            // (attacker-controlled) declared size, which getFromIndex() won't enforce.
+            $stream = $zip->getStreamIndex($i);
+            if (!$stream) {
+                continue;
+            }
+            $data = '';
+            while (!feof($stream) && strlen($data) <= $maxBytes) {
+                $data .= fread($stream, 1024 * 1024);
+            }
+            fclose($stream);
+            if (strlen($data) <= $maxBytes) {
+                $out[$name] = $data;
             }
         }
         $zip->close();

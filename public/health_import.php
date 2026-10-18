@@ -41,7 +41,9 @@ function health_chunk_size(): int
 
 function run_health_import(array $user, string $path, string $range): string
 {
-    set_time_limit(0);
+    // Bounded, not unlimited: a generous backstop for a real export, in case the reader's own
+    // deadline check (read_apple_health_export) is somehow bypassed or too slow to reach.
+    set_time_limit(600);
     ignore_user_abort(true);
     $since = isset(HEALTH_RANGES[$range]) && $range !== 'all' ? new DateTimeImmutable("-$range days") : null;
     $importer = new HealthImporter(home_tz($user), $since);

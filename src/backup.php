@@ -10,6 +10,7 @@ declare(strict_types=1);
  */
 
 const BACKUP_FORMAT = 1;
+const BACKUP_MAX_UPLOAD = 50 * 1024 * 1024; // 50 MB: generous for one account's data as JSON
 
 // Settings (columns of users) that are backed up and restored.
 const BACKUP_SETTINGS = ['timezone', 'enabled_metrics', 'theme', 'color_mode', 'care_areas', 'date_of_birth', 'sex', 'screening_programmes',

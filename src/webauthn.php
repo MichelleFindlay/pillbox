@@ -2,11 +2,16 @@
 declare(strict_types=1);
 
 /*
- * Passkeys for unlocking Mind: WebAuthn credentials on the device (it asks for the
- * fingerprint, face or device PIN), as an alternative to the Mind PIN. Platform authenticators
- * (Touch ID, Face ID, Windows Hello, Android). No attestation is requested; we check the
- * challenge, origin, RP ID hash, user presence and verification flags, and the signature
- * against the public key saved at registration. Needs HTTPS (or localhost).
+ * WebAuthn credentials, for two purposes (see the 'purpose' column):
+ * - 'mind': a passkey that unlocks Mind instead of its PIN (it asks for the fingerprint, face
+ *   or device PIN). Platform authenticators only (Touch ID, Face ID, Windows Hello, Android),
+ *   and always asks for user verification.
+ * - 'login': a security key (e.g. a YubiKey) asked for as a second step after the account
+ *   password on the sign-in page. Any authenticator, and only user presence (a touch) is
+ *   required, since many security keys aren't set up with a PIN of their own.
+ * No attestation is requested; we check the challenge, origin, RP ID hash, user presence
+ * (and verification, for 'mind'), and the signature against the public key saved at
+ * registration. Needs HTTPS (or localhost).
  */
 
 // b64url_encode() / b64url_decode() are in entra.php.
@@ -49,26 +54,29 @@ function webauthn_check_client_data(string $clientDataB64, string $type): string
     return $raw;
 }
 
-/** Check the authenticator data's RP ID hash and that the person was present and verified. */
-function webauthn_check_auth_data(string $authData): array
+/**
+ * Check the authenticator data's RP ID hash and that the person was present, and (for 'mind',
+ * where this replaces entering a PIN) verified by the device too.
+ */
+function webauthn_check_auth_data(string $authData, bool $requireVerification = true): array
 {
     if (strlen($authData) < 37 || !hash_equals(hash('sha256', webauthn_rp_id(), true), substr($authData, 0, 32))) {
         throw new RuntimeException('The response was for a different website.');
     }
     $flags = ord($authData[32]);
-    if (!($flags & 0x01) || !($flags & 0x04)) {
-        throw new RuntimeException('Your fingerprint, face or device PIN wasn\'t checked. Try again.');
+    if (!($flags & 0x01) || ($requireVerification && !($flags & 0x04))) {
+        throw new RuntimeException($requireVerification ? 'Your fingerprint, face or device PIN wasn\'t checked. Try again.' : 'The security key wasn\'t touched in time. Try again.');
     }
     return ['flags' => $flags, 'count' => unpack('N', substr($authData, 33, 4))[1]];
 }
 
 /** Registration: returns [credential id (base64url), public key PEM, sign count]. */
-function webauthn_register(string $clientDataB64, string $attestationB64): array
+function webauthn_register(string $clientDataB64, string $attestationB64, string $purpose): array
 {
     webauthn_check_client_data($clientDataB64, 'webauthn.create');
     $attestation = cbor_decode(b64url_decode($attestationB64));
     $authData = $attestation['authData'] ?? '';
-    $info = webauthn_check_auth_data($authData);
+    $info = webauthn_check_auth_data($authData, $purpose === 'mind');
     if (!($info['flags'] & 0x40)) {
         throw new RuntimeException('The device did not send a key.');
     }
@@ -80,25 +88,31 @@ function webauthn_register(string $clientDataB64, string $attestationB64): array
     return [b64url_encode($credentialId), cose_to_pem($cose), $info['count']];
 }
 
-/** Unlock: verify an assertion from one of the user's saved credentials. @return array the credential row */
-function webauthn_verify(int $userId, array $response): array
+/** Unlock Mind, or sign in: verify an assertion from one of the user's saved credentials of this purpose. @return array the credential row */
+function webauthn_verify(int $userId, array $response, string $purpose): array
 {
-    $cred = q('SELECT * FROM webauthn_credentials WHERE user_id = ? AND credential_id = ?', [$userId, (string) ($response['id'] ?? '')])->fetch();
+    $cred = q('SELECT * FROM webauthn_credentials WHERE user_id = ? AND credential_id = ? AND purpose = ?', [$userId, (string) ($response['id'] ?? ''), $purpose])->fetch();
     if (!$cred) {
-        throw new RuntimeException('This device isn\'t set up for unlocking. Use your PIN.');
+        throw new RuntimeException($purpose === 'mind' ? 'This device isn\'t set up for unlocking. Use your PIN.' : 'That isn\'t one of your security keys.');
     }
     $clientData = webauthn_check_client_data((string) ($response['clientDataJSON'] ?? ''), 'webauthn.get');
     $authData = b64url_decode((string) ($response['authenticatorData'] ?? ''));
-    $info = webauthn_check_auth_data($authData);
+    $info = webauthn_check_auth_data($authData, $purpose === 'mind');
     $signed = $authData . hash('sha256', $clientData, true);
     if (openssl_verify($signed, b64url_decode((string) ($response['signature'] ?? '')), $cred['public_key'], OPENSSL_ALGO_SHA256) !== 1) {
-        throw new RuntimeException('That didn\'t match. Use your PIN.');
+        throw new RuntimeException($purpose === 'mind' ? 'That didn\'t match. Use your PIN.' : 'That security key didn\'t match.');
     }
     if ($info['count'] > 0 && $info['count'] <= (int) $cred['sign_count']) {
         throw new RuntimeException('This device\'s key may have been copied. Remove it and set it up again.');
     }
     q('UPDATE webauthn_credentials SET sign_count = ?, last_used_at = UTC_TIMESTAMP() WHERE id = ?', [$info['count'], $cred['id']]);
     return $cred;
+}
+
+/** Does this account have a security key set up to sign in with, as well as its password? */
+function has_login_security_key(int $userId): bool
+{
+    return (bool) q("SELECT 1 FROM webauthn_credentials WHERE user_id = ? AND purpose = 'login' LIMIT 1", [$userId])->fetch();
 }
 
 /* ---------- COSE keys and a small CBOR decoder ---------- */

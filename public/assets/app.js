@@ -147,7 +147,8 @@
     input.addEventListener('change', function () { input.form.submit(); });
   });
 
-  // Fingerprint / face unlock for Mind (WebAuthn): set up a device, or unlock with one.
+  // Fingerprint / face unlock for Mind, and security keys (e.g. a YubiKey) for signing in: both
+  // WebAuthn, set up a device/key, or use one.
   var b64 = {
     enc: function (buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
     dec: function (s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) { s += '='; } return Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); }); }
@@ -157,13 +158,22 @@
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) { return r.json().then(function (j) { if (j.error) { throw new Error(j.error); } return j; }); });
   }
-  function webauthnButtons(selector, run) {
+  // platformOnly: only show the button when a platform authenticator (Face ID, Touch ID, Windows
+  // Hello) is available, for Mind's passkey. Security keys have no such check: the browser just
+  // prompts for whatever's plugged in or nearby when the button is used.
+  function webauthnButtons(selector, platformOnly, run) {
     var buttons = document.querySelectorAll(selector);
-    if (!buttons.length || !window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) { return; }
-    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function (ok) {
+    if (!buttons.length || !window.PublicKeyCredential) { return; }
+    var ready = platformOnly && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable
+      ? PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable() : Promise.resolve(true);
+    ready.then(function (ok) {
       if (!ok) { return; }
       buttons.forEach(function (btn) {
         btn.hidden = false;
+        var label = btn.parentElement.querySelector('[data-webauthn-label]');
+        if (label) { label.hidden = false; }
+        var password = btn.parentElement.querySelector('[data-webauthn-password]');
+        if (password) { password.hidden = false; }
         var status = btn.parentElement.querySelector('[data-webauthn-status]');
         btn.addEventListener('click', function () {
           btn.disabled = true; if (status) { status.textContent = ''; }
@@ -174,18 +184,30 @@
       });
     });
   }
-  webauthnButtons('[data-webauthn-register]', function (btn) {
-    var csrf = btn.getAttribute('data-csrf');
-    return webauthnCall({ action: 'register_options', csrf: csrf }).then(function (o) {
-      o.challenge = b64.dec(o.challenge); o.user.id = b64.dec(o.user.id);
-      o.excludeCredentials = o.excludeCredentials.map(function (c) { return { type: c.type, id: b64.dec(c.id) }; });
-      return navigator.credentials.create({ publicKey: o });
-    }).then(function (cred) {
-      return webauthnCall({ action: 'register_finish', csrf: csrf, label: btn.getAttribute('data-label') || 'This device',
-        clientDataJSON: b64.enc(cred.response.clientDataJSON), attestationObject: b64.enc(cred.response.attestationObject) });
-    }).then(function () { window.location.reload(); });
-  });
-  webauthnButtons('[data-webauthn-unlock]', function (btn) {
+  function webauthnRegister(selector, platformOnly) {
+    webauthnButtons(selector, platformOnly, function (btn) {
+      var csrf = btn.getAttribute('data-csrf');
+      var purpose = btn.getAttribute('data-purpose') || 'mind';
+      var labelInput = btn.parentElement.querySelector('[data-webauthn-label]');
+      var label = (labelInput && labelInput.value.trim()) || btn.getAttribute('data-label') || 'This device';
+      var passwordInput = btn.parentElement.querySelector('[data-webauthn-password]');
+      var password = passwordInput ? passwordInput.value : '';
+      return webauthnCall({ action: 'register_options', csrf: csrf, purpose: purpose, password: password }).then(function (o) {
+        o.challenge = b64.dec(o.challenge); o.user.id = b64.dec(o.user.id);
+        o.excludeCredentials = o.excludeCredentials.map(function (c) { return { type: c.type, id: b64.dec(c.id) }; });
+        return navigator.credentials.create({ publicKey: o });
+      }).then(function (cred) {
+        return webauthnCall({ action: 'register_finish', csrf: csrf, purpose: purpose, label: label, password: password,
+          clientDataJSON: b64.enc(cred.response.clientDataJSON), attestationObject: b64.enc(cred.response.attestationObject) });
+      }).then(function () {
+        if (passwordInput) { passwordInput.value = ''; }
+        window.location.reload();
+      });
+    });
+  }
+  webauthnRegister('[data-webauthn-register]', true);       // Mind passkey: platform authenticators only
+  webauthnRegister('[data-webauthn-register-key]', false);  // Account security key: any authenticator
+  webauthnButtons('[data-webauthn-unlock]', true, function (btn) {
     var csrf = btn.getAttribute('data-csrf');
     return webauthnCall({ action: 'unlock_options', csrf: csrf }).then(function (o) {
       o.challenge = b64.dec(o.challenge);
@@ -193,6 +215,17 @@
       return navigator.credentials.get({ publicKey: o });
     }).then(function (a) {
       return webauthnCall({ action: 'unlock_finish', csrf: csrf, return: btn.getAttribute('data-return'), credential: {
+        id: a.id, clientDataJSON: b64.enc(a.response.clientDataJSON), authenticatorData: b64.enc(a.response.authenticatorData), signature: b64.enc(a.response.signature) } });
+    }).then(function (r) { window.location.href = r.next; });
+  });
+  webauthnButtons('[data-webauthn-login]', false, function (btn) {
+    var csrf = btn.getAttribute('data-csrf');
+    return webauthnCall({ action: 'login_options', csrf: csrf }).then(function (o) {
+      o.challenge = b64.dec(o.challenge);
+      o.allowCredentials = o.allowCredentials.map(function (c) { return { type: c.type, id: b64.dec(c.id) }; });
+      return navigator.credentials.get({ publicKey: o });
+    }).then(function (a) {
+      return webauthnCall({ action: 'login_finish', csrf: csrf, credential: {
         id: a.id, clientDataJSON: b64.enc(a.response.clientDataJSON), authenticatorData: b64.enc(a.response.authenticatorData), signature: b64.enc(a.response.signature) } });
     }).then(function (r) { window.location.href = r.next; });
   });

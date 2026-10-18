@@ -17,8 +17,10 @@ if (is_post()) {
     switch (post('action')) {
         case 'add_question':
             $text = mb_substr(post('question'), 0, 500);
-            // A question from the Mind running list is now on this appointment.
-            q("UPDATE mind_notes SET done = 1, appointment_id = ? WHERE user_id = ? AND kind = 'question' AND done = 0 AND text = ?", [$a['id'], $user['id'], $text]);
+            if (share_can('mind', 'edit')) {
+                // A question from the Mind running list is now on this appointment.
+                q("UPDATE mind_notes SET done = 1, appointment_id = ? WHERE user_id = ? AND kind = 'question' AND done = 0 AND text = ?", [$a['id'], $user['id'], $text]);
+            }
             if ($text !== '') {
                 q('INSERT INTO appointment_questions (appointment_id, question) VALUES (?, ?)', [$a['id'], $text]);
             }
@@ -41,6 +43,9 @@ if (is_post()) {
             }
             redirect($self . '#questions');
         case 'add_action':
+            if (!share_can('mind', 'edit')) {
+                not_found();
+            }
             $text = trim(mb_substr(post('text'), 0, 500));
             $due = parse_date(post('due_date'));
             if ($text !== '') {
@@ -49,9 +54,15 @@ if (is_post()) {
             }
             redirect($self . '#actions');
         case 'toggle_action':
+            if (!share_can('mind', 'edit')) {
+                not_found();
+            }
             q("UPDATE mind_notes SET done = 1 - done WHERE id = ? AND user_id = ? AND kind = 'action'", [(int) post('note_id'), $uid]);
             redirect($self . '#actions');
         case 'delete_action':
+            if (!share_can('mind', 'edit')) {
+                not_found();
+            }
             q("DELETE FROM mind_notes WHERE id = ? AND user_id = ? AND kind = 'action'", [(int) post('note_id'), $uid]);
             redirect($self . '#actions');
         case 'save_outcome':

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     email            VARCHAR(255)  NULL,
     display_name     VARCHAR(150)  NOT NULL,
     password_hash    VARCHAR(255)  NULL,
+    totp_backup_codes TEXT         NULL,     -- JSON: [{hash, used_at}], one-time codes for a lost authenticator; shared by all of totp_credentials
     auth_provider    ENUM('local','entra','oidc') NOT NULL DEFAULT 'local',
     entra_oid        CHAR(36)      NULL,
     entra_tid        CHAR(36)      NULL,
@@ -589,7 +590,9 @@ CREATE TABLE IF NOT EXISTS data_shares (
     CONSTRAINT fk_share_grantee FOREIGN KEY (grantee_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Fingerprint / face unlock (WebAuthn platform authenticators) for the Mind PIN.
+-- WebAuthn credentials: 'mind' (fingerprint/face/device PIN, platform authenticators only) to
+-- unlock the Mind PIN, or 'login' (any authenticator, including security keys like a YubiKey)
+-- as a second step after the account password.
 CREATE TABLE IF NOT EXISTS webauthn_credentials (
     id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
     user_id        INT UNSIGNED NOT NULL,
@@ -597,11 +600,30 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
     public_key     TEXT          NOT NULL,                 -- PEM
     sign_count     INT UNSIGNED  NOT NULL DEFAULT 0,
     label          VARCHAR(100)  NOT NULL,
+    purpose        VARCHAR(10)   NOT NULL DEFAULT 'mind',   -- 'mind' or 'login'
     created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at   DATETIME      NULL,
     PRIMARY KEY (id),
     KEY ix_webauthn_user (user_id),
     CONSTRAINT fk_webauthn_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Authenticator apps (TOTP) for two-factor sign-in. More than one is allowed per account (e.g.
+-- a phone and a spare), tried in turn against a 6-digit code. confirmed_at is NULL while a
+-- newly-added one is still waiting for its first code. Backup codes are shared across all of
+-- an account's authenticator apps (users.totp_backup_codes), not stored per-row here.
+CREATE TABLE IF NOT EXISTS totp_credentials (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id        INT UNSIGNED NOT NULL,
+    secret         TEXT          NOT NULL,                 -- base32, encrypted with storage/app.key (see seal()/unseal())
+    label          VARCHAR(100)  NOT NULL,
+    confirmed_at   DATETIME      NULL,
+    last_step      BIGINT UNSIGNED NULL,                   -- last accepted 30-second time step, so a code can't be replayed
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at   DATETIME      NULL,
+    PRIMARY KEY (id),
+    KEY ix_totp_user (user_id),
+    CONSTRAINT fk_totp_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- What someone with shared access changed, for the owner to see.
