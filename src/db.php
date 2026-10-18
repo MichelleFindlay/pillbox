@@ -132,6 +132,7 @@ function ensure_schema(): void
         ['users', 'care_prompt_hidden', 'ALTER TABLE users ADD COLUMN care_prompt_hidden TINYINT(1) NOT NULL DEFAULT 0 AFTER health_sync_token'],
         ['webauthn_credentials', 'purpose', "ALTER TABLE webauthn_credentials ADD COLUMN purpose VARCHAR(10) NOT NULL DEFAULT 'mind' AFTER label"],
         ['users', 'totp_backup_codes', 'ALTER TABLE users ADD COLUMN totp_backup_codes TEXT NULL AFTER password_hash'],
+        ['user_sessions', 'location', 'ALTER TABLE user_sessions ADD COLUMN location VARCHAR(150) NULL AFTER ip'],
     ];
     foreach ($upgrades as [$table, $column, $alter]) {
         if (isset($columns[$table]) && !isset($columns[$table][$column])) {

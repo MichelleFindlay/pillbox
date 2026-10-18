@@ -682,7 +682,8 @@ render_header('Account', 'account');
     <ul class="plain">
         <?php foreach ($sessions as $s): $here = (int) $s['id'] === (int) ($_SESSION['session_row_id'] ?? 0); ?>
         <li class="logline"><span><strong><?= h($s['label']) ?></strong><?= $here ? ' <span class="badge">This device</span>' : '' ?>
-            <br><span class="muted small">Signed in <?= h(local_time($s['created_at'], 'j M Y')) ?> · active <?= h(local_time($s['last_active_at'], 'j M Y, H:i')) ?></span></span>
+            <br><span class="muted small">Signed in <?= h(local_time($s['created_at'], 'j M Y')) ?> · active <?= h(local_time($s['last_active_at'], 'j M Y, H:i')) ?></span>
+            <?php if ($s['ip']): ?><br><span class="muted small"><?= h($s['ip']) ?><?= $s['location'] ? ' · ' . h($s['location']) : '' ?></span><?php endif; ?></span>
             <?php if (!$here): ?>
             <form method="post" data-confirm="Sign out this session?"><?= csrf_field() ?><input type="hidden" name="action" value="forget_session"><input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
                 <button class="btn btn-small" type="submit">Sign out</button></form>

@@ -242,9 +242,33 @@ function forget_this_device(): void
 /** Record this sign-in for the "Active sessions" list (Account > Password & security). */
 function track_session(int $userId): void
 {
-    q('INSERT INTO user_sessions (user_id, label, ip) VALUES (?, ?, ?)',
-        [$userId, device_label((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), client_ip()]);
+    $ip = client_ip();
+    q('INSERT INTO user_sessions (user_id, label, ip, location) VALUES (?, ?, ?, ?)',
+        [$userId, device_label((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')), $ip, geoip_lookup($ip)]);
     $_SESSION['session_row_id'] = (int) db()->lastInsertId();
+}
+
+/**
+ * Approximate "City, Country" for an IP address, if config 'app.geoip_lookup' is turned on:
+ * it's off by default, since it sends the IP address to a third party (ipapi.co) that Pillbox
+ * otherwise never shares anything with. Never looks up a private/local address. Fails silently
+ * (a slow or unreachable lookup should never hold up signing in).
+ */
+function geoip_lookup(string $ip): ?string
+{
+    if (!config('app.geoip_lookup', false) || !filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+        return null;
+    }
+    $ch = curl_init('https://ipapi.co/' . rawurlencode($ip) . '/json/');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 3, CURLOPT_CONNECTTIMEOUT => 2,
+        CURLOPT_HTTPHEADER => ['User-Agent: Pillbox/' . pillbox_version()]]);
+    $body = curl_exec($ch);
+    $data = is_string($body) ? json_decode($body, true) : null;
+    if (!is_array($data) || !empty($data['error']) || empty($data['city'])) {
+        return null;
+    }
+    $parts = array_filter([(string) $data['city'], (string) ($data['country_code'] ?? $data['country_name'] ?? '')]);
+    return $parts ? implode(', ', $parts) : null;
 }
 
 /**

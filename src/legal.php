@@ -96,6 +96,7 @@ function legal_default_privacy(): string
         '- **Apple Health and Health Connect**: only if you import a file or set up the sync link yourself.',
         weather_enabled() ? '- **Weather** (Migraine): only if you add your town. Its location, to about 10 km, is sent to Open-Meteo to get the weather there; nothing about you or your headaches is sent.' : null,
         sso_enabled() ? '- **Single sign-on**: if you sign in with a provider (such as Microsoft or Google), they tell us who you are (name, email and an ID). We don\'t get your password.' : null,
+        config('app.geoip_lookup', false) ? '- **Active sessions location**: the IP address of each device you\'re signed in on is sent to an IP-lookup service (ipapi.co) to show its approximate city and country under Account → Active sessions.' : null,
     ]);
     $optionalText = implode("\n", $optional);
     return <<<TXT

@@ -32,6 +32,10 @@ return [
         // "Remember this device" on the sign-in page: how many days a remembered device stays signed in
         // after it was last used. 0 turns the option off.
         'remember_days'        => 90,
+        // Show an approximate city/country next to each entry in Account > Active sessions, by
+        // looking up the IP address with a third-party service (ipapi.co) at sign-in. Off by
+        // default: this sends the IP address off-server, which is otherwise never done.
+        'geoip_lookup'         => false,
         // GitHub repository ("owner/name") linked in the footer and checked for new versions.
         // Set to '' to hide the link and turn off update checks.
         'github_repo'          => 'MichelleFindlay/pillbox',

@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     user_id         INT UNSIGNED NOT NULL,
     label           VARCHAR(100)  NOT NULL,
     ip              VARCHAR(45)   NULL,
+    location        VARCHAR(150)  NULL,                    -- approximate city/country (config 'geoip_lookup')
     created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_active_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
