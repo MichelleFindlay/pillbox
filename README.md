@@ -236,7 +236,10 @@ The server needs PHP's `xmlreader` extension (standard) and, to read `export.zip
 5. **Open the site**. On a new install you'll be asked to create the first administrator account, with a one-time
    **setup code** so nobody else who finds the site first can take it over. The code is in `storage/setup_code.txt`
    on the server, and in PHP's error log (`docker logs`, or your host's error log); or set your own as `'setup_code'`
-   under `'app'` in config.php. It's deleted once the administrator exists. Everyone's
+   under `'app'` in config.php. It's deleted once the administrator exists. After 10 wrong codes an address is
+   paused for 15 minutes (it just keeps being told the code isn't right; the error log says so). If you're
+   stuck, clear it with `DELETE FROM login_attempts WHERE username = 'setup';`. Behind a reverse proxy or load
+   balancer, set `'trust_proxy' => true` so each visitor's own address is used. Everyone's
    first sign-in then goes through a short setup (about you, what to use, reminders), and administrators get a
    **Site settings** step too: site name and address, default time zone, email, scheduled tasks, demo mode.
    Those are saved in `config/settings.php` (git-ignored), which overrides `config/config.php`, so config.php
@@ -529,6 +532,16 @@ only the tabs and parts they've been given appear. Pages are checked centrally, 
 refused. They can never see or change your account settings, sign-in details, sync and calendar links,
 data export or Mind PIN, can't permanently delete medicines, and can't share your Pillbox further. Every
 change they make is listed under their name (**Recent activity**), and you can stop sharing at any time.
+
+### Tests
+
+Sharing permissions have a regression test. Run it against a **test** database (it works inside a transaction that is rolled back, but don't point it at live data):
+
+```
+php tests/sharing_medicines_test.php
+```
+
+It checks the Migraine page for three viewers: the owner, someone with Medicines shared, and someone without. Only the first two see medicine names, and private medicines are never shown to anyone but the owner.
 
 ## Demo mode
 

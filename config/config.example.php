@@ -19,7 +19,9 @@ return [
         'default_timezone'     => 'Europe/London',
         // Shows full error details in the browser. Only turn on while fixing a problem.
         'debug'                => false,
-        // true if a reverse proxy / load balancer terminates HTTPS in front of Apache.
+        // true if a reverse proxy / load balancer sits in front of Apache (it terminates HTTPS, and sends the
+        // visitor's address in X-Forwarded-For). Then sign-in and setup limits apply to each visitor's own
+        // address, not the proxy's. Only turn it on behind a proxy you control, as the header can be faked.
         'trust_proxy'          => false,
         // false = no username/password sign-in at all (single sign-on only).
         'allow_local_login'    => true,

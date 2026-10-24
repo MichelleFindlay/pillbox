@@ -17,10 +17,16 @@ if (is_post()) {
     require_post();
     // The setup code proves this is the person installing Pillbox (see setup_code()).
     if (!setup_unlocked()) {
-        if (q('SELECT COUNT(*) FROM login_attempts WHERE username = ? AND attempted_at > UTC_TIMESTAMP() - INTERVAL 15 MINUTE', ['setup'])->fetchColumn() >= 10) {
-            $errors[] = 'Too many wrong setup codes. Wait 15 minutes and try again.';
-        } elseif (!hash_equals(strtoupper(setup_code()), strtoupper(trim(post('setup_code'))))) {
+        // Wrong codes are counted per address (behind a proxy, set trust_proxy so this is the visitor's own
+        // address, not the proxy's), so one address guessing doesn't lock out the person installing Pillbox.
+        // Every wrong attempt is still recorded. A locked-out address is told nothing more than any wrong code
+        // (the log says, for the operator); clear it with: DELETE FROM login_attempts WHERE username = 'setup';
+        $locked = q("SELECT COUNT(*) FROM login_attempts WHERE username = 'setup' AND ip = ? AND attempted_at > UTC_TIMESTAMP() - INTERVAL 15 MINUTE", [client_ip()])->fetchColumn() >= 10;
+        if ($locked || !hash_equals(strtoupper(setup_code()), strtoupper(trim(post('setup_code'))))) {
             q("INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, 'setup', UTC_TIMESTAMP())", [client_ip()]);
+            if ($locked) {
+                log_line('Pillbox: setup code attempts from ' . client_ip() . ' are paused for 15 minutes after 10 wrong codes.');
+            }
             $errors[] = "That setup code isn't right.";
         } else {
             $_SESSION['setup_ok'] = time();

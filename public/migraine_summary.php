@@ -65,8 +65,8 @@ render_header('Migraine summary', 'care');
     <section>
         <h2>Month by month</h2>
         <table><thead><tr><th></th><th class="num">Headache days</th><th class="num">Migraine days</th><th class="num">Acute medicine days</th><th class="num">Simple painkillers</th><th class="num">Triptans</th><th class="num">Opioid or combination</th></tr></thead><tbody>
-            <?php foreach ($months as $label => $d): ?><tr><td><?= h($label) ?></td><td class="num"><?= $d['headache'] ?></td><td class="num"><?= $d['migraine'] ?></td><td class="num"><?= $d['acute'] ?></td>
-                <td class="num"><?= $d['by_class']['simple'] ?></td><td class="num"><?= $d['by_class']['triptan'] ?></td><td class="num"><?= $d['by_class']['opioid'] + $d['by_class']['combination'] ?></td></tr><?php endforeach; ?>
+            <?php foreach ($months as $label => $d): ?><tr><td><?= h($label) ?></td><td class="num"><?= $d['headache'] ?></td><td class="num"><?= $d['migraine'] ?></td><td class="num"><?= med_count($d['acute']) ?></td>
+                <td class="num"><?= med_count($d['by_class']['simple']) ?></td><td class="num"><?= med_count($d['by_class']['triptan']) ?></td><td class="num"><?= $d['meds_shared'] ? $d['by_class']['opioid'] + $d['by_class']['combination'] : '–' ?></td></tr><?php endforeach; ?>
         </tbody></table>
         <?php foreach (overuse_warnings(headache_days($uid, $today->modify('-29 days'), $today)) as [, $text]): ?><p class="small"><strong><?= h($text) ?></strong></p><?php endforeach; ?>
     </section>
