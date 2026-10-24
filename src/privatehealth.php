@@ -172,8 +172,13 @@ function plan_from_post(): array
 }
 
 /** Save a plan, and keep its renewal date as a Care check (on Today, and in the calendar feed). */
+// The columns a plan can be saved with: only these names ever go into the SQL (values are always bound).
+const PLAN_COLUMNS = ['kind', 'provider', 'plan_name', 'member_number', 'who_covered', 'through_employer', 'cost_amount', 'cost_period', 'excess_amount',
+    'excess_per', 'renews_on', 'underwriting', 'six_week', 'hospital_list', 'claims_phone', 'website', 'covers', 'cover_limits', 'exclusions', 'notes'];
+
 function save_health_plan(int $userId, array $plan, ?int $id = null): int
 {
+    $plan = array_intersect_key($plan, array_flip(PLAN_COLUMNS));
     if ($id) {
         q('UPDATE health_plans SET ' . implode(', ', array_map(fn ($k) => "$k = ?", array_keys($plan))) . ' WHERE id = ? AND user_id = ?', [...array_values($plan), $id, $userId]);
     } else {

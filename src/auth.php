@@ -126,6 +126,107 @@ function require_admin(): array
     return $user;
 }
 
+/**
+ * Sign someone in after a correct password or single sign-on. If the account has an authenticator
+ * app or security key, ask for that first (login_2fa.php), whichever way they signed in: single
+ * sign-on doesn't skip it. "Remember this device" ($_SESSION['remember_device']) carries through.
+ */
+function begin_sign_in(array $user, ?string $method = null): never
+{
+    if (empty($user['is_demo']) && empty($user['pending_approval']) && (has_totp_enabled((int) $user['id']) || has_login_security_key((int) $user['id']))) {
+        $remember = !empty($_SESSION['remember_device']);
+        session_regenerate_id(true);
+        unset($_SESSION['remember_device']);
+        $_SESSION['pending_2fa'] = ['uid' => (int) $user['id'], 'at' => time(), 'remember' => $remember, 'method' => $method];
+        redirect('login_2fa.php');
+    }
+    login_user($user, $method);
+    finish_login_redirect();
+}
+
+/**
+ * The single sign-on buttons (sign-in, sign-up and setup pages), as small forms that carry the CSRF token,
+ * so only Pillbox's own pages can start a sign-in (another site can't start one for you). The "Remember
+ * this device" box is copied into each (data-remember-mirror) by app.js.
+ * $prefix: e.g. "Sign up with" (then the provider's name is used instead of its button label).
+ */
+function sso_buttons(string $prefix = ''): string
+{
+    $form = fn (string $action, string $class, string $inner) => '<form method="post" action="' . h(url($action)) . '" class="sso-form">' . csrf_field()
+        . '<input type="hidden" name="remember" value="0" data-remember-mirror><button class="btn ' . $class . ' btn-block" type="submit">' . $inner . '</button></form>';
+    $html = '';
+    if (entra_enabled()) {
+        $html .= $form('auth_entra.php', 'btn-microsoft', '<svg viewBox="0 0 21 21" width="18" height="18" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/>'
+            . '<rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg> '
+            . h($prefix !== '' ? "$prefix Microsoft" : (string) config('entra.button_label')));
+    }
+    foreach (oidc_providers() as $key => $p) {
+        $html .= $form('oidc_start.php?provider=' . rawurlencode($key), 'btn-sso', h($prefix !== '' ? "$prefix {$p['name']}" : $p['label']));
+    }
+    return $html;
+}
+
+/* ---------- First-run setup ---------- */
+
+/**
+ * The one-time setup code needed to create the first administrator, so that whoever reaches a
+ * new Pillbox first can't take it over: only someone who can see the server's files (or logs) can.
+ * Set 'setup_code' under 'app' in config.php, or one is made in storage/setup_code.txt.
+ */
+function setup_code(): string
+{
+    $configured = trim((string) config('app.setup_code', ''));
+    if ($configured !== '') {
+        return $configured;
+    }
+    $file = storage_path('setup_code.txt');
+    $code = trim((string) @file_get_contents($file));
+    if (!preg_match('/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/', $code)) {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $code = implode('-', array_map(fn () => implode('', array_map(fn () => $alphabet[random_int(0, 31)], range(1, 4))), range(1, 3)));
+        @file_put_contents($file, $code . "\n", LOCK_EX);
+        @chmod($file, 0600);
+        error_log("Pillbox setup code (to create the first administrator): $code  (also in storage/setup_code.txt)");
+    }
+    return $code;
+}
+
+/** Has this browser entered the setup code (for a first administrator signing in with single sign-on)? */
+function setup_unlocked(): bool
+{
+    return !empty($_SESSION['setup_ok']) && $_SESSION['setup_ok'] > time() - 3600;
+}
+
+/** The first administrator now exists: the setup code isn't needed any more. */
+function setup_finished(): void
+{
+    unset($_SESSION['setup_ok']);
+    @unlink(storage_path('setup_code.txt'));
+}
+
+/**
+ * PINs (Mind, private pages) are short, so wrong ones are limited harder than passwords, and per
+ * account in the database (not per session, which a remembered device could reset): 5 in 15 minutes,
+ * and 15 in a day. $key: e.g. "#mind12".
+ */
+function pin_is_throttled(string $key): bool
+{
+    $row = q('SELECT SUM(attempted_at > UTC_TIMESTAMP() - INTERVAL 15 MINUTE) AS recent, COUNT(*) AS day FROM login_attempts
+              WHERE username = ? AND attempted_at > UTC_TIMESTAMP() - INTERVAL 1 DAY', [$key])->fetch();
+    return (int) $row['recent'] >= 5 || (int) $row['day'] >= 15;
+}
+
+function pin_failed(string $key): void
+{
+    q('INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, ?, UTC_TIMESTAMP())', [client_ip(), $key]);
+}
+
+/** Wrong second-factor codes for an account in the last 15 minutes (counted per account, not per browser). */
+function two_factor_failures(int $userId): int
+{
+    return (int) q('SELECT COUNT(*) FROM login_attempts WHERE username = ? AND attempted_at > UTC_TIMESTAMP() - INTERVAL 15 MINUTE', ['2fa:' . $userId])->fetchColumn();
+}
+
 function login_user(array $user, ?string $method = null): void
 {
     // A sign-up waiting for an admin: no session until it's approved.
@@ -322,16 +423,17 @@ function login_is_throttled(string $username): bool
  */
 function verify_step_up_password(array $user, string $password): bool
 {
-    $tries = $_SESSION['stepup_tries'] ?? ['n' => 0, 'at' => 0];
-    if ($tries['n'] >= 5 && $tries['at'] > time() - 900) {
+    // Counted per account in the database, so a new session (e.g. a remembered device) doesn't reset it.
+    $key = '#pw' . $user['id'];
+    if (q('SELECT COUNT(*) FROM login_attempts WHERE username = ? AND attempted_at > UTC_TIMESTAMP() - INTERVAL 15 MINUTE', [$key])->fetchColumn() >= 5) {
         return false;
     }
     $ok = $user['password_hash'] && password_verify($password, $user['password_hash']);
     if ($ok) {
-        unset($_SESSION['stepup_tries']);
+        q('DELETE FROM login_attempts WHERE username = ?', [$key]);
         mark_step_up();
     } else {
-        $_SESSION['stepup_tries'] = ['n' => ($tries['at'] > time() - 900 ? $tries['n'] : 0) + 1, 'at' => time()];
+        q('INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, ?, UTC_TIMESTAMP())', [client_ip(), $key]);
     }
     return $ok;
 }
@@ -455,6 +557,11 @@ function send_password_reset(string $who): void
     $user = q("SELECT * FROM users WHERE (username = ? OR LOWER(email) = ?) AND auth_provider = 'local' AND password_hash IS NOT NULL
                AND is_active = 1 AND is_demo = 0 AND email IS NOT NULL AND email <> '' ORDER BY username = ? DESC LIMIT 1", [$who, $who, $who])->fetch();
     if (!$user || q('SELECT COUNT(*) FROM password_resets WHERE user_id = ? AND created_at > UTC_TIMESTAMP() - INTERVAL 1 HOUR', [$user['id']])->fetchColumn() >= 3) {
+        return;
+    }
+    if (trusted_site_url() === null) {
+        // No trusted address for the link yet: never build it from this request's Host header.
+        error_log('Pillbox: password reset not sent, as the site address is not known. Set it in Site settings (Admin).');
         return;
     }
     $selector = bin2hex(random_bytes(12));

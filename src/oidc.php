@@ -176,7 +176,7 @@ function oidc_handle_callback(array $query): array
                 $claims += array_intersect_key($info, array_flip(['email', 'email_verified', 'name', 'preferred_username']));
             }
         } catch (RuntimeException $e) {
-            error_log("{$p['name']} userinfo failed: " . $e->getMessage());
+            log_line("{$p['name']} userinfo failed: " . $e->getMessage());
         }
     }
 
@@ -329,12 +329,20 @@ function oidc_find_or_create_user(string $key, array $claims): array
 
         if (!$identity) {
             // A trusted directory (auto_provision) gets accounts straight away; otherwise only while sign-ups are open.
-            if (!$p['auto_provision'] && !signups_open()) {
+            // The very first account becomes the administrator: only for the person who entered the setup code.
+            $first = user_count() === 0;
+            if ($first && !setup_unlocked()) {
+                throw new RuntimeException('This Pillbox has not been set up yet. Whoever is setting it up should go to the setup page first.');
+            }
+            if (!$first && !$p['auto_provision'] && !signups_open()) {
                 throw new RuntimeException("Your {$p['name']} account hasn't been given access to Pillbox. Ask an administrator to add you.");
             }
-            $created = !$p['auto_provision'];
+            $created = !$first && !$p['auto_provision'];
+            if ($first) {
+                setup_finished();
+            }
             q("INSERT INTO users (display_name, email, auth_provider, timezone, is_admin) VALUES (?, ?, 'oidc', ?, ?)",
-                [$name, $email, config('app.default_timezone'), user_count() === 0 ? 1 : 0]);
+                [$name, $email, config('app.default_timezone'), $first ? 1 : 0]);
             $userId = (int) db()->lastInsertId();
             q('INSERT INTO user_identities (user_id, provider, subject, email) VALUES (?, ?, ?, ?)', [$userId, $key, $sub, $email]);
             $identity = ['user_id' => $userId];

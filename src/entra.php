@@ -113,7 +113,7 @@ function entra_http(string $url, ?array $form = null): array
         throw new RuntimeException("Unexpected response from Microsoft (HTTP $status).");
     }
     if ($status >= 400) {
-        error_log('Entra error: ' . $body);
+        log_line('Entra error: ' . $body);
         throw new RuntimeException('Microsoft rejected the sign-in: ' . ($data['error_description'] ?? $data['error'] ?? "HTTP $status"));
     }
     return $data;
@@ -210,6 +210,26 @@ function entra_tenant_allowed(string $tid): bool
 }
 
 /**
+ * May a pre-registered account be linked by email for someone from this tenant? Only for a tenant the
+ * operator named explicitly (tenant_id, or one listed in allowed_tenants), never through the '*' wildcard:
+ * Microsoft's email claim isn't verified, so another tenant could claim someone else's address.
+ */
+function entra_tenant_trusted_for_email(string $tid): bool
+{
+    $named = array_filter((array) config('entra.allowed_tenants', []), fn ($t) => is_string($t) && $t !== '*');
+    $configured = (string) config('entra.tenant_id');
+    if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $configured)) {
+        $named[] = $configured;
+    }
+    foreach ($named as $tenant) {
+        if (strcasecmp($tenant, $tid) === 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Map validated claims to a Pillbox user, linking a pre-registered account or
  * creating one if auto-provisioning is on.
  * @throws RuntimeException
@@ -223,8 +243,8 @@ function entra_find_or_create_user(array $claims): array
 
     $user = q('SELECT * FROM users WHERE entra_tid = ? AND entra_oid = ?', [$tid, $oid])->fetch();
 
-    if (!$user && $email !== null) {
-        // An admin may have pre-registered this person by email.
+    if (!$user && $email !== null && entra_tenant_trusted_for_email($tid)) {
+        // An admin may have pre-registered this person by email (only from a tenant named in the config).
         $user = q(
             "SELECT * FROM users WHERE auth_provider = 'entra' AND entra_oid IS NULL AND email = ?",
             [$email]
@@ -238,13 +258,22 @@ function entra_find_or_create_user(array $claims): array
     if (!$user) {
         // A trusted tenant (auto_provision) gets accounts straight away; otherwise only while sign-ups are open.
         $signup = !config('entra.auto_provision');
+        // The very first account becomes the administrator: only for the person who entered the setup code.
+        $first = user_count() === 0;
+        if ($first && !setup_unlocked()) {
+            throw new RuntimeException('This Pillbox has not been set up yet. Whoever is setting it up should go to the setup page first.');
+        }
+        if ($first) {
+            $signup = false;
+            setup_finished();
+        }
         if ($signup && !signups_open()) {
             throw new RuntimeException('Your Microsoft account has not been given access to Pillbox. Ask an administrator to add you.');
         }
         q(
             "INSERT INTO users (display_name, email, auth_provider, entra_oid, entra_tid, timezone, is_admin)
              VALUES (?, ?, 'entra', ?, ?, ?, ?)",
-            [mb_substr($name, 0, 150), $email, $oid, $tid, config('app.default_timezone'), user_count() === 0 ? 1 : 0]
+            [mb_substr($name, 0, 150), $email, $oid, $tid, config('app.default_timezone'), $first ? 1 : 0]
         );
         $user = q('SELECT * FROM users WHERE id = ?', [db()->lastInsertId()])->fetch();
         if ($signup) {

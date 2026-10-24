@@ -68,7 +68,7 @@ function bp_advice(int $sys, int $dia): ?array
 /** Blood pressure readings since a time, oldest first. */
 function bp_readings(int $userId, string $fromUtc): array
 {
-    return q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_pressure' AND recorded_at >= ? ORDER BY recorded_at", [$userId, $fromUtc])->fetchAll();
+    return readings_q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_pressure' AND recorded_at >= ? ORDER BY recorded_at", [$userId, $fromUtc])->fetchAll();
 }
 
 /**
@@ -82,7 +82,7 @@ function bp_session(array $user, array $profile, DateTimeImmutable $today): ?arr
     }
     $start = new DateTimeImmutable($profile['session_start'], $today->getTimezone());
     $end = $start->modify('+' . (BP_SESSION_DAYS - 1) . ' days');
-    $rows = q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_pressure' AND context = 'Home monitoring' AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at",
+    $rows = readings_q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_pressure' AND context = 'Home monitoring' AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at",
         [$user['id'], $start->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'), $end->modify('+1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s')])->fetchAll();
     $days = [];
     foreach ($rows as $r) {
@@ -163,7 +163,8 @@ function bp_handle_post(array $user, DateTimeImmutable $today): never
 {
     $uid = (int) $user['id'];
     $back = 'care.php?area=bp';
-    $save = fn (array $cols) => q('INSERT INTO bp_profiles (user_id, ' . implode(', ', array_keys($cols)) . ') VALUES (?' . str_repeat(', ?', count($cols)) . ')
+    // Column names are fixed in this file (never from input); checked anyway, as they go into the SQL.
+    $save = fn (array $cols) => array_filter(array_keys($cols), fn ($k) => !preg_match('/^[a-z_]+$/', (string) $k)) ? throw new InvalidArgumentException('Bad column') : q('INSERT INTO bp_profiles (user_id, ' . implode(', ', array_keys($cols)) . ') VALUES (?' . str_repeat(', ?', count($cols)) . ')
         ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(fn ($c) => "$c = VALUES($c)", array_keys($cols))), [$uid, ...array_values($cols)]);
     switch (post('action')) {
         case 'bp_profile':
@@ -178,6 +179,10 @@ function bp_handle_post(array $user, DateTimeImmutable $today): never
             $save(['session_start' => post('stop') === '1' ? null : $today->format('Y-m-d')]);
             redirect($back . '#bp-session');
         case 'bp_reading':
+            if (!readings_writable()) { // these are readings
+                flash('error', "Adding blood pressure readings needs permission to add readings, which hasn't been shared with you.");
+                redirect($back . '#bp-session');
+            }
             $msgs = [];
             foreach ([1, 2] as $n) {
                 $sys = (int) post("sys$n");
@@ -238,9 +243,9 @@ function bp_sections(array $user, DateTimeImmutable $today): void
     $pm = array_filter($readings, fn ($r) => (int) local_time($r['recorded_at'], 'G') >= 13);
     $avg = fn (array $rs) => $rs ? (int) round(array_sum(array_column($rs, 'value1')) / count($rs)) . '/' . (int) round(array_sum(array_column($rs, 'value2')) / count($rs)) : null;
     $irregular = count(array_filter($readings, fn ($r) => stripos((string) $r['notes'], 'irregular') !== false));
-    $sideEffects = $bpMeds ? q("SELECT n.*, m.name FROM med_notes n JOIN medications m ON m.id = n.medication_id WHERE n.user_id = ? AND n.kind = 'side_effect' AND n.medication_id IN ("
+    $sideEffects = $bpMeds && mind_visible($user) ? q("SELECT n.*, m.name FROM med_notes n JOIN medications m ON m.id = n.medication_id WHERE n.user_id = ? AND n.kind = 'side_effect' AND n.medication_id IN ("
         . implode(',', array_map('intval', array_column($bpMeds, 'id'))) . ') ORDER BY n.created_at DESC LIMIT 8', [$uid])->fetchAll() : [];
-    $recentChange = q("SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'restarted') AND c.effective_date >= ?
+    $recentChange = q("SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'restarted') AND c.effective_date >= ?" . private_med_filter() . "
         ORDER BY c.effective_date DESC", [$uid, $today->modify('-21 days')->format('Y-m-d')])->fetchAll();
     $recentChange = array_values(array_filter($recentChange, fn ($c) => in_array(bp_class($c['name']), ['acei', 'arb'], true) || preg_match('/spironolactone|eplerenone/i', $c['name'])));
     $todayYmd = $today->format('Y-m-d');

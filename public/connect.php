@@ -7,6 +7,10 @@ require __DIR__ . '/../src/bootstrap.php';
 
 $user = require_login();
 if (get('error') !== '') {
+    // Only for the connection this person started (its state), so another site can't cancel or fake one.
+    if (empty($_SESSION['connect']['state']) || !hash_equals((string) $_SESSION['connect']['state'], get('state'))) {
+        redirect('connections.php');
+    }
     unset($_SESSION['connect']);
     flash('error', get('error') === 'access_denied' ? 'Connecting was cancelled.' : 'The service said: ' . mb_substr(get('error_description') ?: get('error'), 0, 200));
     redirect('connections.php');

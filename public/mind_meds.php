@@ -15,7 +15,9 @@ if (is_post()) {
     $med = find_medication((int) post('medication_id'), $uid) ?? not_found();
     switch (post('action')) {
         case 'mark':
-            q('UPDATE medications SET mental_health = ? WHERE id = ?', [post('on') === '1' ? 1 : 0, $med['id']]);
+            if (share_can('doses', 'edit')) { // changing a medicine needs Medicines permission, not just Mind
+                q('UPDATE medications SET mental_health = ? WHERE id = ?', [post('on') === '1' ? 1 : 0, $med['id']]);
+            }
             break;
         case 'note':
             $note = trim(mb_substr(post('note'), 0, 1000));
@@ -28,7 +30,8 @@ if (is_post()) {
             }
             break;
         case 'delete_note':
-            q('DELETE FROM med_notes WHERE id = ? AND user_id = ?', [(int) post('note_id'), $uid]);
+            // Only a note on this (visible) medicine: never one on a private medicine hidden from someone with shared access.
+            q('DELETE FROM med_notes WHERE id = ? AND user_id = ? AND medication_id = ?', [(int) post('note_id'), $uid, $med['id']]);
             break;
     }
     redirect('mind_meds.php#med-' . $med['id']);
@@ -86,11 +89,14 @@ render_header('Mental health medication', 'mind');
         <?php endforeach; ?>
     </ul>
     <?php endif; ?>
+    <?php if (share_can('doses', 'edit')): ?>
     <form method="post" class="inline-actions"><?= csrf_field() ?><input type="hidden" name="action" value="mark"><input type="hidden" name="medication_id" value="<?= (int) $m['id'] ?>"><input type="hidden" name="on" value="0">
         <button class="btn-link small" type="submit">Not a mental health medicine</button></form>
+    <?php endif; ?>
 </section>
 <?php endforeach; ?>
 
+<?php if (share_can('doses', 'edit')): // choosing which medicines count needs Medicines permission ?>
 <section class="card">
     <h2><?= $meds ? 'Other medicines' : 'Which of your medicines are for your mental health?' ?></h2>
     <?php if (!$others): ?>
@@ -105,4 +111,5 @@ render_header('Mental health medication', 'mind');
     </ul>
     <?php endif; ?>
 </section>
+<?php endif; ?>
 <?php render_footer();

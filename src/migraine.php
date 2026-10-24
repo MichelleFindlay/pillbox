@@ -49,7 +49,9 @@ function headache_episodes(int $userId, string $fromUtc): array
     foreach ($rows as &$r) {
         $r['symptoms'] = array_filter(explode(',', (string) $r['symptoms']));
         $r['triggers'] = array_filter(explode(',', (string) $r['triggers']));
-        $r['meds'] = q('SELECT * FROM episode_meds WHERE episode_id = ? ORDER BY taken_at', [$r['id']])->fetchAll();
+        // Medicines from Meds that are private are left out for someone looking at a shared Pillbox.
+        $r['meds'] = q('SELECT em.* FROM episode_meds em LEFT JOIN medications m ON m.id = em.medication_id
+                        WHERE em.episode_id = ?' . (private_meds_hidden() ? ' AND (m.id IS NULL OR m.is_private = 0)' : '') . ' ORDER BY em.taken_at', [$r['id']])->fetchAll();
     }
     return $rows;
 }
@@ -214,7 +216,7 @@ function migraine_add_med(int $uid, int $episodeId, string $defaultAt): void
     $at = preg_match('/^\d\d:\d\d$/', post('med_time')) ? (local_to_utc(local_time($defaultAt, 'Y-m-d') . ' ' . post('med_time')) ?? $defaultAt) : $defaultAt;
     q('INSERT INTO episode_meds (episode_id, medication_id, name, taken_at, helped) VALUES (?, ?, ?, ?, ?)',
         [$episodeId, $med['id'] ?? null, $name, min($at, utc_now()), isset(RELIEF[(int) post('helped')]) && post('helped') !== '' ? (int) post('helped') : null]);
-    if ($med && $med['as_needed'] && post('log_dose') === '1') {
+    if ($med && $med['as_needed'] && post('log_dose') === '1' && share_can('doses', 'log')) { // logging a dose needs Medicines permission
         $amount = (float) ($med['prn_dose_amount'] ?? 1);
         q("INSERT INTO dose_logs (user_id, medication_id, status, amount, taken_at, notes) VALUES (?, ?, 'taken', ?, ?, 'Headache')", [$uid, $med['id'], $amount, min($at, utc_now())]);
         adjust_stock((int) $med['id'], -$amount);

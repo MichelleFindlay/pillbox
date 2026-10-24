@@ -31,7 +31,18 @@ if (is_post()) {
             if ($isLocal && $username !== $user['username'] && ($e = validate_username($username))) {
                 $errors[] = $e;
             }
+            // The email address is where password reset links go: changing it needs the current password
+            // (or a recent confirmation), so a session left open can't be used to take the account over.
+            $emailChanged = $email !== mb_strtolower((string) $user['email']);
+            if (!$errors && $emailChanged && $hasPassword && !step_up_confirmed() && !verify_step_up_password($user, (string) ($_POST['current'] ?? ''))) {
+                $errors[] = "To change your email address, enter your current password (or wait 15 minutes if you've tried too many times).";
+            }
             if (!$errors) {
+                if ($emailChanged && $user['email'] && mail_enabled()) {
+                    $app = (string) config('app.name');
+                    send_mail((string) $user['email'], "Your $app email address was changed",
+                        "Hello {$user['display_name']},\n\nThe email address on your $app account was just changed" . ($email ? " to $email" : ' (removed)') . ".\n\nIf this wasn't you, contact whoever runs this $app straight away.\n");
+                }
                 q('UPDATE users SET display_name = ?, email = ?, timezone = ?, username = ?, pronouns = ?, gender_identity = ? WHERE id = ?',
                     [$name, $email ?: null, $tz, $username, trim(mb_substr(post('pronouns'), 0, 40)) ?: null, trim(mb_substr(post('gender_identity'), 0, 100)) ?: null, $uid]);
                 flash('success', 'Profile saved.' . ($isLocal && $username !== $user['username'] ? " Sign in as \"$username\" from now on." : ''));
@@ -142,8 +153,11 @@ if (is_post()) {
         case 'password':
             // Change your password, or (Microsoft-only accounts) add one so you can sign in either way.
             $new = (string) ($_POST['new'] ?? '');
-            if ($hasPassword && !password_verify((string) ($_POST['current'] ?? ''), (string) $user['password_hash'])) {
-                $errors[] = 'Your current password is incorrect.';
+            if ($hasPassword && !verify_step_up_password($user, (string) ($_POST['current'] ?? ''))) {
+                $errors[] = "Your current password is incorrect (or you've tried too many times: wait 15 minutes).";
+            } elseif (!$hasPassword && !step_up_confirmed()) {
+                // Adding a password to a single sign-on account: confirm it's you with that sign-in first.
+                $errors[] = 'Confirm it\'s you first, with the button below.';
             } elseif ($e = validate_new_password($new, (string) ($_POST['confirm'] ?? ''))) {
                 $errors[] = $e;
             }
@@ -399,6 +413,10 @@ render_header('Account', 'account');
             <label>Name <input name="display_name" required maxlength="150" autocomplete="name" value="<?= h($posted['display_name'] ?? $user['display_name']) ?>"></label>
             <label>Email <span class="muted small">(optional)</span>
                 <input type="email" name="email" maxlength="255" autocomplete="email" value="<?= h($posted['email'] ?? $user['email']) ?>"></label>
+            <?php if ($hasPassword && !step_up_confirmed()): ?>
+            <label>Current password <span class="muted small">(only needed to change your email)</span>
+                <input type="password" name="current" autocomplete="current-password"></label>
+            <?php endif; ?>
             <?php if ($isLocal): ?>
             <label>Username <span class="muted small">(what you sign in with)</span>
                 <input name="username" required autocapitalize="none" autocomplete="username" value="<?= h($posted['username'] ?? $user['username']) ?>"></label>
@@ -574,6 +592,14 @@ render_header('Account', 'account');
     <?php elseif (local_login_enabled()): ?>
     <h3>Add a password</h3>
     <p class="muted small">Optional. Lets you sign in without Microsoft too, for example if your work account is unavailable.</p>
+    <?php $addPwStepUp = step_up_method($user); if (!step_up_confirmed() && in_array($addPwStepUp['type'], ['entra', 'oidc'], true)): ?>
+    <p class="muted small">Confirm it's you first:</p>
+    <form method="post">
+        <?= csrf_field() ?><input type="hidden" name="action" value="stepup_<?= $addPwStepUp['type'] ?>">
+        <?php if ($addPwStepUp['provider']): ?><input type="hidden" name="provider" value="<?= h($addPwStepUp['provider']) ?>"><?php endif; ?>
+        <button class="btn btn-small" type="submit">Confirm with <?= h($addPwStepUp['label']) ?></button>
+    </form>
+    <?php else: ?>
     <form method="post" class="stack narrow">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="password">
@@ -582,6 +608,7 @@ render_header('Account', 'account');
         <label>Confirm password <input type="password" name="confirm" required minlength="10" autocomplete="new-password"></label>
         <button class="btn btn-primary" type="submit">Add password</button>
     </form>
+    <?php endif; ?>
     <?php endif; ?>
 
     <?php if (can_add_login_2fa($user)): ?>

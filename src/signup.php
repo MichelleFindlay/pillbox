@@ -112,7 +112,16 @@ function create_local_signup(string $name, string $username, string $email, stri
     if ($name === '' || mb_strlen($name) > 150) {
         $errors[] = 'Enter your name.';
     }
+    // "That username is already taken" says an account exists, so it can only be asked so often from one
+    // address: enough for someone choosing a name, not for checking a list of them.
+    $probes = (int) q("SELECT COUNT(*) FROM login_attempts WHERE ip = ? AND username = '#signup-taken' AND attempted_at > UTC_TIMESTAMP() - INTERVAL 1 HOUR", [client_ip()])->fetchColumn();
+    if ($probes >= 10) {
+        return 'Too many tries from here recently. Please try again later.';
+    }
     if ($e = validate_username($username)) {
+        if (str_contains($e, 'taken')) {
+            q("INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, '#signup-taken', UTC_TIMESTAMP())", [client_ip()]);
+        }
         $errors[] = $e;
     }
     if ($email !== '' && (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 255)) {
@@ -129,6 +138,6 @@ function create_local_signup(string $name, string $username, string $email, stri
     }
     q("INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, '#signup', UTC_TIMESTAMP())", [client_ip()]);
     q("INSERT INTO users (username, email, display_name, password_hash, auth_provider, is_admin, timezone) VALUES (?, ?, ?, ?, 'local', ?, ?)",
-        [$username, $email ?: null, $name, password_hash($password, PASSWORD_DEFAULT), user_count() === 0 ? 1 : 0, config('app.default_timezone')]);
+        [$username, $email ?: null, $name, password_hash($password, PASSWORD_DEFAULT), 0, config('app.default_timezone')]); // never the administrator: that's set up with the setup code
     return signup_created(q('SELECT * FROM users WHERE id = ?', [db()->lastInsertId()])->fetch(), 'password');
 }

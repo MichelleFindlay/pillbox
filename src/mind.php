@@ -99,6 +99,12 @@ function mind_enabled(array $user): bool
 
 const MIND_UNLOCK_SECONDS = 600; // stays unlocked for 10 minutes after the last Mind page
 
+/** Can Mind data be shown right now: switched on, shared (if acting for someone), and unlocked? */
+function mind_visible(array $user): bool
+{
+    return mind_enabled($user) && mind_unlocked($user);
+}
+
 function mind_unlocked(array $user): bool
 {
     // The owner chose to share Mind with this person, so their PIN isn't asked for.
@@ -252,7 +258,7 @@ function mind_insights(array $user, DateTimeImmutable $today): array
 
     // Sleep: the night ending on each day (Pillbox log or Apple Health).
     $sleep = [];
-    foreach (q("SELECT value1, recorded_at FROM health_readings WHERE user_id = ? AND metric = 'sleep' AND recorded_at >= ?",
+    foreach (readings_q("SELECT value1, recorded_at FROM health_readings WHERE user_id = ? AND metric = 'sleep' AND recorded_at >= ?",
         [$user['id'], $from->modify('-1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s')]) as $r) {
         $sleep[local_time($r['recorded_at'], 'Y-m-d')] = (float) $r['value1'];
     }
@@ -451,12 +457,12 @@ function symptom_ratings(array $checkinIds): array
 function mind_medications(int $userId): array
 {
     return q("SELECT m.*, (SELECT CONCAT(c.effective_date, '|', c.summary) FROM medication_changes c WHERE c.medication_id = m.id ORDER BY c.effective_date DESC, c.id DESC LIMIT 1) AS last_change
-              FROM medications m WHERE m.user_id = ? AND m.mental_health = 1 AND m.is_active = 1 ORDER BY m.name", [$userId])->fetchAll();
+              FROM medications m WHERE m.user_id = ? AND m.mental_health = 1 AND m.is_active = 1" . private_med_filter() . " ORDER BY m.name", [$userId])->fetchAll();
 }
 
 function med_notes(int $userId, ?int $medicationId = null, ?string $sinceUtc = null): array
 {
-    return q('SELECT n.*, m.name FROM med_notes n JOIN medications m ON m.id = n.medication_id WHERE n.user_id = ?'
+    return q('SELECT n.*, m.name FROM med_notes n JOIN medications m ON m.id = n.medication_id WHERE n.user_id = ?' . private_med_filter()
         . ($medicationId ? ' AND n.medication_id = ' . (int) $medicationId : '') . ($sinceUtc ? ' AND n.created_at >= ?' : '') . ' ORDER BY n.created_at DESC',
         $sinceUtc ? [$userId, $sinceUtc] : [$userId])->fetchAll();
 }

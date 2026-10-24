@@ -14,12 +14,19 @@ if (is_post()) {
     require_post();
     $questionId = (int) post('question_id');
     $owned = fn () => q('SELECT 1 FROM appointment_questions WHERE id = ? AND appointment_id = ?', [$questionId, $a['id']])->fetch();
+    // Mind's notes (actions, the running question list) need Mind access: shared, unlocked, and editable.
+    $mindOk = mind_visible($user) && share_can('mind', 'edit');
+    if (in_array(post('action'), ['add_action', 'toggle_action', 'delete_action'], true) && !$mindOk) {
+        redirect($self);
+    }
     switch (post('action')) {
         case 'add_question':
             $text = mb_substr(post('question'), 0, 500);
             if (share_can('mind', 'edit')) {
                 // A question from the Mind running list is now on this appointment.
+                if ($mindOk) {
                 q("UPDATE mind_notes SET done = 1, appointment_id = ? WHERE user_id = ? AND kind = 'question' AND done = 0 AND text = ?", [$a['id'], $user['id'], $text]);
+            }
             }
             if ($text !== '') {
                 q('INSERT INTO appointment_questions (appointment_id, question) VALUES (?, ?)', [$a['id'], $text]);
@@ -218,7 +225,7 @@ render_header(appointment_title($a), 'appointments');
     <?php if ($a['outcome_notes']): ?><p class="print-only"><?= nl2br(h($a['outcome_notes'])) ?></p><?php else: ?><span class="print-only answer-lines tall"></span><?php endif; ?>
 </section>
 
-<?php if (in_array($a['kind'], MIND_APPOINTMENT_KINDS, true) && mind_enabled($user)):
+<?php if (in_array($a['kind'], MIND_APPOINTMENT_KINDS, true) && mind_visible($user)): // not while Mind is PIN-locked
     $actions = array_filter(mind_notes($uid, 'action'), fn ($n) => (int) $n['appointment_id'] === (int) $a['id']); ?>
 <section class="card" id="actions">
     <h2>Actions agreed</h2>

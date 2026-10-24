@@ -46,31 +46,54 @@ function pretty_path(string $path): string
     return preg_replace(['/^index\.php(?=$|[?#])/', '/^([a-z_]+)\.php(?=$|[?#])/'], ['', '$1'], $path);
 }
 
-/** Full URL including scheme and host, e.g. for links used outside Pillbox (calendar feeds). */
-function absolute_url(string $path = ''): string
+/**
+ * The site's own address, from somewhere trustworthy: the Site address setting (app.public_url), or
+ * else the address an administrator last used it at (see remember_site_url). Never just the Host
+ * header of a request, which anyone can set: links built from it could point at someone else's site
+ * (e.g. a password reset link). Null if neither is known yet.
+ */
+function trusted_site_url(): ?string
 {
     $base = rtrim((string) config('app.public_url', ''), '/');
-    if ($base === '' && empty($_SERVER['HTTP_HOST'])) {
-        // Scheduled tasks have no request to go on: use the address the site was last visited at.
-        $base = rtrim((string) @file_get_contents(storage_path('site_url.txt')), '/');
-    }
     if ($base === '') {
+        $base = rtrim(trim((string) @file_get_contents(storage_path('site_url.txt'))), '/');
+    }
+    return preg_match('#^https?://[^\s/]+#', $base) ? $base : null;
+}
+
+/**
+ * Full URL including scheme and host, e.g. for links used outside Pillbox (calendar feeds, emails).
+ * Uses the trusted site address; only before one is known (a new install) does it fall back to the
+ * address of this request.
+ */
+function absolute_url(string $path = ''): string
+{
+    $base = trusted_site_url();
+    if ($base === null) {
         $host = preg_replace('/[^A-Za-z0-9.\-:\[\]]/', '', (string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
         $base = (is_https() ? 'https' : 'http') . '://' . $host . config('app.base_path', '');
     }
     return $base . '/' . pretty_path(ltrim($path, '/'));
 }
 
-/** Remember the site's address (once per session) so emails sent by scheduled tasks can link back. */
+/**
+ * Remember the site's address (once per session) so links in emails and feeds point back here,
+ * learned only from an administrator's visit (a trusted person), not from anyone's request.
+ */
 function remember_site_url(): void
 {
-    if (config('app.public_url', '') !== '' || empty($_SERVER['HTTP_HOST']) || !empty($_SESSION['site_url_saved'])) {
+    if (config('app.public_url', '') !== '' || empty($_SERVER['HTTP_HOST']) || !empty($_SESSION['site_url_saved']) || empty($_SESSION['uid'])) {
+        return;
+    }
+    $admin = q('SELECT is_admin FROM users WHERE id = ? AND is_active = 1', [(int) $_SESSION['uid']])->fetchColumn();
+    if (!$admin) {
         return;
     }
     $_SESSION['site_url_saved'] = true;
     // Scheduled tasks can't tell whether tidy addresses work, so remember that too.
     pretty_urls() ? @touch(storage_path('pretty_urls')) : @unlink(storage_path('pretty_urls'));
-    $url = rtrim(absolute_url(), '/');
+    $host = preg_replace('/[^A-Za-z0-9.\-:\[\]]/', '', (string) $_SERVER['HTTP_HOST']);
+    $url = (is_https() ? 'https' : 'http') . '://' . $host . config('app.base_path', '');
     if (@file_get_contents(storage_path('site_url.txt')) !== $url) {
         @file_put_contents(storage_path('site_url.txt'), $url, LOCK_EX);
     }
@@ -112,6 +135,12 @@ function is_https(): bool
         return true;
     }
     return config('app.trust_proxy') && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+}
+
+/** Write to the error log with outside text made safe: one line (no forged log entries), limited length. */
+function log_line(string $message): void
+{
+    error_log(mb_substr((string) preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $message), 0, 2000));
 }
 
 function client_ip(): string

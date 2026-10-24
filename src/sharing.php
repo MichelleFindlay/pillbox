@@ -117,6 +117,30 @@ function share_can(string $section, string $need = 'view', ?array $user = null):
     return SHARE_LEVEL_RANK[$have] >= SHARE_LEVEL_RANK[$need];
 }
 
+/*
+ * Section-level checks for data that shows up on other sections' pages. Pages are allowed per section
+ * (SHARE_PAGES), but Care, Mind and the reports also touch readings, medicines and appointments: those
+ * need the person's permission for that section too, wherever they appear.
+ */
+
+/** Run a query on health_readings: for someone without Readings access, the same query with no rows. */
+function readings_q(string $sql, array $params = []): PDOStatement
+{
+    return share_can('readings', 'view') ? q($sql, $params) : q('SELECT * FROM (' . $sql . ') AS not_shared WHERE 0', $params);
+}
+
+/** May readings be added or changed (from any page, e.g. the hypo guide or a BP check-up)? */
+function readings_writable(): bool
+{
+    return share_can('readings', 'edit');
+}
+
+/** Medicines are hidden altogether from someone with shared access but no Medicines permission. */
+function meds_not_shared(): bool
+{
+    return !share_can('doses', 'view');
+}
+
 /** May this Care area (or Mind's habits) be seen? */
 function share_area_allowed(string $area, ?array $user = null): bool
 {

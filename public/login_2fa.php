@@ -16,7 +16,7 @@ $uid = (int) $pending['uid'];
 
 if (is_post() && post('action') === 'cancel') {
     require_post();
-    unset($_SESSION['pending_2fa'], $_SESSION['login_2fa_tries']);
+    unset($_SESSION['pending_2fa']);
     redirect('login.php');
 }
 
@@ -32,16 +32,17 @@ $useBackup = is_post() ? post('mode') === 'backup' : get('backup') === '1';
 
 if (is_post() && post('action') === 'code') {
     require_post();
-    $tries = $_SESSION['login_2fa_tries'] ?? ['n' => 0, 'at' => 0];
-    if ($tries['n'] >= 8 && $tries['at'] > time() - 900) {
+    // Wrong codes are counted against the account in the database, so starting a new session doesn't reset them.
+    if (two_factor_failures($uid) >= 8) {
         $error = 'Too many wrong codes. Wait 15 minutes and try again.';
     } elseif ($useBackup ? totp_verify_backup_code($user, post('code')) : ($hasTotp && totp_verify_code($uid, post('code')) !== null)) {
-        unset($_SESSION['login_2fa_tries'], $_SESSION['pending_2fa']);
+        q('DELETE FROM login_attempts WHERE username = ?', ['2fa:' . $uid]);
+        unset($_SESSION['pending_2fa']);
         $_SESSION['remember_device'] = !empty($pending['remember']);
-        login_user($user);
+        login_user($user, $pending['method'] ?? null);
         finish_login_redirect();
     } else {
-        $_SESSION['login_2fa_tries'] = ['n' => ($tries['at'] > time() - 900 ? $tries['n'] : 0) + 1, 'at' => time()];
+        q('INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, ?, UTC_TIMESTAMP())', [client_ip(), '2fa:' . $uid]);
         $error = $useBackup ? "That backup code isn't right, or has already been used." : "That code isn't right.";
     }
 }

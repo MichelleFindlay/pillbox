@@ -85,6 +85,17 @@ if (is_post()) {
             if (($index === 0 ? 0 : filesize($path)) + $chunk['size'] > HEALTH_MAX_UPLOAD) {
                 json_reply(['ok' => false, 'error' => 'That file is too big.'], 413);
             }
+            if ($index === 0) {
+                // One upload in progress per person: drop any earlier unfinished one, so they can't pile up.
+                foreach (glob(health_upload_dir() . "/health_{$uid}_*.part*") ?: [] as $old) {
+                    @unlink($old);
+                }
+            }
+            // Never fill the disk: keep at least 1 GB free for everything else.
+            $free = @disk_free_space(health_upload_dir());
+            if ($free !== false && $free - $chunk['size'] < 1024 ** 3) {
+                json_reply(['ok' => false, 'error' => "The server is running out of space, so the upload can't continue. Ask whoever runs this Pillbox."], 507);
+            }
             $in = fopen($chunk['tmp_name'], 'rb');
             $out = fopen($path, $index === 0 ? 'wb' : 'ab');
             stream_copy_to_stream($in, $out);

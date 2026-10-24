@@ -23,14 +23,14 @@ $hba1c = q("SELECT * FROM lab_results WHERE user_id = ? AND test = 'hba1c' ORDER
 $meds = array_filter(user_medications($uid), fn ($m) => preg_match(DIABETES_MED_PATTERN, $m['name']) || preg_match(HYPO_RISK_PATTERN, $m['name']) || preg_match(SGLT2_PATTERN, $m['name']));
 $schedules = schedules_by_medication(array_column($meds, 'id'), $today->format('Y-m-d'));
 $hypos = q('SELECT * FROM hypo_events WHERE user_id = ? AND at >= ? ORDER BY at DESC', [$uid, gmdate('Y-m-d H:i:s', time() - 90 * 86400)])->fetchAll();
-$ketones = q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_ketones' AND value1 >= 1.5 AND recorded_at >= ? ORDER BY recorded_at DESC", [$uid, gmdate('Y-m-d H:i:s', time() - 90 * 86400)])->fetchAll();
+$ketones = readings_q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_ketones' AND value1 >= 1.5 AND recorded_at >= ? ORDER BY recorded_at DESC", [$uid, gmdate('Y-m-d H:i:s', time() - 90 * 86400)])->fetchAll();
 $ins = q('SELECT COUNT(DISTINCT DATE(taken_at)) AS days, SUM(CASE WHEN kind = \'basal\' THEN units ELSE 0 END) AS basal, SUM(CASE WHEN kind <> \'basal\' THEN units ELSE 0 END) AS bolus, SUM(carbs) AS carbs
           FROM insulin_logs WHERE user_id = ? AND taken_at >= ?', [$uid, gmdate('Y-m-d H:i:s', time() - 14 * 86400)])->fetch();
 $annual = [];
 foreach (q("SELECT * FROM health_checks WHERE user_id = ? AND area = 'diabetes' AND kind LIKE 'dm\\_%'", [$uid]) as $c) {
     $annual[$c['kind']] = $c;
 }
-$latest = fn (string $metric) => q('SELECT * FROM health_readings WHERE user_id = ? AND metric = ? ORDER BY recorded_at DESC LIMIT 1', [$uid, $metric])->fetch();
+$latest = fn (string $metric) => readings_q('SELECT * FROM health_readings WHERE user_id = ? AND metric = ? ORDER BY recorded_at DESC LIMIT 1', [$uid, $metric])->fetch();
 $bp = $latest('blood_pressure');
 $weight = $latest('weight');
 

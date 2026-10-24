@@ -101,7 +101,16 @@ if (is_post()) {
             redirect($back);
         case 'delete':
             owner_only('Permanently deleting a medicine');
-            q('DELETE FROM medications WHERE id = ?', [$med['id']]);
+            transaction(function () use ($med, $uid) {
+                // Doses, schedules, changes, stock, notes and effects go with it (foreign keys). Elsewhere: unlink it,
+                // and remove what was only about it (its prescription payments).
+                q('DELETE FROM prescription_payments WHERE medication_id = ? AND user_id = ?', [$med['id'], $uid]);
+                q('UPDATE health_checks SET medication_id = NULL WHERE medication_id = ? AND user_id = ?', [$med['id'], $uid]);
+                q('UPDATE lab_results SET medication_id = NULL WHERE medication_id = ? AND user_id = ?', [$med['id'], $uid]);
+                q('UPDATE insulin_logs SET medication_id = NULL WHERE medication_id = ? AND user_id = ?', [$med['id'], $uid]);
+                q('UPDATE episode_meds SET medication_id = NULL WHERE medication_id = ?', [$med['id']]);
+                q('DELETE FROM medications WHERE id = ?', [$med['id']]);
+            });
             flash('success', $med['name'] . ' and all of its dose history were deleted.');
             break;
     }

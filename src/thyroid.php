@@ -104,7 +104,7 @@ function next_tsh_due(int $userId): array
 function recent_oestrogen_change(int $userId): ?array
 {
     $row = q("SELECT c.effective_date, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id
-              WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'decreased', 'strength', 'restarted') AND c.effective_date >= ?
+              WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'decreased', 'strength', 'restarted') AND c.effective_date >= ?" . private_med_filter() . "
                 AND (m.name REGEXP 'oestr|estrad|estrogen|combined|HRT' OR m.reason REGEXP 'HRT|oestrogen|Gender-affirming')
               ORDER BY c.effective_date DESC LIMIT 1", [$userId, local_today()->modify('-4 months')->format('Y-m-d')])->fetch();
     return $row ?: null;

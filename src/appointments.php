@@ -176,7 +176,7 @@ function appointment_suggestions(array $user, array $appointment): array
     $out = [];
 
     // Mental health appointments: the running question list, and how things have been in Mind.
-    if (in_array($appointment['kind'], MIND_APPOINTMENT_KINDS, true) && mind_enabled($user)) {
+    if (in_array($appointment['kind'], MIND_APPOINTMENT_KINDS, true) && mind_visible($user)) { // not while Mind is PIN-locked
         foreach (mind_notes($uid, 'question', false) as $n) {
             $out[] = $n['text'];
         }
@@ -204,7 +204,7 @@ function appointment_suggestions(array $user, array $appointment): array
     }
 
     // Symptoms and side effects logged.
-    foreach (q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'symptom' AND recorded_at >= ? AND recorded_at <= ? ORDER BY recorded_at",
+    foreach (readings_q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'symptom' AND recorded_at >= ? AND recorded_at <= ? ORDER BY recorded_at",
         [$uid, $sinceUtc, $until]) as $r) {
         $out[] = 'Symptom on ' . local_time($r['recorded_at'], 'j M') . ': ' . ($r['notes'] ?: 'no description')
             . ($r['value1'] !== null ? ' (severity ' . num($r['value1']) . '/10)' : '');
@@ -222,14 +222,14 @@ function appointment_suggestions(array $user, array $appointment): array
 
     // Heavy use of as-needed medicines.
     foreach (q('SELECT m.name, COUNT(*) AS n FROM dose_logs l JOIN medications m ON m.id = l.medication_id
-                WHERE l.user_id = ? AND l.schedule_id IS NULL AND l.taken_at >= ? AND l.taken_at <= ? GROUP BY m.id HAVING n >= 5',
+                WHERE l.user_id = ? AND l.schedule_id IS NULL AND l.taken_at >= ? AND l.taken_at <= ?' . private_med_filter() . ' GROUP BY m.id HAVING n >= 5',
         [$uid, $sinceUtc, $until]) as $r) {
         $out[] = "I've needed {$r['name']} {$r['n']} times since $sinceLabel.";
     }
 
     // Recent dose changes.
     foreach (q("SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id
-                WHERE c.user_id = ? AND c.effective_date >= ? AND c.kind NOT IN ('note') ORDER BY c.effective_date",
+                WHERE c.user_id = ? AND c.effective_date >= ? AND c.kind NOT IN ('note')" . private_med_filter() . " ORDER BY c.effective_date",
         [$uid, local_time($sinceUtc, 'Y-m-d')]) as $c) {
         $out[] = "How the change to {$c['name']} is going: " . lcfirst($c['summary']) . ' (' . date('j M', strtotime($c['effective_date'])) . ').';
     }
@@ -245,9 +245,9 @@ function appointment_suggestions(array $user, array $appointment): array
     }
 
     // Blood pressure trend.
-    $bp = q("SELECT AVG(value1) AS sys, AVG(value2) AS dia, COUNT(*) AS n FROM health_readings
+    $bp = readings_q("SELECT AVG(value1) AS sys, AVG(value2) AS dia, COUNT(*) AS n FROM health_readings
              WHERE user_id = ? AND metric = 'blood_pressure' AND recorded_at >= ? AND recorded_at <= ?", [$uid, $sinceUtc, $until])->fetch();
-    if ((int) $bp['n'] >= 3) {
+    if ($bp && (int) $bp['n'] >= 3) { // (no row at all when readings aren't shared)
         $out[] = 'My blood pressure averaged ' . round((float) $bp['sys']) . '/' . round((float) $bp['dia']) . " mmHg over {$bp['n']} readings since $sinceLabel.";
     }
 

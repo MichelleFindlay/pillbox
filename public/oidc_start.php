@@ -1,6 +1,6 @@
 <?php
 /*
- * Start sign-in with an OpenID Connect provider: oidc_start.php?provider=<key>
+ * Start sign-in with an OpenID Connect provider: POST oidc_start.php?provider=<key> (with the CSRF token)
  * Linking to the signed-in account: oidc_start.php?provider=<key>&link=1&csrf=<token>
  */
 require __DIR__ . '/../src/bootstrap.php';
@@ -12,7 +12,14 @@ if (!oidc_provider($key)) {
 }
 
 $linkUserId = null;
-$_SESSION['remember_device'] = get('remember') === '1'; // "Remember this device" on the sign-in page
+if (get('link') !== '1') {
+    // Signing in: only from Pillbox's own sign-in buttons (a form with the CSRF token), so another site can't start one for you.
+    if (!is_post()) {
+        redirect('login.php');
+    }
+    require_post();
+    $_SESSION['remember_device'] = post('remember') === '1'; // "Remember this device" on the sign-in page
+}
 if (get('link') === '1') {
     $user = require_login();
     if (!hash_equals(csrf_token(), get('csrf'))) {
@@ -25,7 +32,7 @@ if (get('link') === '1') {
 try {
     oidc_begin($key, $linkUserId);
 } catch (RuntimeException $e) {
-    error_log('OIDC start failed: ' . $e->getMessage());
+    log_line('OIDC start failed: ' . $e->getMessage());
     flash('error', $e->getMessage());
     redirect($linkUserId ? 'account.php#sign-in-options' : 'login.php');
 }

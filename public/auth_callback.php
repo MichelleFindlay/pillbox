@@ -27,10 +27,9 @@ try {
     }
     $user = entra_find_or_create_user($claims);
 } catch (RuntimeException $e) {
-    error_log('Entra sign-in failed: ' . $e->getMessage());
+    log_line('Entra sign-in failed: ' . $e->getMessage());
     flash('error', $e->getMessage());
     redirect(!$linking ? 'login.php' : ($stepup ? 'account.php#security' : 'account.php#sign-in-options'));
 }
 
-login_user($user, 'entra');
-finish_login_redirect();
+begin_sign_in($user, 'entra'); // asks for the second factor first, if the account has one

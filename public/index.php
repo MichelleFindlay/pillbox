@@ -64,7 +64,7 @@ $metrics = enabled_metrics($user);
 $latest = [];
 if ($metrics) {
     $in = implode(',', array_fill(0, count($metrics), '?'));
-    $rows = q(
+    $rows = readings_q( // nothing for someone with shared access but no Readings permission
         "SELECT r.* FROM health_readings r
          JOIN (SELECT metric, MAX(recorded_at) AS latest FROM health_readings WHERE user_id = ? AND metric IN ($in) GROUP BY metric) x
            ON x.metric = r.metric AND x.latest = r.recorded_at
@@ -315,7 +315,7 @@ render_header('Today', 'today');
                 </div>
             </div>
             <?php if (share_can('doses', 'log')): ?>
-            <form method="post" action="<?= h(url('dose_action.php')) ?>" class="dose-actions prn-form"<?= $atMax ? ' data-confirm="You have reached the daily maximum for this medicine. Log another dose anyway?"' : '' ?>>
+            <form method="post" action="<?= h(url('dose_action.php')) ?>" class="dose-actions prn-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="prn">
                 <input type="hidden" name="medication_id" value="<?= (int) $m['id'] ?>">

@@ -1535,3 +1535,6 @@ h1 .help-q { width: 1.5rem; height: 1.5rem; font-size: .9rem; }
 .cover-grid { display: grid; grid-template-columns: 1fr 7rem; gap: .2rem .75rem; align-items: center; }
 .cover-grid .count-input { width: 100%; }
 .private-fields { border-left: 3px solid var(--border); padding-left: .75rem; }
+
+/* Single sign-on buttons are small forms (with the CSRF token). */
+.sso-form { margin: 0 0 .5rem; }

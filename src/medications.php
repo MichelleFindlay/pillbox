@@ -86,6 +86,9 @@ function days_label(int $mask): string
 
 function user_medications(int $userId, bool $activeOnly = true): array
 {
+    if (meds_not_shared()) {
+        return []; // shared access without Medicines permission: no medicines anywhere (Care, Mind, summaries)
+    }
     return q(
         'SELECT * FROM medications WHERE user_id = ?' . ($activeOnly ? ' AND is_active = 1' : '') . (private_meds_hidden() ? ' AND is_private = 0' : '') . ' ORDER BY is_active DESC, name',
         [$userId]
@@ -98,6 +101,15 @@ function private_meds_hidden(): bool
     return isset(current_user()['_acting']);
 }
 
+/** SQL to add to a query on medications (alias $alias) so private ones are left out when they must be hidden. */
+function private_med_filter(string $alias = 'm'): string
+{
+    if (meds_not_shared()) {
+        return ' AND 0 = 1'; // no medicines at all without Medicines permission
+    }
+    return private_meds_hidden() ? ' AND ' . preg_replace('/\W/', '', $alias) . '.is_private = 0' : '';
+}
+
 /** A medicine's name, or "a private medicine" where it might be seen by others (notifications, emails). */
 function public_med_name(array $med): string
 {
@@ -106,6 +118,9 @@ function public_med_name(array $med): string
 
 function find_medication(int $id, int $userId): ?array
 {
+    if (meds_not_shared()) {
+        return null;
+    }
     return q('SELECT * FROM medications WHERE id = ? AND user_id = ?' . (private_meds_hidden() ? ' AND is_private = 0' : ''), [$id, $userId])->fetch() ?: null;
 }
 
@@ -311,9 +326,7 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
     if ($activeOnly) {
         $sql .= ' AND m.is_active = 1';
     }
-    if (private_meds_hidden()) {
-        $sql .= ' AND m.is_private = 0';
-    }
+    $sql .= private_med_filter(); // private medicines, or all of them without Medicines permission
     if ($medId !== null) {
         $sql .= ' AND m.id = ?';
         $params[] = $medId;
@@ -402,7 +415,7 @@ function prn_logs(int $userId, string $fromUtc, string $toUtc): array
     return q(
         'SELECT l.*, m.name, m.strength, m.dose_unit, m.colour
          FROM dose_logs l JOIN medications m ON m.id = l.medication_id
-         WHERE l.user_id = ? AND l.schedule_id IS NULL AND l.taken_at >= ? AND l.taken_at < ?
+         WHERE l.user_id = ? AND l.schedule_id IS NULL AND l.taken_at >= ? AND l.taken_at < ?' . private_med_filter() . '
          ORDER BY l.taken_at DESC',
         [$userId, $fromUtc, $toUtc]
     )->fetchAll();
@@ -843,7 +856,7 @@ function medication_change_markers(int $userId, callable $match): array
 {
     $out = [];
     foreach (q("SELECT c.effective_date, c.kind, c.summary, m.name, m.reason FROM medication_changes c JOIN medications m ON m.id = c.medication_id
-                WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'decreased', 'strength', 'stopped', 'restarted') ORDER BY c.effective_date", [$userId]) as $c) {
+                WHERE c.user_id = ? AND c.kind IN ('started', 'increased', 'decreased', 'strength', 'stopped', 'restarted')" . private_med_filter() . " ORDER BY c.effective_date", [$userId]) as $c) {
         if ($match($c['name'] . ' ' . $c['reason'])) {
             $out[] = [strtotime($c['effective_date'] . ' 12:00 UTC'), CHANGE_KINDS[$c['kind']] . ': ' . $c['name'] . ', ' . lcfirst($c['summary'])];
         }

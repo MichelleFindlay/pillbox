@@ -145,7 +145,7 @@ function nd_sections(array $user, DateTimeImmutable $today): void
         <?php endforeach; ?></div>
         <?php if ($canEdit): ?><span class="inline-actions"><button class="btn btn-small" type="submit">Save</button></span><?php endif; ?>
     </form>
-    <?php if ($controlled): $lastBp = q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_pressure' ORDER BY recorded_at DESC LIMIT 1", [$uid])->fetch(); ?>
+    <?php if ($controlled): $lastBp = readings_q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_pressure' ORDER BY recorded_at DESC LIMIT 1", [$uid])->fetch(); ?>
     <p class="small">Blood pressure and pulse (checked regularly on stimulants): <?= $lastBp ? 'latest ' . (int) $lastBp['value1'] . '/' . (int) $lastBp['value2'] . ($lastBp['value3'] ? ', pulse ' . (int) $lastBp['value3'] : '') . ' on ' . h(local_time($lastBp['recorded_at'], 'j M Y')) : 'none recorded yet' ?>
         · <a href="<?= h(url('readings.php?metric=blood_pressure')) ?>">log one</a></p>
     <p class="small">Your medicine timing and effects: <?php foreach ($controlled as $i => $m): ?><?= $i ? ', ' : '' ?><a href="<?= h(url('med_effects.php?id=' . $m['id'])) ?>"><?= h($m['name']) ?></a><?php endforeach; ?>.</p>

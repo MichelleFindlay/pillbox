@@ -65,7 +65,7 @@ $plans = array_values(array_filter(user_travel_plans($uid, true), fn ($p) => $p[
 function trip_preview(array $user, array $plan, DateTimeZone $home): array
 {
     $schedules = q('SELECT s.*, m.name, m.dose_unit FROM medication_schedules s JOIN medications m ON m.id = s.medication_id
-                    WHERE m.user_id = ? AND m.is_active = 1 AND m.as_needed = 0 ORDER BY s.dose_time, m.name', [$user['id']])->fetchAll();
+                    WHERE m.user_id = ? AND m.is_active = 1 AND m.as_needed = 0' . private_med_filter() . ' ORDER BY s.dose_time, m.name', [$user['id']])->fetchAll();
     $dest = new DateTimeZone($plan['destination_tz']);
     $plans = user_travel_plans((int) $user['id']);
     $first = (new DateTimeImmutable($plan['start_date']))->modify('-1 day');

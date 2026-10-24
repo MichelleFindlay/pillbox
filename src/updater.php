@@ -61,6 +61,11 @@ function updater_install(array $latest): string
     if (!update_available($latest) || !$latest['zip']) {
         throw new RuntimeException('There is no newer release to install.');
     }
+    // Only ever this Pillbox's own repository's release zip from GitHub's API, whatever the release data says.
+    $repo = trim((string) config('app.github_repo', 'MichelleFindlay/pillbox'), '/');
+    if (!preg_match('#^https://api\.github\.com/repos/' . preg_quote($repo, '#') . '/zipball/[A-Za-z0-9._\-]+$#i', (string) $latest['zip'])) {
+        throw new RuntimeException("The release's download address isn't the expected GitHub one, so nothing was changed.");
+    }
     $zipFile = updater_dir('updates') . '/pillbox-' . preg_replace('/[^0-9A-Za-z.\-]/', '', $latest['version']) . '.zip';
     updater_download($latest['zip'], $zipFile);
 
@@ -82,8 +87,9 @@ function updater_install(array $latest): string
     for ($i = 0; $i < $zip->numFiles; $i++) {
         $name = (string) $zip->getNameIndex($i);
         $relative = substr($name, strlen($prefix));
-        if (!str_starts_with($name, $prefix) || $relative === '' || str_ends_with($name, '/') || str_contains($relative, '..') || update_kept($relative)) {
-            continue;
+        if (!str_starts_with($name, $prefix) || $relative === '' || str_ends_with($name, '/') || str_contains($relative, '..') || update_kept($relative)
+            || str_contains($relative, '\\') || str_starts_with($relative, '/') || str_contains($relative, "\0") || !preg_match('#^[A-Za-z0-9._\-/ ]+$#', $relative)) {
+            continue; // nothing outside Pillbox's folder, and no odd names
         }
         $target = APP_ROOT . '/' . $relative;
         if (!is_dir(dirname($target))) {
@@ -121,7 +127,13 @@ function updater_download(string $url, string $file): void
     ]);
     $ok = curl_exec($ch);
     $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $finalHost = strtolower((string) parse_url((string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL), PHP_URL_HOST));
     fclose($out);
+    // GitHub sends the zip from its own download host: anywhere else, don't trust it.
+    if ($ok && !in_array($finalHost, ['api.github.com', 'codeload.github.com', 'github.com'], true)) {
+        @unlink($file);
+        throw new RuntimeException('The release download came from an unexpected address, so nothing was changed.');
+    }
     if (!$ok || $status !== 200 || filesize($file) < 1000) {
         @unlink($file);
         throw new RuntimeException("The release couldn't be downloaded from GitHub (HTTP $status). Try again later.");

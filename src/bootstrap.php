@@ -9,9 +9,21 @@ if (!is_file(APP_ROOT . '/config/config.php')) {
         . '<p>Copy <code>config/config.example.php</code> to <code>config/config.php</code> and fill in your database details.</p>');
 }
 $GLOBALS['APP_CONFIG'] = require APP_ROOT . '/config/config.php';
+// An empty or broken config.php (e.g. overwritten by an upload) returns 1, not the settings: say so clearly.
+if (!is_array($GLOBALS['APP_CONFIG'])) {
+    http_response_code(500);
+    error_log('Pillbox: config/config.php did not return the settings array. It may be empty or damaged: restore it from a backup.');
+    exit('<!doctype html><meta charset="utf-8"><title>Pillbox setup</title><h1>Pillbox\'s settings file is empty or damaged</h1>'
+        . '<p><code>config/config.php</code> must start with <code>&lt;?php</code> and <code>return [</code> &hellip; <code>];</code> with your database details. '
+        . 'It may have been overwritten by an upload. Restore it from a backup, or copy <code>config/config.example.php</code> and fill it in again.</p>');
+}
 // Site settings chosen by an admin in Pillbox (first-run setup or the Admin page) override config.php.
 if (is_file(APP_ROOT . '/config/settings.php')) {
-    $GLOBALS['APP_CONFIG'] = array_replace_recursive($GLOBALS['APP_CONFIG'], (array) (require APP_ROOT . '/config/settings.php'));
+    $settings = require APP_ROOT . '/config/settings.php';
+    if (is_array($settings)) { // a damaged settings.php is ignored, rather than stopping the site
+        $GLOBALS['APP_CONFIG'] = array_replace_recursive($GLOBALS['APP_CONFIG'], $settings);
+    }
+    unset($settings);
 }
 $GLOBALS['APP_CONFIG']['app']['base_path'] = rtrim((string) ($GLOBALS['APP_CONFIG']['app']['base_path'] ?? ''), '/');
 
@@ -93,6 +105,8 @@ if (pretty_urls() && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
 }
 if (!defined('PILLBOX_NO_SESSION')) {
     start_session();
-    remember_site_url();
 }
 ensure_schema();
+if (!defined('PILLBOX_NO_SESSION')) {
+    remember_site_url(); // after the schema, as it checks the user is an admin
+}
