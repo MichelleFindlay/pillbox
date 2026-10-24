@@ -19,13 +19,19 @@ if (is_post()) {
     if (!setup_unlocked()) {
         // Wrong codes are counted per address (behind a proxy, set trust_proxy so this is the visitor's own
         // address, not the proxy's), so one address guessing doesn't lock out the person installing Pillbox.
-        // Every wrong attempt is still recorded. A locked-out address is told nothing more than any wrong code
-        // (the log says, for the operator); clear it with: DELETE FROM login_attempts WHERE username = 'setup';
+        // A cap across all addresses, above the per-address one, still stops guessing without limit from a
+        // rotating set of addresses (or a faked X-Forwarded-For): one address can only reach 10, so it can't
+        // use the overall cap up on its own and can't lock the installer out by itself. A paused address is
+        // told nothing more than any wrong code (the log says, for the operator); clear it with:
+        // DELETE FROM login_attempts WHERE username = 'setup';
         $locked = q("SELECT COUNT(*) FROM login_attempts WHERE username = 'setup' AND ip = ? AND attempted_at > UTC_TIMESTAMP() - INTERVAL 15 MINUTE", [client_ip()])->fetchColumn() >= 10;
-        if ($locked || !hash_equals(strtoupper(setup_code()), strtoupper(trim(post('setup_code'))))) {
-            q("INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, 'setup', UTC_TIMESTAMP())", [client_ip()]);
-            if ($locked) {
-                log_line('Pillbox: setup code attempts from ' . client_ip() . ' are paused for 15 minutes after 10 wrong codes.');
+        $capped = q("SELECT COUNT(*) FROM login_attempts WHERE username = 'setup' AND attempted_at > UTC_TIMESTAMP() - INTERVAL 15 MINUTE")->fetchColumn() >= 40;
+        if ($locked || $capped || !hash_equals(strtoupper(setup_code()), strtoupper(trim(post('setup_code'))))) {
+            if (!$locked && !$capped) {
+                q("INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, 'setup', UTC_TIMESTAMP())", [client_ip()]);
+            }
+            if ($locked || $capped) {
+                log_line('Pillbox: setup code attempts are paused for 15 minutes after too many wrong codes' . ($locked ? ' from ' . client_ip() : '') . '.');
             }
             $errors[] = "That setup code isn't right.";
         } else {
