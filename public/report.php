@@ -21,10 +21,14 @@ $utc = new DateTimeZone('UTC');
 $fromUtc = $from->setTimezone($utc)->format('Y-m-d H:i:s');
 $toUtc = $to->modify('+1 day')->setTimezone($utc)->format('Y-m-d H:i:s');
 
-$meds = user_medications($uid);
+// Someone with shared access sees only the sections they've been given, not everything in the report.
+$canMeds = share_can('doses', 'view');
+$canAppointments = share_can('appointments', 'view');
+$canReadings = share_can('readings', 'view');
+$meds = user_medications($uid); // (none without Medicines permission)
 $schedules = schedules_by_medication(array_column($meds, 'id'), $today->format('Y-m-d'));
-$adherence = adherence(dose_slots($user, $from, $to));
-$prn = prn_logs($uid, $fromUtc, $toUtc);
+$adherence = $canMeds ? adherence(dose_slots($user, $from, $to)) : [];
+$prn = $canMeds ? prn_logs($uid, $fromUtc, $toUtc) : [];
 $prnTotals = [];
 foreach ($prn as $log) {
     $prnTotals[$log['name']] ??= ['count' => 0, 'amount' => 0.0, 'unit' => $log['dose_unit']];
@@ -32,15 +36,15 @@ foreach ($prn as $log) {
     $prnTotals[$log['name']]['amount'] += (float) $log['amount'];
 }
 
-$appointments = appointments_between($uid, $fromUtc, $toUtc);
+$appointments = $canAppointments ? appointments_between($uid, $fromUtc, $toUtc) : [];
 $medChanges = q('SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id
                  WHERE c.user_id = ? AND c.effective_date BETWEEN ? AND ?' . private_med_filter() . ' ORDER BY c.effective_date, m.name',
     [$uid, $from->format('Y-m-d'), $to->format('Y-m-d')])->fetchAll();
-$nextAppointments = appointments_between($uid, utc_now(), gmdate('Y-m-d H:i:s', strtotime('+6 months')));
+$nextAppointments = $canAppointments ? appointments_between($uid, utc_now(), gmdate('Y-m-d H:i:s', strtotime('+6 months'))) : [];
 
 $defs = user_metric_definitions($uid);
 $readingsByMetric = [];
-foreach (q('SELECT * FROM health_readings WHERE user_id = ? AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at', [$uid, $fromUtc, $toUtc]) as $r) {
+foreach (readings_q('SELECT * FROM health_readings WHERE user_id = ? AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at', [$uid, $fromUtc, $toUtc]) as $r) {
     if (isset($defs[$r['metric']])) {
         $readingsByMetric[$r['metric']][] = $r;
     }
@@ -55,8 +59,8 @@ render_header('Report', 'report');
     <label>To <input type="date" name="to" value="<?= h($range['to']) ?>"></label>
     <button class="btn" type="submit">Update</button>
     <button class="btn btn-primary" type="button" data-print>Print / save as PDF</button>
-    <a class="btn" href="<?= h(url('export.php?' . http_build_query($range + ['what' => 'doses']))) ?>">Doses CSV</a>
-    <a class="btn" href="<?= h(url('export.php?' . http_build_query($range + ['what' => 'readings']))) ?>">Readings CSV</a>
+    <?php if ($canMeds): ?><a class="btn" href="<?= h(url('export.php?' . http_build_query($range + ['what' => 'doses']))) ?>">Doses CSV</a><?php endif; ?>
+    <?php if ($canReadings): ?><a class="btn" href="<?= h(url('export.php?' . http_build_query($range + ['what' => 'readings']))) ?>">Readings CSV</a><?php endif; ?>
     <a class="btn" href="<?= h(url('care_summary.php?' . http_build_query($range))) ?>">Care summary</a>
 </form>
 
@@ -85,6 +89,10 @@ render_header('Report', 'report');
     </section>
     <?php endif; ?>
 
+    <?php $notShared = array_keys(array_filter(['medicines' => !$canMeds, 'appointments' => !$canAppointments, 'readings' => !$canReadings])); ?>
+    <?php if ($notShared): ?><p class="muted small no-print">Not shown, as they haven't been shared with you: <?= h(implode(', ', $notShared)) ?>.</p><?php endif; ?>
+
+    <?php if ($canMeds): ?>
     <section>
         <h2>Current medication</h2>
         <?php if (!$meds): ?><p class="muted">None recorded.</p><?php else: ?>
@@ -164,6 +172,8 @@ render_header('Report', 'report');
     </section>
     <?php endif; ?>
 
+    <?php endif; // medicines ?>
+
     <?php if ($appointments || $nextAppointments): ?>
     <section>
         <h2>Appointments</h2>
@@ -182,6 +192,7 @@ render_header('Report', 'report');
     </section>
     <?php endif; ?>
 
+    <?php if ($canReadings): ?>
     <section>
         <h2>Health readings</h2>
         <?php if (!$readingsByMetric): ?><p class="muted">No readings in this period.</p><?php endif; ?>
@@ -206,5 +217,6 @@ render_header('Report', 'report');
         </div>
         <?php endforeach; ?>
     </section>
+    <?php endif; ?>
 </article>
 <?php render_footer();

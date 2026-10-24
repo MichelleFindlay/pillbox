@@ -86,6 +86,9 @@ function days_label(int $mask): string
 
 function user_medications(int $userId, bool $activeOnly = true): array
 {
+    if (meds_not_shared()) {
+        return []; // shared access without Medicines permission: no medicines anywhere (Care, Mind, summaries)
+    }
     return q(
         'SELECT * FROM medications WHERE user_id = ?' . ($activeOnly ? ' AND is_active = 1' : '') . (private_meds_hidden() ? ' AND is_private = 0' : '') . ' ORDER BY is_active DESC, name',
         [$userId]
@@ -101,6 +104,9 @@ function private_meds_hidden(): bool
 /** SQL to add to a query on medications (alias $alias) so private ones are left out when they must be hidden. */
 function private_med_filter(string $alias = 'm'): string
 {
+    if (meds_not_shared()) {
+        return ' AND 0 = 1'; // no medicines at all without Medicines permission
+    }
     return private_meds_hidden() ? ' AND ' . preg_replace('/\W/', '', $alias) . '.is_private = 0' : '';
 }
 
@@ -112,6 +118,9 @@ function public_med_name(array $med): string
 
 function find_medication(int $id, int $userId): ?array
 {
+    if (meds_not_shared()) {
+        return null;
+    }
     return q('SELECT * FROM medications WHERE id = ? AND user_id = ?' . (private_meds_hidden() ? ' AND is_private = 0' : ''), [$id, $userId])->fetch() ?: null;
 }
 
@@ -317,9 +326,7 @@ function dose_slots(array $user, DateTimeImmutable $fromDay, DateTimeImmutable $
     if ($activeOnly) {
         $sql .= ' AND m.is_active = 1';
     }
-    if (private_meds_hidden()) {
-        $sql .= ' AND m.is_private = 0';
-    }
+    $sql .= private_med_filter(); // private medicines, or all of them without Medicines permission
     if ($medId !== null) {
         $sql .= ' AND m.id = ?';
         $params[] = $medId;

@@ -216,7 +216,7 @@ function migraine_add_med(int $uid, int $episodeId, string $defaultAt): void
     $at = preg_match('/^\d\d:\d\d$/', post('med_time')) ? (local_to_utc(local_time($defaultAt, 'Y-m-d') . ' ' . post('med_time')) ?? $defaultAt) : $defaultAt;
     q('INSERT INTO episode_meds (episode_id, medication_id, name, taken_at, helped) VALUES (?, ?, ?, ?, ?)',
         [$episodeId, $med['id'] ?? null, $name, min($at, utc_now()), isset(RELIEF[(int) post('helped')]) && post('helped') !== '' ? (int) post('helped') : null]);
-    if ($med && $med['as_needed'] && post('log_dose') === '1') {
+    if ($med && $med['as_needed'] && post('log_dose') === '1' && share_can('doses', 'log')) { // logging a dose needs Medicines permission
         $amount = (float) ($med['prn_dose_amount'] ?? 1);
         q("INSERT INTO dose_logs (user_id, medication_id, status, amount, taken_at, notes) VALUES (?, ?, 'taken', ?, ?, 'Headache')", [$uid, $med['id'], $amount, min($at, utc_now())]);
         adjust_stock((int) $med['id'], -$amount);

@@ -855,6 +855,6 @@ function sleep_log_from_post(DateTimeImmutable $today): array
 /** Sleep readings (Pillbox and Apple Health) for nights ending on or after a local date, newest first. */
 function sleep_nights(int $userId, DateTimeImmutable $fromDay): array
 {
-    return q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'sleep' AND recorded_at >= ? ORDER BY recorded_at DESC",
+    return readings_q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'sleep' AND recorded_at >= ? ORDER BY recorded_at DESC",
         [$userId, $fromDay->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s')])->fetchAll();
 }

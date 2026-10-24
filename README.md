@@ -319,7 +319,7 @@ How accounts are created:
 - Accounts are matched by Entra object ID and tenant ID, so a name or email change won't create a second account.
 - On a new install, the administrator can be a Microsoft account: open the site, enter the setup code, then sign in with Microsoft.
 
-**Multi-tenant:** set `tenant_id` to `organizations` and list the permitted tenant GUIDs in `allowed_tenants`.
+**Multi-tenant:** set `tenant_id` to `organizations` and list the permitted tenant GUIDs in `allowed_tenants`. Only list tenants you control or trust. Pre-registered accounts are only linked by email for people from your `tenant_id` or a tenant listed by GUID; never through `'*'` (any tenant), since another tenant could claim someone else's email address.
 Sign-ins from any other tenant are rejected.
 
 You can run local and Microsoft accounts side by side. To allow Microsoft accounts only, set

@@ -64,7 +64,7 @@ $metrics = enabled_metrics($user);
 $latest = [];
 if ($metrics) {
     $in = implode(',', array_fill(0, count($metrics), '?'));
-    $rows = q(
+    $rows = readings_q( // nothing for someone with shared access but no Readings permission
         "SELECT r.* FROM health_readings r
          JOIN (SELECT metric, MAX(recorded_at) AS latest FROM health_readings WHERE user_id = ? AND metric IN ($in) GROUP BY metric) x
            ON x.metric = r.metric AND x.latest = r.recorded_at

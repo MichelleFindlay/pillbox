@@ -204,7 +204,7 @@ function appointment_suggestions(array $user, array $appointment): array
     }
 
     // Symptoms and side effects logged.
-    foreach (q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'symptom' AND recorded_at >= ? AND recorded_at <= ? ORDER BY recorded_at",
+    foreach (readings_q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'symptom' AND recorded_at >= ? AND recorded_at <= ? ORDER BY recorded_at",
         [$uid, $sinceUtc, $until]) as $r) {
         $out[] = 'Symptom on ' . local_time($r['recorded_at'], 'j M') . ': ' . ($r['notes'] ?: 'no description')
             . ($r['value1'] !== null ? ' (severity ' . num($r['value1']) . '/10)' : '');
@@ -245,9 +245,9 @@ function appointment_suggestions(array $user, array $appointment): array
     }
 
     // Blood pressure trend.
-    $bp = q("SELECT AVG(value1) AS sys, AVG(value2) AS dia, COUNT(*) AS n FROM health_readings
+    $bp = readings_q("SELECT AVG(value1) AS sys, AVG(value2) AS dia, COUNT(*) AS n FROM health_readings
              WHERE user_id = ? AND metric = 'blood_pressure' AND recorded_at >= ? AND recorded_at <= ?", [$uid, $sinceUtc, $until])->fetch();
-    if ((int) $bp['n'] >= 3) {
+    if ($bp && (int) $bp['n'] >= 3) { // (no row at all when readings aren't shared)
         $out[] = 'My blood pressure averaged ' . round((float) $bp['sys']) . '/' . round((float) $bp['dia']) . " mmHg over {$bp['n']} readings since $sinceLabel.";
     }
 

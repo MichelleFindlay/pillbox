@@ -27,7 +27,8 @@ $meds = array_filter(user_medications($uid, false), fn ($m) => bp_class($m['name
 $schedules = schedules_by_medication(array_column($meds, 'id'), $today->format('Y-m-d'));
 $ids = array_map('intval', array_column($meds, 'id'));
 $changes = $ids ? q('SELECT c.*, m.name FROM medication_changes c JOIN medications m ON m.id = c.medication_id WHERE c.medication_id IN (' . implode(',', $ids) . ') ORDER BY c.effective_date DESC LIMIT 12')->fetchAll() : [];
-$effects = $ids ? q("SELECT n.*, m.name FROM med_notes n JOIN medications m ON m.id = n.medication_id WHERE n.kind = 'side_effect' AND n.medication_id IN (" . implode(',', $ids) . ') ORDER BY n.created_at DESC LIMIT 10')->fetchAll() : [];
+// Side-effect notes are shared with Mind's medication notes: only for someone who can see Mind.
+$effects = $ids && mind_visible($user) ? q("SELECT n.*, m.name FROM med_notes n JOIN medications m ON m.id = n.medication_id WHERE n.kind = 'side_effect' AND n.medication_id IN (" . implode(',', $ids) . ') ORDER BY n.created_at DESC LIMIT 10')->fetchAll() : [];
 $labs = [];
 foreach (q("SELECT * FROM lab_results WHERE user_id = ? AND test IN ('egfr', 'creatinine', 'potassium', 'sodium') ORDER BY taken_at", [$uid]) as $r) {
     $labs[$r['test']] = $r;

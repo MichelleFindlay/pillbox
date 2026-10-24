@@ -52,7 +52,7 @@ function has_diabetes(array $user): bool
 function glucose_points(int $userId, int $sinceTs): array
 {
     return array_map(fn ($r) => [strtotime($r['recorded_at'] . ' UTC'), (float) $r['value1']],
-        q("SELECT recorded_at, value1 FROM health_readings WHERE user_id = ? AND metric = 'blood_glucose' AND recorded_at >= ? ORDER BY recorded_at",
+        readings_q("SELECT recorded_at, value1 FROM health_readings WHERE user_id = ? AND metric = 'blood_glucose' AND recorded_at >= ? ORDER BY recorded_at",
             [$userId, gmdate('Y-m-d H:i:s', $sinceTs)])->fetchAll());
 }
 
@@ -205,7 +205,7 @@ function diabetes_handle_post(array $user, DateTimeImmutable $today): never
                     $uid, $at, isset(INSULIN_KINDS[post('kind')]) ? post('kind') : 'bolus', $units, $carbs,
                     is_numeric(post('glucose')) ? max(0.5, min(40, (float) post('glucose'))) : null,
                     post('medication_id') !== '' && find_medication((int) post('medication_id'), $uid) ? (int) post('medication_id') : null, trim(mb_substr(post('notes'), 0, 300)) ?: null]);
-                if (is_numeric(post('glucose'))) {
+                if (is_numeric(post('glucose')) && readings_writable()) {
                     q("INSERT INTO health_readings (user_id, metric, value1, context, recorded_at) VALUES (?, 'blood_glucose', ?, 'Before meal', ?)", [$uid, (float) post('glucose'), $at]);
                 }
                 flash('success', 'Saved.');
@@ -217,7 +217,9 @@ function diabetes_handle_post(array $user, DateTimeImmutable $today): never
         case 'dm_drive':
             $v = is_numeric(post('glucose')) ? (float) post('glucose') : null;
             if ($v !== null && $v >= 0.5 && $v <= 40) {
-                q("INSERT INTO health_readings (user_id, metric, value1, context, recorded_at) VALUES (?, 'blood_glucose', ?, 'Before driving', UTC_TIMESTAMP())", [$uid, $v]);
+                if (readings_writable()) {
+                    q("INSERT INTO health_readings (user_id, metric, value1, context, recorded_at) VALUES (?, 'blood_glucose', ?, 'Before driving', UTC_TIMESTAMP())", [$uid, $v]);
+                }
                 $_SESSION['dm_drive'] = $v;
             }
             redirect($back . '#dm-drive');
@@ -267,7 +269,7 @@ function diabetes_sections(array $user, DateTimeImmutable $today): void
     $points14 = glucose_points($uid, time() - 14 * 86400);
     $stats = glucose_stats($points14, $low, $high, $tz);
     $last = $points14 ? end($points14) : null;
-    $ketone = q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_ketones' ORDER BY recorded_at DESC LIMIT 1", [$uid])->fetch();
+    $ketone = readings_q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'blood_ketones' ORDER BY recorded_at DESC LIMIT 1", [$uid])->fetch();
     $hba1c = q("SELECT * FROM lab_results WHERE user_id = ? AND test = 'hba1c' ORDER BY taken_at DESC LIMIT 1", [$uid])->fetch();
     $hypos = hypo_episodes($uid, time() - 30 * 86400);
     $meds = user_medications($uid);

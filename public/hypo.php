@@ -13,7 +13,7 @@ if (is_post()) {
     $g = is_numeric(post('glucose')) && (float) post('glucose') >= 0.5 && (float) post('glucose') <= 40 ? (float) post('glucose') : null;
     q('INSERT INTO hypo_events (user_id, at, glucose, treated_with, notes) VALUES (?, UTC_TIMESTAMP(), ?, ?, ?)',
         [$uid, $g, trim(mb_substr(post('treated_with'), 0, 150)) ?: null, trim(mb_substr(post('notes'), 0, 500)) ?: null]);
-    if ($g !== null) {
+    if ($g !== null && readings_writable()) { // the glucose also goes in Readings, if this person may add readings
         q("INSERT INTO health_readings (user_id, metric, value1, context, notes, recorded_at) VALUES (?, 'blood_glucose', ?, 'Hypo symptoms', 'Hypo', UTC_TIMESTAMP())", [$uid, $g]);
     }
     flash('success', 'Logged. Once you feel better, have a snack with longer-acting carbohydrate if your next meal is more than an hour away.');

@@ -38,6 +38,18 @@ if (is_post()) {
     $allowedItem = fn (?array $item) => $item && share_area_allowed($item['area']) && ($item['area'] !== 'mind' || (mind_visible($user) && share_can('mind', 'edit')));
     $task = $allowedItem($task) ? $task : null;
     $check = $allowedItem($check) ? $check : null;
+    // Actions on a category's own records belong to that category, whatever ?area= the request names:
+    // someone with shared access can't reach a hidden category's records through one they can see.
+    $actionArea = match (true) {
+        in_array(post('action'), ['payment_add', 'payment_delete'], true) => 'prescriptions',
+        in_array(post('action'), ['period_save', 'period_end', 'period_delete'], true) => 'womens',
+        post('action') === 'log_sleep' => 'sleep',
+        default => null,
+    };
+    if ($actionArea !== null && !share_area_allowed($actionArea)) {
+        flash('error', "That part of {$user['display_name']}'s Pillbox hasn't been shared with you.");
+        redirect('care.php');
+    }
     $back = safe_return(post('return'), $self);
     // Changing anything in Mind (habits, checks) needs Mind's own 'edit' permission, not just Care's.
     if (($task['area'] ?? $check['area'] ?? $areaKey) === 'mind' && !share_can('mind', 'edit')) {
@@ -240,7 +252,12 @@ if (is_post()) {
             q('DELETE FROM prescription_payments WHERE id = ? AND user_id = ?', [(int) post('payment_id'), $uid]);
             redirect($self . '#costs');
         case 'med_returned':
-            q('UPDATE medications SET stock_count = 0 WHERE id = ? AND user_id = ? AND is_active = 0', [(int) post('med_id'), $uid]);
+            // A medicine they can see (not private, and Medicines shared), and permission to change stock.
+            $returned = share_can('doses', 'log') ? find_medication((int) post('med_id'), $uid) : null;
+            if (!$returned) {
+                redirect($self . '#returns');
+            }
+            q('UPDATE medications SET stock_count = 0 WHERE id = ? AND user_id = ? AND is_active = 0', [$returned['id'], $uid]);
             flash('success', 'Thanks: marked as returned.');
             redirect($self . '#returns');
         case 'check_delete':
@@ -258,6 +275,10 @@ if (is_post()) {
 
         /* ----- sleep log ----- */
         case 'log_sleep':
+            if (!readings_writable()) { // sleep is stored as a reading
+                flash('error', "Adding sleep needs permission to add readings, which hasn't been shared with you.");
+                redirect(safe_return(post('return'), 'care.php?area=sleep'));
+            }
             [$night, $sleepErrors] = sleep_log_from_post($today);
             if ($night) {
                 q("INSERT INTO health_readings (user_id, metric, value1, context, notes, recorded_at) VALUES (?, 'sleep', ?, ?, ?, ?)",

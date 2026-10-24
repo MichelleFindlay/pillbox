@@ -210,6 +210,26 @@ function entra_tenant_allowed(string $tid): bool
 }
 
 /**
+ * May a pre-registered account be linked by email for someone from this tenant? Only for a tenant the
+ * operator named explicitly (tenant_id, or one listed in allowed_tenants), never through the '*' wildcard:
+ * Microsoft's email claim isn't verified, so another tenant could claim someone else's address.
+ */
+function entra_tenant_trusted_for_email(string $tid): bool
+{
+    $named = array_filter((array) config('entra.allowed_tenants', []), fn ($t) => is_string($t) && $t !== '*');
+    $configured = (string) config('entra.tenant_id');
+    if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $configured)) {
+        $named[] = $configured;
+    }
+    foreach ($named as $tenant) {
+        if (strcasecmp($tenant, $tid) === 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Map validated claims to a Pillbox user, linking a pre-registered account or
  * creating one if auto-provisioning is on.
  * @throws RuntimeException
@@ -223,8 +243,8 @@ function entra_find_or_create_user(array $claims): array
 
     $user = q('SELECT * FROM users WHERE entra_tid = ? AND entra_oid = ?', [$tid, $oid])->fetch();
 
-    if (!$user && $email !== null) {
-        // An admin may have pre-registered this person by email.
+    if (!$user && $email !== null && entra_tenant_trusted_for_email($tid)) {
+        // An admin may have pre-registered this person by email (only from a tenant named in the config).
         $user = q(
             "SELECT * FROM users WHERE auth_provider = 'entra' AND entra_oid IS NULL AND email = ?",
             [$email]

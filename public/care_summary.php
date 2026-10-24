@@ -66,7 +66,7 @@ usort($attention, fn ($a, $b) => $a['due'] <=> $b['due']);
 $nights = [];
 if (in_array('sleep', $areas, true)) {
     $utc = new DateTimeZone('UTC');
-    $nights = q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'sleep' AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at",
+    $nights = readings_q("SELECT * FROM health_readings WHERE user_id = ? AND metric = 'sleep' AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at",
         [$uid, $from->setTimezone($utc)->format('Y-m-d H:i:s'), $to->modify('+1 day')->setTimezone($utc)->format('Y-m-d H:i:s')])->fetchAll();
 }
 $hours = array_map(fn ($n) => (float) $n['value1'], $nights);

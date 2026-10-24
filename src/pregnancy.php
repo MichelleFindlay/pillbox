@@ -165,6 +165,9 @@ function antenatal_bp_flag(?int $sys, ?int $dia): bool
 /** Save a check-up's blood pressure as a reading too, so it shows on the Readings charts. */
 function sync_antenatal_bp(int $userId, int $checkId, ?int $sys, ?int $dia, string $date): void
 {
+    if (!readings_writable()) {
+        return; // someone with shared access but no permission to change readings: the check-up is saved, Readings left alone
+    }
     $ext = sha1('antenatal-' . $checkId);
     q('DELETE FROM health_readings WHERE user_id = ? AND external_id = ?', [$userId, $ext]);
     if ($sys && $dia) {

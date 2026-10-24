@@ -258,7 +258,7 @@ function mind_insights(array $user, DateTimeImmutable $today): array
 
     // Sleep: the night ending on each day (Pillbox log or Apple Health).
     $sleep = [];
-    foreach (q("SELECT value1, recorded_at FROM health_readings WHERE user_id = ? AND metric = 'sleep' AND recorded_at >= ?",
+    foreach (readings_q("SELECT value1, recorded_at FROM health_readings WHERE user_id = ? AND metric = 'sleep' AND recorded_at >= ?",
         [$user['id'], $from->modify('-1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s')]) as $r) {
         $sleep[local_time($r['recorded_at'], 'Y-m-d')] = (float) $r['value1'];
     }

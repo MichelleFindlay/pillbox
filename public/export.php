@@ -13,6 +13,12 @@ $utc = new DateTimeZone('UTC');
 $fromUtc = $from->setTimezone($utc)->format('Y-m-d H:i:s');
 $toUtc = $to->modify('+1 day')->setTimezone($utc)->format('Y-m-d H:i:s');
 $what = get('what') === 'readings' ? 'readings' : 'doses';
+// Someone with shared access needs that section too, not just "Reports and exports".
+if (!share_can($what === 'readings' ? 'readings' : 'doses', 'view')) {
+    http_response_code(403);
+    header('Content-Type: text/plain; charset=utf-8');
+    exit(($what === 'readings' ? 'Readings' : 'Medicines') . " haven't been shared with you, so they can't be downloaded.\n");
+}
 
 /** Stop spreadsheet apps from treating user text as a formula. */
 function csv_safe(mixed $v): string
@@ -47,7 +53,7 @@ if ($what === 'doses') {
 } else {
     $defs = user_metric_definitions($uid);
     fputcsv($out, ['Date & time', 'Measurement', 'Reading', 'Value 1', 'Value 2', 'Value 3', 'Context', 'Notes'], ',', '"', '\\');
-    foreach (q('SELECT * FROM health_readings WHERE user_id = ? AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at', [$uid, $fromUtc, $toUtc]) as $r) {
+    foreach (readings_q('SELECT * FROM health_readings WHERE user_id = ? AND recorded_at >= ? AND recorded_at < ? ORDER BY recorded_at', [$uid, $fromUtc, $toUtc]) as $r) {
         $def = $defs[$r['metric']] ?? null;
         fputcsv($out, array_map('csv_safe', [
             local_time($r['recorded_at'], 'Y-m-d H:i'), $def['label'] ?? $r['metric'], $def ? format_reading($def, $r) : '',
