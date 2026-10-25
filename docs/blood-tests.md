@@ -6,6 +6,8 @@ Switch on **Blood tests** in your health profile. It has two parts.
 
 Ready-made reminders for routine and specific tests (full blood count, kidney and liver function, HbA1c, cholesterol, thyroid, vitamins and iron, clotting and INR, medicine levels such as lithium, PSA, and the NHS Health Check), each with notes on what it's for and how to prepare. Add the ones you need, mark them done, and note results. Link a test to the medicine it's monitoring if you like.
 
+![Ready-made blood test reminders, grouped by type](images/blood-tests-checks.png)
+
 ## Results and trends
 
 **Add a result** records a number in UK units (for example testosterone in nmol/L, oestradiol in pmol/L, HbA1c in mmol/mol, TSH in mU/L):

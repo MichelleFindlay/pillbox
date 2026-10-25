@@ -46,7 +46,9 @@ Some Care pages have buttons that open this form already filled in: HRT, gender-
 
 ## Changing a dose
 
-Edit the medicine and change the amounts or times. Changes only apply from now on: past doses and your history keep the old dose. If today's doses are already logged, the change starts tomorrow. Each change is recorded in the medicine's history ("Increased from 10mg to 20mg a day"); tick **Show dose changes** on the Meds page to see the latest one under each medicine.
+Edit the medicine and change the amounts or times. Changes only apply from now on: past doses and your history keep the old dose. If today's doses are already logged, the change starts tomorrow. Each change is recorded in the medicine's history ("Increased from 10mg to 20mg a day"); tick **Show dose changes** on the Meds page to see the latest one under each medicine. Each medicine's **History** shows every change, and you can add earlier ones from before you used Pillbox.
+
+![A medicine's dose history, with a form to add an earlier change](images/medicine-history.png)
 
 ## Stock and prescriptions
 
@@ -61,6 +63,8 @@ Enter **Stock on hand** to keep count: it goes down as you log doses.
 
 **How it's working** on each medicine logs a day at a time: when you took it, when it started working, when it wore off, any crash, how well it worked, and side effects. It shows a timeline and a table comparing each dose (useful when a dose is being adjusted), and with cycle tracking, whether it works differently before a period.
 
+![How it's working: logging when a dose started working and wore off](images/how-its-working.png)
+
 ## Warnings
 
 Pillbox points out a few things that are worth asking about, such as:
@@ -71,6 +75,18 @@ Pillbox points out a few things that are worth asking about, such as:
 - medicines that can cause hypos (low blood sugar)
 
 These are prompts to talk to your GP or pharmacist, not instructions.
+
+## Travel
+
+**Meds → ✈ Travel** plans a trip across time zones: where you're going, when you leave and get back, and how dose times should change:
+
+- **Switch to local time**: the same clock time where you are (08:00 in Tokyo). Simplest for most medicines.
+- **Stay on home time**: the same moment as at home (08:00 London is 16:00 Tokyo), keeping the same gap between doses.
+- **Shift gradually**: dose times move 1 to 4 hours a day until they match local time, then back again when you return. Useful for time-critical medicines.
+
+While you're away, Pillbox shows times in local time, and each dose also shows its home time. If you take time-critical medicines (insulin, contraceptive pills, or medicines for epilepsy, Parkinson's or HIV), check with a doctor or pharmacist before you go.
+
+![Planning a trip, and how dose times should change](images/travel.png)
 
 ## Stopping a medicine
 

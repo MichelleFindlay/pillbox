@@ -193,6 +193,10 @@ function send_security_headers(): void
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: same-origin');
     header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    // Everything is loaded from this site and sign-in uses full-page redirects (no popups), so these can be strict.
+    header('Cross-Origin-Embedder-Policy: require-corp');
+    header('Cross-Origin-Opener-Policy: same-origin');
+    header('Cross-Origin-Resource-Policy: same-origin');
     if (is_https()) {
         header('Strict-Transport-Security: max-age=31536000');
     }

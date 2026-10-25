@@ -28,6 +28,10 @@ People agree to the terms and privacy policy when they sign up. Single sign-on p
 
 How long **Remember this device** keeps a device signed in is `remember_days` under `'app'` in `config/config.php` (90 days by default; 0 turns the option off).
 
+**Active sessions** (each person's Account page) shows the IP address of each signed-in device. To show an approximate city and country too, set `'geoip_lookup' => true` under `'app'`: that sends each address to ipapi.co at sign-in, so it's off by default, and the privacy policy mentions it when it's on.
+
+Behind a reverse proxy or load balancer, set `'trust_proxy' => true` under `'app'` so sign-in limits and session addresses use each visitor's own address. Only do this behind a proxy you control.
+
 Site settings are saved to `config/settings.php` (which overrides `config/config.php`): site name and address, default time zone, update checks, weather for the headache diary (Open-Meteo), tidy addresses, email (PHP mail or SMTP), the scheduled tasks token, sign-ups, terms and privacy, connected services, and demo mode. If the `config/` folder isn't writable, Pillbox shows what to paste into `config.php` instead.
 
 ## Terms and privacy
@@ -46,8 +50,10 @@ Reminders, notifications, email, connected app syncs, the check for a new versio
 */5 * * * * php /path/to/pillbox/bin/cron.php
 ```
 
-Or set a token and have a web cron service call `cron.php?token=…`. The Admin page shows when they last ran.
+Or set a token and have a web cron service call `cron.php?token=…`. The Admin page shows when they last ran, and **What they did**.
+
+Notifications only go to the browsers' own push services (Google, Mozilla, Apple, Microsoft). To allow another, such as a self-hosted UnifiedPush server, add `'push' => ['allowed_hosts' => ['push.example.com']]` to `config/config.php`.
 
 ## Updates and backups
 
-Admins see **Update available** in the footer when a new GitHub release is out. **Install version X now** backs up the current files, then updates them; **Restore** puts a backup back. `config/` and `storage/` are never touched, and the database updates itself on the next page load. Back up your database and `storage/` (especially `storage/app.key`, which encrypts private pages: without it they can't be read).
+Admins see **Update available** in the footer when a new GitHub release is out (or **Development version** if this copy is ahead of the latest release). **Admin → Version** has **Check now**, the **Changelog** with every release's notes, and the **Licenses** of Pillbox and the code it includes. **Install version X now** backs up the current files, then updates them; **Restore** puts a backup back. `config/` and `storage/` are never touched, and the database updates itself on the next page load. Back up your database and `storage/` (especially `storage/app.key`, which encrypts private pages: without it they can't be read).

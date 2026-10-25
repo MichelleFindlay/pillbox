@@ -12,7 +12,9 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
   (set when you add it or collect a new supply), flagged on Today when it's within 30 days or past.
   **Dose changes only apply from now on**: past days keep the dose they had, and if any of today's doses
   are already logged the change starts tomorrow (or on a later "takes effect from" date). The latest
-  change under each medicine is hidden unless you tick **Show dose changes**.
+  change under each medicine is hidden unless you tick **Show dose changes**. Doses can also repeat every few
+  days or weeks, only on some days of a repeating cycle (e.g. sequential HRT) or of each calendar month, and a
+  **minimum time between doses** refuses a dose logged too soon (with "log anyway" if it really was taken).
 - **Today view**: tick off doses (Take, Skip or Undo), see missed doses, get low-stock warnings and log
   as-needed doses.
 - **Health readings**: blood pressure, heart rate, blood glucose, ketones, weight, temperature, SpO₂,
@@ -21,16 +23,18 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
   Every measurement has trend charts and averages.
 - **Apple Health import**: upload the Health app's export, or sync automatically every day from an iPhone
   using Shortcuts or the Health Auto Export app.
-- **History and adherence**: each day's doses, plus the percentage of doses taken for each medicine.
+- **History and adherence**: each day's doses, plus the percentage of doses taken for each medicine, and each
+  day's Care routines, Mind habits and self-care checklist, which can be ticked off afterwards (up to a year back).
 - **Dose change history**: changes to strength, amount or timing are recorded automatically, e.g.
   "Increased from 10mg to 20mg a day", with the date and reason. Each medicine has a timeline, and you can
   add earlier changes by hand.
 - **Travel mode**: plan trips across time zones and choose to switch to local time, stay on home time, or
   shift gradually by 1–4 hours a day, with a day-by-day preview of dose times.
-- **Care** (the **Care** tab): dental care, eye care, sleep, physical activity & rehab, respiratory, diabetes and
-  monitoring, foot health, women's health, hearing, skin and wound care, mobility and supports, emergency and first aid,
-  sharps and disposal, screening and vaccinations. Choose which appear under **Account → Health profile**, along with your
-  date of birth and sex (for screening). Each category can have:
+- **Care** (the **Care** tab): dental care, eye care, sleep, physical activity & rehab, respiratory, allergies, private
+  health care, diabetes, blood tests, prescriptions and payments, foot health, periods and contraception, menopause,
+  pregnancy, blood pressure, migraine, thyroid, ADHD and autism, gender-affirming care, hearing, skin and wound care,
+  mobility and supports, emergency and first aid, sharps and disposal, screening and vaccinations. Choose which appear
+  under **Account → Health profile**, along with your date of birth and sex (for screening). Each category can have:
   - **Routines** ticked off on the Today page: one-tap presets (brushing, screen breaks, physio exercises with reps,
     stretching, foot checks, monthly mole checks, CPAP cleaning...) or your own, at set times on chosen days or every
     few days or weeks, with a streak and a 7-day view for catching up on missed ticks.
@@ -51,9 +55,23 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
     and medicines taken with how well they helped, optionally logged as a dose); headache, migraine and acute-medicine
     days each month (including as-needed doses logged on Today); medication overuse warnings at the NHS thresholds
     (15+ days of simple painkillers, 10+ of triptans, opioids, combination painkillers or a mix) with an early nudge
-    from 8 days; common triggers; menstrual migraine (days -2 to +3); preventive treatment with a before-and-after
-    review; the evidence NICE uses for CGRP medicines; warnings for topiramate (pregnancy prevention) and for combined
-    hormonal contraception with migraine with aura (also on Meds); red flags; and a clinician summary.
+    from 8 days; common triggers; menstrual migraine (days -2 to +3); **weather** for your town (Open-Meteo: pressure
+    falls, low pressure, temperature changes, heat and humidity compared with headache days, and a heads-up when a big
+    pressure fall is forecast); preventive treatment with a before-and-after review; the evidence NICE uses for CGRP
+    medicines; warnings for topiramate (pregnancy prevention) and for combined hormonal contraception with migraine with
+    aura (also on Meds); red flags; and a clinician summary. Admins can switch weather off with `'weather' => false` in
+    the `app` section (or under Site settings).
+  - **Allergies**: allergies, intolerances and side effects (medicines, the 14 food allergens, stings, latex, pollen...),
+    with severity and who confirmed them, or "no known allergies"; medicines checked by name and, if ticked, by group
+    (penicillins, cephalosporins, NSAIDs, opioids...) on Meds and when saving a medicine; anaphylaxis steps with a
+    **Call 999** button; adrenaline pens with expiry and trainer-pen checks; an **allergy card** and a card for restaurant
+    staff; a medical ID line; and pollen counts for your town (Open-Meteo, Europe only). Allergies head the Meds page
+    and the doctor's report.
+  - **Private health care**: insurance, cash plans, dental plans or self-pay, with membership number, claims phone,
+    cost, excess, renewal (as a Care check), what's covered and yearly limits used and left; treatment and claims; and
+    what it all costs. **Fill in from a policy document** reads a PDF, Word document or pasted text on the server (it
+    isn't kept) and fills in the form for the person to check. Appointments can be marked **private**, with the plan,
+    pre-authorisation number and cost, and recorded as a claim afterwards.
   - **Diabetes** (type 1, type 2 and others): glucose time in range (very low, low, in range, high, very high) with a
     chart, patterns by time of day and before a period; CGM readings, insulin and carbs from **Nightscout**; HbA1c from
     Blood tests; ketone guidance when you log one (under 0.6, 0.6 to 1.4, 1.5 to 2.9, 3 or more); an insulin and
@@ -107,8 +125,9 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
     Anything overdue, expiring, low or due within 30 days is listed under **Coming up** on Today. Respiratory shows your
     inhalers' doses left and expiry from Meds; Sharps lists stopped or expired medicines to take back to a pharmacy.
   - **NHS screening**: cervical, breast, bowel and AAA, on NHS England intervals, worked out from your date of birth
-    and when you were last screened.
-  - **Cycle tracking** (Women's health): log periods, see your average cycle and when the next is expected.
+    and when you were last screened, plus monthly breast and testicular self-check routines (based on CoppaFeel and
+    Movember).
+  - **Cycle tracking** (Periods and contraception): log periods, see your average cycle and when the next is expected.
   - **Sleep log**: bedtime, wake time, time awake and how you slept, saved as a Sleep reading alongside Apple Health
     nights, with the last 14 nights as a chart.
   Tasks marked **Remind me**, and checks on their due dates, are added to your private calendar feed with an alert,
@@ -137,9 +156,12 @@ A medication and health tracker built with PHP and MySQL. It works in mobile and
     reminder in the calendar feed worded just "Pillbox check-in".
 - **Appointments**: GP, specialist, hospital, dentist, optician, blood tests and more, with a private
   calendar link per person that Apple Calendar, Google Calendar and Outlook can subscribe to.
-- **Doctor's report**: a printable summary (or save as PDF), plus CSV export.
-- **Accounts**: local username/password and **Microsoft Entra ID single sign-on**, with optional self sign-up and admin approval. Supports multiple users,
-  each with private data, plus an admin page.
+- **Doctor's report** (the **Report** tab): a printable summary (or save as PDF) of allergies, current medicines,
+  changes, adherence, as-needed use, appointments and readings, plus doses and readings as CSV.
+- **Accounts**: local username/password, **Microsoft Entra ID** and other **OpenID Connect** single sign-on, with
+  optional self sign-up and admin approval; **two-factor sign-in** (authenticator apps with backup codes, and security
+  keys); **Remember this device**; **Forgotten your password?** by email; and a list of **active sessions** that can
+  each be signed out. Supports multiple users, each with private data, plus an admin page.
 
 ## Appointments and the calendar link
 
@@ -154,8 +176,9 @@ automatically. Calendar apps check every few hours.
 
 - Anyone with the link can see that person's appointments. Notes are left out unless the person switches
   them on. **Make a new link** stops the old one working immediately, and **Turn off link** disables it.
-- The link uses your site's address as the browser sees it. If you're behind a proxy or the link shows the
-  wrong address, set `'public_url' => 'https://your-site'` in the `app` section of `config/config.php`.
+- The link uses the site address from **Admin → Site settings** (or `'public_url'` in the `app` section of
+  `config/config.php`). Until one is set, Pillbox uses the address an administrator last opened it at, never just
+  the address a request claims (which anyone can fake). If links show the wrong address, set it.
 
 ### Preparing for an appointment
 
@@ -209,7 +232,8 @@ The server needs PHP's `xmlreader` extension (standard) and, to read `export.zip
 ## Requirements
 
 - Apache 2.4 with `mod_rewrite` (normally enabled) and ideally `mod_headers`
-- PHP 8.1+ with `pdo_mysql`, `curl`, `openssl`, `mbstring`
+- PHP 8.1+ with `pdo_mysql`, `curl`, `openssl`, `mbstring`; `zip`, `xmlreader` and `zlib` for imports,
+  policy documents and self-updates (all standard)
 - MySQL 8.0+ or MariaDB 10.5+
 - HTTPS (required for Entra ID sign-in and strongly recommended anyway)
 
@@ -228,23 +252,31 @@ The server needs PHP's `xmlreader` extension (standard) and, to read `export.zip
 
 3. **Configure**: copy `config/config.example.php` to `config/config.php` and fill in the
    database details. `config/config.php` is the only settings file; it is git-ignored, so your passwords stay off GitHub. If the site is in a sub-folder (e.g. `https://example.com/pillbox/`), set
-   `'base_path' => '/pillbox'`.
+   `'base_path' => '/pillbox'`. If `config/config.php` is empty or damaged (for example overwritten by an upload),
+   Pillbox shows a page saying so rather than an error.
 
-4. **Make `storage/` writable** by the web server (it caches Microsoft's signing keys):
-   `chown www-data storage` (or set it to 775 in your file manager).
+4. **Make `storage/` writable** by the web server: `chown www-data storage` (or set it to 775 in your file
+   manager). It holds sessions, the encryption key for private pages and sign-in tokens (`app.key`), the
+   notification keys, the setup code, update backups, encrypted photos and caches. Back it up, especially
+   `app.key`: without it, private pages can't be read.
 
 5. **Open the site**. On a new install you'll be asked to create the first administrator account, with a one-time
    **setup code** so nobody else who finds the site first can take it over. The code is in `storage/setup_code.txt`
    on the server, and in PHP's error log (`docker logs`, or your host's error log); or set your own as `'setup_code'`
-   under `'app'` in config.php. It's deleted once the administrator exists. Everyone's
+   under `'app'` in config.php. It's deleted once the administrator exists. After 10 wrong codes an address is
+   paused for 15 minutes, and after 40 wrong codes from all addresses together everyone is (it just keeps being
+   told the code isn't right; the error log says so). If you're
+   stuck, clear it with `DELETE FROM login_attempts WHERE username = 'setup';`. Behind a reverse proxy or load
+   balancer, set `'trust_proxy' => true` so each visitor's own address is used. Everyone's
    first sign-in then goes through a short setup (about you, what to use, reminders), and administrators get a
    **Site settings** step too: site name and address, default time zone, email, scheduled tasks, demo mode.
    Those are saved in `config/settings.php` (git-ignored), which overrides `config/config.php`, so config.php
    itself, with its comments and database details, is never rewritten; they can be changed later on the Admin
    page. If the `config/` folder isn't writable, Pillbox shows what to paste into config.php instead.
 
-6. **Set up the scheduled tasks** (optional, but needed for emails): run them every 5 to 15 minutes, either
-   with cron, `*/10 * * * * php /var/www/pillbox/bin/cron.php`, or, if your host has no cron, set a long
+6. **Set up the scheduled tasks** (optional, but needed for emails, notifications and connected apps): run them
+   every 5 minutes (notifications are sent on time only then; up to 15 is fine without them), either
+   with cron, `*/5 * * * * php /var/www/pillbox/bin/cron.php`, or, if your host has no cron, set a long
    random `token` under `'cron'` in `config/config.php` and have a web cron service call
    `https://your-site/cron.php?token=...`. The Admin page shows when they last ran and what they did.
 
@@ -369,6 +401,24 @@ against the provider's published keys, plus the issuer, audience, expiry and non
 `'disable_local_login_when_sso' => true` (in the `app` section) turns off password sign-in whenever
 Microsoft or any OIDC provider is enabled.
 
+## Signing in safely
+
+- **Two-factor sign-in** (Account → Password & security): authenticator apps (TOTP, with a QR code and backup
+  codes) and security keys (WebAuthn, e.g. a YubiKey), as many of each as people like. It's asked for after every
+  kind of sign-in, single sign-on included. Adding one needs the password again, or a fresh Microsoft or other
+  single sign-on. Authenticator secrets are stored encrypted (`storage/app.key`).
+- **Remember this device** keeps a device signed in for `remember_days` (90 by default; `0` turns it off) after
+  it was last used. Only a hash of its token is stored. Signing out, changing the password and **Sign out everywhere
+  else** forget remembered devices.
+- **Forgotten your password?** emails a single-use link that works for an hour, without saying whether an account
+  exists, at most 3 an hour. It needs email and a known site address (see Site settings); otherwise people are told
+  to ask an admin, who can reset it from **Admin → Manage**.
+- **Active sessions** lists every device signed in now, with its IP address, and signs out any of them at once.
+  With `'geoip_lookup' => true` (in the `app` section; off by default) it also shows an approximate city and
+  country, by sending the IP address to ipapi.co at sign-in. The privacy policy then says so.
+- Wrong passwords are limited to 8 per username and 24 per address in 15 minutes; two-factor codes, PINs and setup
+  codes have their own limits.
+
 ## Inclusive care and privacy
 
 Everything clinical follows a person's body and medicines, never a gender field:
@@ -418,8 +468,8 @@ Everything clinical follows a person's body and medicines, never a gender field:
 
 **Terms** and **Privacy** pages are linked in every page's footer, and people agree to them when they sign up (the
 date is saved with the account). The text is generated from what Pillbox actually does: what it stores, encryption,
-sharing, the optional services you've switched on (email, push, connected apps, dm+d, single sign-on), its one
-cookie, and people's rights under UK GDPR. Fill in who runs it, a contact and the governing law under **Admin → Site
+sharing, the optional services you've switched on (email, push, connected apps, dm+d, single sign-on, weather,
+IP location), its cookies, and people's rights under UK GDPR. Fill in who runs it, a contact and the governing law under **Admin → Site
 settings → Terms and privacy** (or `'legal'` in `config/config.php`), or replace either text with your own. It's a
 starting point, not legal advice.
 
@@ -491,8 +541,9 @@ matched to ones already in Pillbox.
 The installed version is in the `VERSION` file and is shown in the footer, with a link to the GitHub
 repository (`github_repo` in `config/config.php`; set it to `''` to hide both). For admins, Pillbox compares
 its `VERSION` with the newest published release on GitHub, at most twice a day, and shows
-**Update available** in the footer when that release is newer. Drafts and pre-releases are ignored. The
-Admin page has **Check now** and links to the release notes.
+**Update available** in the footer when that release is newer (or **Development version** when this copy is
+ahead of it). Drafts and pre-releases are ignored. The Admin page's **Version** section has **Check now**, the
+**Changelog** (every release's notes) and the **Licenses** of Pillbox and the code it includes.
 
 - **To release a new version:** raise the number in `VERSION` (e.g. `1.0.0` → `1.1.0`), merge it into `main`,
   then publish a GitHub release tagged with the same number (`v1.1.0` or `1.1.0`).
@@ -520,15 +571,29 @@ check for updates but never install them. **Send me a test email** on the Accoun
 Under **Sharing** (the people icon), you can give someone with an account on the same Pillbox access to parts
 of yours. For each part (medicines and doses, readings, appointments, Care, Mind, reports) you choose
 **no access**, **see**, or a level of change: for medicines, **log doses** (take, skip, collected
-prescriptions) or **change medicines**. You can keep chosen Care categories private (e.g. Women's health),
-include or leave out the Mind journal, and set an end date. Quick choices: "See everything except Mind",
-"Help with medicines", "Full help".
+prescriptions) or **change medicines**. You can keep chosen Care categories private (e.g. Periods and
+contraception), include or leave out the Mind journal, and set an end date. Quick choices: "See everything
+except Mind", "Help with medicines", "Full help (not Mind)".
+
+Each part's permission applies wherever its information appears, not just on its own page: someone without
+Readings doesn't see readings in Care, on Today or in the report, and someone without Medicines doesn't see
+medicines anywhere (including the headache diary). Private medicines and the private pages are never shared.
 
 They open it from their own Sharing page, with a banner showing whose Pillbox it is and **Back to mine**;
 only the tabs and parts they've been given appear. Pages are checked centrally, and anything not shared is
 refused. They can never see or change your account settings, sign-in details, sync and calendar links,
 data export or Mind PIN, can't permanently delete medicines, and can't share your Pillbox further. Every
 change they make is listed under their name (**Recent activity**), and you can stop sharing at any time.
+
+### Tests
+
+Sharing permissions have a regression test. Run it against a **test** database (it works inside a transaction that is rolled back, but don't point it at live data):
+
+```
+php tests/sharing_medicines_test.php
+```
+
+It checks the Migraine page for three viewers: the owner, someone with Medicines shared, and someone without. Only the first two see medicine names, and private medicines are never shown to anyone but the owner.
 
 ## Demo mode
 
@@ -568,7 +633,9 @@ and the Mind check-in. **Hide details on the lock screen** shows just "Pillbox: 
 the standard Web Push protocol (VAPID keys are created automatically in `storage/`; messages are encrypted
 for the device), so no third-party service or account is needed. They're sent by the scheduled tasks, so run
 those every 5 minutes. On iPhone and iPad, notifications work once Pillbox has been added to the Home Screen
-(iOS 16.4 or later).
+(iOS 16.4 or later). Notifications are only sent to the browsers' own push services (Google, Mozilla, Apple,
+Microsoft); to allow another, such as a self-hosted UnifiedPush server, list its host in
+`'push' => ['allowed_hosts' => ['push.example.com']]` (a leading dot allows its subdomains too).
 
 ## Updating
 
@@ -593,9 +660,13 @@ moving to another Pillbox. Sign-in details, sharing, passkeys and sync links are
 
 ## Security notes
 
-- Passwords are hashed with PHP's `password_hash`. Local logins are rate-limited per username and per IP.
+- Passwords are hashed with PHP's `password_hash`. Local logins are rate-limited per username and per IP, and
+  optional two-factor sign-in covers every way of signing in (see Signing in safely).
 - All forms have CSRF protection. Sessions use HttpOnly and SameSite cookies, which are Secure over HTTPS.
-- A strict Content-Security-Policy is sent: no inline scripts or styles, and no third-party assets.
+- Every page sends a strict Content-Security-Policy (no inline scripts or styles, and no third-party assets),
+  plus Strict-Transport-Security (over HTTPS), X-Frame-Options, X-Content-Type-Options, Referrer-Policy,
+  Permissions-Policy, Cross-Origin-Embedder-Policy, Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy.
+  Files Apache serves directly (CSS, JavaScript, icons) don't get them unless you add them in the server config.
 - Entra ID tokens are obtained with the authorisation-code flow plus PKCE. The ID token's signature,
   audience, issuer, expiry, nonce and tenant are all checked.
 - Every query is scoped to the signed-in user, so people can only see their own data, or data that has
@@ -610,12 +681,16 @@ moving to another Pillbox. Sign-in details, sharing, passkeys and sync links are
 ## Project layout
 
 ```
-public/      web root: pages, assets (CSS, JS, logo)
-src/         application code (auth, Entra OIDC, scheduling, metrics, charts, layout, care, mind, mail, tasks, demo)
+public/      web root: pages, assets (CSS, JS, logo, icons), service worker
+src/         application code (auth, single sign-on, two-factor, scheduling, metrics, charts, layout, Care
+             categories, Mind, sharing, mail, push, tasks, updater, demo)
 bin/         cron.php: the scheduled tasks, for the command line
-config/      config.example.php (template) -> copy to config.php (your settings)
+config/      config.example.php (template) -> copy to config.php (your settings); settings.php (Site settings)
 database/    schema.sql
-storage/     cache (must be writable)
+docs/        the user documentation, also shown in the app (Docs in the footer)
+tests/       regression tests (run against a test database)
+vendor/      bundled third-party code (qrcode-generator, MIT)
+storage/     keys, sessions, backups, encrypted photos and caches (must be writable; back it up)
 ```
 
 ## License

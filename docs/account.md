@@ -13,6 +13,8 @@ Your name, email, username, time zone, **pronouns** (shown on reports) and, opti
 - **Body inventory**: see below
 - **Care categories** to switch on, and whether to show **Mind**
 
+**Measurements to track** (further down the Account page) chooses which readings appear in Readings, and **Your own measurements** adds new ones with your own name and unit.
+
 ![The health profile: date of birth, body inventory and Care categories](images/account-health-profile.png)
 
 ### Body inventory
@@ -26,16 +28,20 @@ Change it any time.
 
 ## Notifications and email
 
-- **Notifications on this device**: dose reminders, Care reminders and "coming up", appointments, and the Mind check-in. **Hide details on the lock screen** makes them all say "You have a reminder".
-- **Email**: a daily summary at a time you choose, and appointment reminders (if your Pillbox sends email). Nothing from Mind is ever emailed.
+- **Notifications on this device**: dose reminders, Care reminders and "coming up", and appointments. **Send a test** checks they arrive, and **Devices with notifications on** lists each one with **Remove**. **Hide details on the lock screen** makes them all say "You have a reminder". The Mind check-in reminder is set in Mind, and only ever says "Pillbox check-in".
+- **Email**: a daily summary at a time you choose, and appointment reminders (if your Pillbox sends email). **Send me a test email** checks it works. Nothing from Mind is ever emailed.
 
 ## Display, privacy and appearance
 
 See [Display and accessibility](accessibility.md) and [Privacy and security](privacy.md). **Appearance** has 8 colour themes, including high contrast, each in light, dark or automatic mode.
 
-## Sign-in
+![Appearance: 8 colour themes, in light, dark or automatic mode](images/appearance.png)
 
-Change your password, link a Microsoft or other sign-in, and **sign out everywhere else**. Add an email address under **Profile** so you can reset your password yourself if you forget it.
+**Install Pillbox on your phone** shows how to add it to your home screen (see [Getting started](getting-started.md#installing-it-on-your-phone)).
+
+## Sign-in and security
+
+Under **Password & security**: change your password (or add one, if you only use single sign-on), and set up two-factor sign-in. **Sign-in options** links a Microsoft or other sign-in, so you can sign in either way; you can't unlink the last way you have of signing in. Add an email address under **Profile** so you can reset your password yourself if you forget it. Changing your email asks for your password.
 
 **Two-factor sign-in**: if you have a password, or sign in with Microsoft or another linked account, add either of these and it's asked for as well each time you sign in. Adding one asks you to confirm it's you first &mdash; with your password, or by signing in again with Microsoft/your linked account, whichever you used to get here.
 
@@ -44,8 +50,10 @@ Change your password, link a Microsoft or other sign-in, and **sign out everywhe
 
 With either set up, signing in asks for it after your password, on a page where you can also switch to the other method (if you've set up both) or a backup code.
 
-**Remembered devices** lists the phones and computers you ticked **Remember this device** on, with when each was last used. **Forget** one if it's lost or no longer yours. Signing out on a device, changing your password, or **sign out everywhere else** forgets remembered devices too.
+**Remembered devices** lists the phones and computers you ticked **Remember this device** on, with when each was last used. **Forget** one if it's lost or no longer yours. Signing out on a device, changing your password, or **Sign out everywhere else** forgets remembered devices too.
+
+**Active sessions** lists every device signed in right now (whether or not it's remembered), with when it signed in, when it was last active, and its IP address (and roughly where, if your Pillbox has that switched on). **Sign out** one to sign that device out straight away. **Sign out everywhere else** signs out every device except the one you're using.
 
 ## Your data
 
-**Download all my data**, **import** a download into this account (for example when moving Pillbox), or **delete your account**.
+**Download all my data**, **import** a download into this account (for example when moving Pillbox: type REPLACE to confirm, as it replaces everything), or **delete your account**. If you're the only administrator, someone else needs to be made an admin before you can delete yours.

@@ -49,9 +49,12 @@ function headache_episodes(int $userId, string $fromUtc): array
     foreach ($rows as &$r) {
         $r['symptoms'] = array_filter(explode(',', (string) $r['symptoms']));
         $r['triggers'] = array_filter(explode(',', (string) $r['triggers']));
-        // Medicines from Meds that are private are left out for someone looking at a shared Pillbox.
+        // The medicines taken: none at all (not even typed names) for someone with shared access but no Medicines
+        // permission; for someone with it, everything but private medicines. (Not private_med_filter(): this is a
+        // LEFT JOIN, and medicines typed in rather than chosen from Meds have no medication to filter on.)
+        $medsVisible = meds_not_shared() ? ' AND 0 = 1' : (private_meds_hidden() ? ' AND (m.id IS NULL OR m.is_private = 0)' : '');
         $r['meds'] = q('SELECT em.* FROM episode_meds em LEFT JOIN medications m ON m.id = em.medication_id
-                        WHERE em.episode_id = ?' . (private_meds_hidden() ? ' AND (m.id IS NULL OR m.is_private = 0)' : '') . ' ORDER BY em.taken_at', [$r['id']])->fetchAll();
+                        WHERE em.episode_id = ?' . $medsVisible . ' ORDER BY em.taken_at', [$r['id']])->fetchAll();
     }
     return $rows;
 }
@@ -59,6 +62,9 @@ function headache_episodes(int $userId, string $fromUtc): array
 /**
  * Days with a headache, a migraine, and acute medicine (by class) between two local dates.
  * Acute days include as-needed doses logged on Today and medicines logged with a headache.
+ * The medicine counts come from medicine records, so they follow the Medicines permission: for someone
+ * with shared access but none, they're null (shown as "not shared", and no overuse warnings), and for
+ * someone with it, private medicines are left out. Headache and migraine days are Care, so always there.
  */
 function headache_days(int $userId, DateTimeImmutable $from, DateTimeImmutable $to): array
 {
@@ -86,19 +92,37 @@ function headache_days(int $userId, DateTimeImmutable $from, DateTimeImmutable $
             $out['by_class'][$class][$day] = true;
         }
     };
-    foreach (q('SELECT m.name, m.taken_at FROM episode_meds m JOIN headache_episodes e ON e.id = m.episode_id WHERE e.user_id = ? AND m.taken_at >= ? AND m.taken_at < ?', [$userId, $fromUtc, $toUtc]) as $m) {
-        $add($m['name'], $m['taken_at']);
+    $medsShared = !meds_not_shared();
+    if ($medsShared) {
+        foreach (q('SELECT m.name, m.taken_at FROM episode_meds m JOIN headache_episodes e ON e.id = m.episode_id LEFT JOIN medications md ON md.id = m.medication_id
+                    WHERE e.user_id = ? AND m.taken_at >= ? AND m.taken_at < ?' . (private_meds_hidden() ? ' AND (md.id IS NULL OR md.is_private = 0)' : ''), [$userId, $fromUtc, $toUtc]) as $m) {
+            $add($m['name'], $m['taken_at']);
+        }
+        foreach (q("SELECT d.taken_at, m.name FROM dose_logs d JOIN medications m ON m.id = d.medication_id WHERE d.user_id = ? AND d.status = 'taken' AND m.as_needed = 1 AND d.taken_at >= ? AND d.taken_at < ?"
+            . private_med_filter(), [$userId, $fromUtc, $toUtc]) as $m) {
+            $add($m['name'], $m['taken_at']);
+        }
     }
-    foreach (q("SELECT d.taken_at, m.name FROM dose_logs d JOIN medications m ON m.id = d.medication_id WHERE d.user_id = ? AND d.status = 'taken' AND m.as_needed = 1 AND d.taken_at >= ? AND d.taken_at < ?",
-        [$userId, $fromUtc, $toUtc]) as $m) {
-        $add($m['name'], $m['taken_at']);
+    $counts = array_map(fn ($v) => is_array($v) && !isset($v['simple']) ? count($v) : array_map('count', $v), $out);
+    if (!$medsShared) {
+        $counts['acute'] = null;
+        $counts['by_class'] = array_fill_keys(array_keys($counts['by_class']), null);
     }
-    return array_map(fn ($v) => is_array($v) && !isset($v['simple']) ? count($v) : array_map('count', $v), $out);
+    return $counts + ['meds_shared' => $medsShared];
+}
+
+/** A medicine-day count for display: "–" where medicines aren't shared. */
+function med_count(?int $n): string
+{
+    return $n === null ? '–' : (string) $n;
 }
 
 /** Medication overuse warnings (NHS thresholds) for days in the last 30. */
 function overuse_warnings(array $days): array
 {
+    if (empty($days['meds_shared'])) {
+        return []; // medicines not shared with this person: nothing to go on (and nothing to give away)
+    }
     $out = [];
     $strong = $days['by_class']['triptan'] + $days['by_class']['opioid'] + $days['by_class']['combination'];
     if ($days['by_class']['simple'] >= 15) {
@@ -275,7 +299,7 @@ function migraine_sections(array $user, DateTimeImmutable $today): void
     <div class="tiles">
         <div class="tile"><span class="tile-label">Headache days</span><span class="tile-value"><?= $last30['headache'] ?></span><span class="tile-meta">last 30 days</span></div>
         <div class="tile"><span class="tile-label">Migraine days</span><span class="tile-value"><?= $last30['migraine'] ?></span><span class="tile-meta">last 30 days</span></div>
-        <div class="tile"><span class="tile-label">Painkiller or triptan days</span><span class="tile-value<?= $last30['acute'] >= 8 ? ' warn' : '' ?>"><?= $last30['acute'] ?></span><span class="tile-meta">last 30 days</span></div>
+        <div class="tile"><span class="tile-label">Painkiller or triptan days</span><span class="tile-value<?= ($last30['acute'] ?? 0) >= 8 ? ' warn' : '' ?>"><?= med_count($last30['acute']) ?></span><span class="tile-meta"><?= $last30['meds_shared'] ? 'last 30 days' : 'medicines not shared' ?></span></div>
     </div>
     <?php foreach ($ongoing as $e): ?>
     <div class="flash flash-info notice-row"><span>Headache since <?= h(local_time($e['started_at'], 'D H:i')) ?></span>
@@ -326,8 +350,8 @@ function migraine_sections(array $user, DateTimeImmutable $today): void
 <section class="card">
     <h2>Month by month</h2>
     <div class="table-wrap"><table><thead><tr><th></th><th class="num">Headache days</th><th class="num">Migraine days</th><th class="num">Painkiller or triptan days</th><th class="num">Triptans</th><th class="num">Opioid or combination</th></tr></thead><tbody>
-        <?php foreach ($months as $label => $d): ?><tr><td><?= h($label) ?></td><td class="num"><?= $d['headache'] ?></td><td class="num"><?= $d['migraine'] ?></td><td class="num"><?= $d['acute'] ?></td>
-            <td class="num"><?= $d['by_class']['triptan'] ?></td><td class="num"><?= $d['by_class']['opioid'] + $d['by_class']['combination'] ?></td></tr><?php endforeach; ?>
+        <?php foreach ($months as $label => $d): ?><tr><td><?= h($label) ?></td><td class="num"><?= $d['headache'] ?></td><td class="num"><?= $d['migraine'] ?></td><td class="num"><?= med_count($d['acute']) ?></td>
+            <td class="num"><?= med_count($d['by_class']['triptan']) ?></td><td class="num"><?= $d['meds_shared'] ? $d['by_class']['opioid'] + $d['by_class']['combination'] : '–' ?></td></tr><?php endforeach; ?>
     </tbody></table></div>
     <?php if ($triggerCounts && count($episodes) >= 3): ?>
     <p class="small">Most often noted with your headaches (last 4 months): <?= h(implode(', ', array_map(fn ($k, $n) => mb_strtolower(HEADACHE_TRIGGERS[$k] ?? $k) . " ($n of " . count($episodes) . ')', array_keys(array_slice($triggerCounts, 0, 4, true)), array_slice($triggerCounts, 0, 4, true)))) ?>.</p>

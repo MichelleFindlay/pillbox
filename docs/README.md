@@ -6,7 +6,7 @@ Pillbox keeps a record of your medicines, health readings, appointments and care
 
 - [Getting started](getting-started.md): signing in, the first-time setup, and installing it on your phone
 - [Today](today.md): your doses for the day, what's coming up, and notices
-- [Medicines](medicines.md): adding medicines, schedules, stock, prescriptions, effects and side effects
+- [Medicines](medicines.md): adding medicines, schedules, stock, prescriptions, effects and side effects, and travel
 - [Readings](readings.md): blood pressure, glucose, weight and other measurements, and connecting apps and devices
 - [Blood tests](blood-tests.md): results, trends and target ranges
 - [Appointments](appointments.md): appointments, questions to ask, and your calendar

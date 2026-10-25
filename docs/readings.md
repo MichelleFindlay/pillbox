@@ -1,6 +1,6 @@
 # Readings
 
-The **Readings** tab holds measurements: blood pressure, heart rate, blood glucose, ketones, weight, temperature, oxygen level, breathing rate, peak flow, INR, cholesterol, pain, mood, sleep, fluids, steps, heart rate variability, calories and symptoms. Choose which ones you see in **Account → Health profile**, or add your own.
+The **Readings** tab holds measurements: blood pressure, heart rate, blood glucose, ketones, weight, temperature, oxygen level, breathing rate, peak flow, INR, cholesterol, pain, mood, sleep, fluids, steps, heart rate variability, calories and symptoms. Choose which ones you see in **Account → Measurements to track**, or add your own there.
 
 ![Blood glucose readings, with the trend chart](images/readings.png)
 
@@ -24,3 +24,7 @@ Some readings bring up advice straight away:
 - **MyFitnessPal** and **Google Fit**: import their export files
 - **Nightscout** (CGM glucose): connect in [Diabetes](diabetes.md#cgm-and-nightscout)
 - **Blood pressure monitors**: import a CSV export in [Blood pressure](blood-pressure.md#importing-from-your-monitor)
+
+![Connect apps and devices: Apple Health and Android Health Connect](images/connections-phones.png)
+
+![Watches, rings, straps and scales (set up by your administrator)](images/connections.png)
