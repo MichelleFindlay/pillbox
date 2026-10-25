@@ -20,6 +20,8 @@ Most adults need 7 to 9 hours a night; going to bed and getting up at about the 
 
 - **Sleep log**: when you went to bed and got up, and how well you slept. It's saved as a Sleep reading, alongside any from Apple Health or a connected tracker.
 - **Routines**: start winding down, bedtime, cleaning a CPAP mask, emptying the CPAP humidifier, washing CPAP tubing
+
+![The sleep log: the last 14 nights](images/sleep-log.png)
 - **Checks**: CPAP or sleep clinic review
 
 ## Physical activity & rehab
@@ -75,9 +77,13 @@ NHS screening (cervical, breast, bowel and AAA), with when each is next due, wor
 
 - **Routines**: a monthly breast self-check reminder (Touch, Look, Check), based on [CoppaFeel](https://coppafeel.org)'s approach, and a monthly testicular self-check reminder, based on [Movember](https://movember.com)'s "It's in the Bag" guide. The breast one is separate from NHS breast screening, which starts at 50.
 
+![NHS screening, with when each is next due](images/screening.png)
+
 ## Vaccinations
 
 - **Checks**: flu jab (every autumn), COVID-19 booster, tetanus, and travel vaccinations, with when each is next due
+
+![Vaccinations: an overdue flu jab, and others to add](images/vaccinations.png)
 
 ## Prescriptions and payments
 
@@ -85,3 +91,5 @@ Prescriptions are free in Scotland, Wales and Northern Ireland; in England, free
 
 - **Checks**: prepayment certificates (PPC and HRT PPC) and exemption certificates (MedEx, MatEx, HC2), with a reminder before each one ends
 - **What prescriptions cost you**: a payment log, totals for the last 3 and 12 months, and whether a PPC would save you money. Private and bought medicines are kept out of the PPC sums.
+
+![What prescriptions cost, and whether a prepayment certificate would save money](images/prescription-costs.png)

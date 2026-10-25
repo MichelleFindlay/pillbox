@@ -10,7 +10,7 @@ Your latest glucose, **time in range** over 14 days (very low, low, in range, hi
 
 ## CGM and Nightscout
 
-Nightscout is a free, self-hosted service that collects readings from Libre, Dexcom and other CGMs. Under **CGM: connect Nightscout**, enter its address and an access token with the "readable" role (Nightscout Admin tools → Subjects). Pillbox imports the last 2 weeks, then keeps up to date about once an hour, including insulin and carbs.
+Nightscout is a free, self-hosted service that collects readings from Libre, Dexcom and other CGMs. Under **CGM: connect Nightscout**, enter its address (starting with `https://`, so the token is sent securely) and an access token with the "readable" role (Nightscout Admin tools → Subjects). Pillbox imports the last 2 weeks, then keeps up to date about once an hour, including insulin and carbs.
 
 ## Ketones
 

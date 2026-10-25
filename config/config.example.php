@@ -49,6 +49,11 @@ return [
         // Addresses without ".php" (e.g. /medications). On automatically when Apache's mod_rewrite is
         // available (see public/.htaccess); set to false to always use ".php".
         // 'pretty_urls'       => false,
+        // Weather for the headache diary and pollen counts (Open-Meteo); also under Admin > Site settings.
+        // 'weather'           => false,
+        // Your own one-time setup code for creating the first administrator, instead of the generated one
+        // (in storage/setup_code.txt and the error log). Not needed once an administrator exists.
+        // 'setup_code'        => '',
         // Cache folder; must be writable by the web server.
         'storage_path'         => __DIR__ . '/../storage',
     ],
@@ -64,6 +69,10 @@ return [
     // Nightscout (CGM data, Diabetes): addresses on private networks are blocked so people can't make
     // this server reach into its own network. Set true only if everyone using this Pillbox is trusted.
     'nightscout' => ['allow_private' => false],
+
+    // Notifications are only sent to the browsers' own push services (Google, Mozilla, Apple, Microsoft).
+    // To allow another (e.g. a self-hosted UnifiedPush server), list its host; a leading dot allows subdomains.
+    // 'push' => ['allowed_hosts' => ['push.example.com']],
 
     // Terms of use and privacy policy (terms.php, privacy.php). Generated from what Pillbox does and these
     // details; 'terms' / 'privacy' replace the generated text ("## " headings, "- " bullets, **bold**).

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * paragraphs. It's a starting point, not legal advice.
  */
 
-const LEGAL_UPDATED = '11 October 2026';
+const LEGAL_UPDATED = '25 October 2026';
 
 /** Who runs this Pillbox, how to contact them, and which law applies. */
 function legal_details(): array
@@ -99,13 +99,16 @@ function legal_default_privacy(): string
         config('app.geoip_lookup', false) ? '- **Active sessions location**: the IP address of each device you\'re signed in on is sent to an IP-lookup service (ipapi.co) to show its approximate city and country under Account → Active sessions.' : null,
     ]);
     $optionalText = implode("\n", $optional);
+    $cookieText = remember_days() > 0
+        ? 'We use one cookie, which keeps you signed in, and a second only if you tick "Remember this device", which keeps that device signed in. Both are strictly necessary, so we don\'t ask for consent.'
+        : 'We use one cookie, which keeps you signed in. It\'s strictly necessary, so we don\'t ask for consent.';
     return <<<TXT
 This policy explains what {$d['app']} at {$d['url']} does with your information. The data controller is {$d['operator']} ("we"). We follow UK data protection law (the UK GDPR and the Data Protection Act 2018).
 
 ## What we hold
 - **Account details**: your name, username or email, password (stored only as a secure hash), time zone, settings, and how you sign in.
 - **Health information** you choose to add: medicines and doses, health readings, appointments, Care records (such as screening, periods, pregnancy or menopause), Mind check-ins and journal, blood test results, and anything else you type in. Optional profile details such as date of birth, pronouns, gender identity and body inventory.
-- **Technical information**: a session cookie to keep you signed in, and short-lived records of sign-in attempts (to protect against password guessing) and of what has been sent to you, so nothing is sent twice.
+- **Technical information**: a session cookie to keep you signed in (and, if you choose, one to remember a device), the devices you're signed in on (with their IP address), and short-lived records of sign-in attempts (to protect against password guessing) and of what has been sent to you, so nothing is sent twice.
 
 ## Why, and our lawful basis
 We use your information only to provide {$d['app']} to you: showing your records, reminders and summaries, and the features you switch on. Health information is special category data, so we only process it with your explicit consent, which you give by adding it. You can withdraw consent at any time by deleting the information or your account. Account details are processed to provide the service you asked for (contract).
@@ -123,7 +126,7 @@ Your information is stored on the server that runs this {$d['app']}. It's protec
 {$optionalText}
 
 ## Cookies
-We use one cookie, which keeps you signed in. It's strictly necessary, so we don't ask for consent. We don't use any other cookies or third-party tracking.
+{$cookieText} We don't use any other cookies or third-party tracking.
 
 ## How long we keep it
 Until you delete it, or delete your account. Deleting your account removes your information from {$d['app']} straight away. Copies may remain in the server's own backups for a limited time, until they're replaced. Accounts that are no longer used may be deleted after we've tried to contact you.

@@ -21,6 +21,8 @@ Tap an appointment to open it:
 
 **Add to your calendar** makes a private link that Apple, Google, Outlook or Proton calendars can subscribe to, so appointments (and Care reminders) appear there automatically. Anyone with the link can see your appointments, so **Make a new link** if it's ever shared by mistake.
 
+![Add to your calendar](images/calendar-link.png)
+
 ### Proton Calendar
 
 1. In Pillbox, press **Copy** next to your calendar link.

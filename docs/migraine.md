@@ -34,9 +34,13 @@ Under **Weather**, add your town and Pillbox fetches the weather there (from Ope
 
 A pattern doesn't prove the weather causes your headaches, but it can help you plan and have treatment ready. **Turn off weather** deletes the town and its weather. Admins can switch weather off for the whole site.
 
+![Headache days compared with the weather over the last year](images/migraine-weather.png)
+
 ## Preventive treatment
 
 Preventives (propranolol, amitriptyline, candesartan, topiramate, CGRP medicines and others) are recognised automatically, with migraine days before and after starting from 2 months in. Pillbox also shows the evidence NICE looks at for CGRP medicines: migraine days a month, and preventives tried.
+
+![Preventive treatment, and the evidence NICE looks at for CGRP medicines](images/migraine-preventive.png)
 
 Warnings appear for **topiramate** if you could become pregnant, and for **combined hormonal contraception** if you've had migraine with aura (a stroke risk).
 

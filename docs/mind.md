@@ -8,6 +8,10 @@ An optional space for mental health. Switch it on or off in your health profile.
 
 The **Help** button in the top bar is always one tap away and is never locked. It lists UK crisis lines (Samaritans on 116 123, NHS 111 option 2, and others you can edit), your own contacts, and your safety plan. If you're in danger now, call 999.
 
+![Help now: UK crisis lines, one tap to call](images/help-now.png)
+
+![The safety plan, shown on the Help page](images/safety-plan.png)
+
 ## What's in Mind
 
 - **Check-ins**: mood, energy, motivation and anxiety, with tags, triggers and notes, and trends over time
@@ -17,6 +21,10 @@ The **Help** button in the top bar is always one tap away and is never locked. I
 - **Journal** with prompts, and CBT thought records
 - **Therapy and care**, mental health medicine notes, symptoms, self-care, activities, habits, wins, connections, a staying-well plan and an advance statement
 - **Summary** to print for appointments
+
+![Mood, energy, motivation and anxiety over 30 days](images/mind-trends.png)
+
+![The coping toolkit: what helps you, with ideas to add](images/mind-toolkit.png)
 
 ## Privacy
 

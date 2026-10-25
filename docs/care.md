@@ -8,7 +8,11 @@ Categories include dental, eyes, sleep, activity and rehab, respiratory, allergi
 
 ## Routines
 
-Daily or regular tasks (brush teeth, physio exercises, change a CPAP filter) ticked off on Today. Use a one-tap preset or add your own: times, days or every few days, and an amount (like "10 reps"). A 7-day grid lets you tick off days you missed. Streaks can be hidden in [Display and accessibility](accessibility.md).
+Daily or regular tasks (brush teeth, physio exercises, change a CPAP filter) ticked off on Today. Use a one-tap preset or add your own: times, days or every few days, and an amount (like "10 reps").
+
+![A dental routine, with one-tap presets to add more](images/care-routine.png) A 7-day grid lets you tick off days you missed. Streaks can be hidden in [Display and accessibility](accessibility.md).
+
+![The last 7 days, for ticking off days you missed](images/care-last-7-days.png)
 
 ## Checks and renewals
 
@@ -35,5 +39,7 @@ Prepayment and exemption certificates (PPC, HRT PPC, MedEx, MatEx, HC2) with ren
 ## Care summary
 
 **Care summary** prints everything in Care over a period, for a GP, physio or nurse.
+
+![The Care summary: what needs attention, and how often each routine was done](images/care-summary.png)
 
 What's in each everyday category is in [Everyday Care categories](care-categories.md). Several categories have their own pages and summaries: see the [list of Care categories](README.md#care-categories).

@@ -32,9 +32,12 @@ The tabs along the bottom (or top, on a bigger screen) are:
 - **Care**: routines, checks and the Care categories you've switched on
 - **Mind**: mood, coping tools and your safety plan (if switched on)
 - **Readings**: measurements like blood pressure and weight
-- **History**: what you took, and reports
+- **History**: what you took, and your Care routines, day by day
+- **Report**: a summary to print or save for your GP or pharmacist
 
-The top bar has **Help** (crisis contacts, always one tap away), **Appointments**, **Sharing**, and your **Account**.
+The top bar has **Help** (crisis contacts, always one tap away, when Mind is switched on), **Appointments**, **Sharing**, your **Account** and **Sign out**. Administrators also see **Admin** (the shield).
+
+If you've set up two-factor sign-in, Pillbox asks for a code from your authenticator app, your security key or a backup code after your password (or single sign-on). See [Your account](account.md#sign-in-and-security).
 
 Look for the **?** next to headings: it opens the part of this documentation about that screen.
 
@@ -44,5 +47,7 @@ Pillbox works like an app once it's on your home screen:
 
 - **iPhone or iPad**: open Pillbox in Safari, tap Share, then **Add to Home Screen**.
 - **Android**: open it in Chrome, tap the menu, then **Install app**.
+
+![Account → Install Pillbox on your phone](images/install.png)
 
 It then opens full screen with its own icon, and can send you notifications (on iPhone, only once it's on the home screen). You can give it a disguised name and icon: see [Privacy and security](privacy.md).
